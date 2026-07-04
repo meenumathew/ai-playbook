@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/meenumathew/ai-playbook/branch/main/graph/badge.svg)](https://codecov.io/gh/meenumathew/ai-playbook)
 [![CodeQL](https://github.com/meenumathew/ai-playbook/actions/workflows/codeql.yml/badge.svg)](https://github.com/meenumathew/ai-playbook/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/meenumathew/ai-playbook/badge)](https://scorecard.dev/viewer/?uri=github.com/meenumathew/ai-playbook)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13487/badge)](https://www.bestpractices.dev/projects/13487)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
