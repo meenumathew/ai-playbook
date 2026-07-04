@@ -1,0 +1,174 @@
+{
+  "agent": "diff-reviewer",
+  "version": 1,
+  "must_demonstrate": [
+    {
+      "id": "DIFF-MUST-001",
+      "criterion": "**`logger.error(str(e))` in notification_service.py** \u2014 Violates `CLAUDE.md` \u00a7 Security and `security.md` \u00a7 Data Handling. Must use `exc_info=True`, not `str(e)`. This leaks stack context and loses the traceback.",
+      "keywords": [
+        "logger.error(str(e))",
+        "CLAUDE.md",
+        "security.md",
+        "exc_info=True",
+        "str(e)",
+        "`logger.error(str(e))` in notification_service.py"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-002",
+      "criterion": "**Test uses try/except instead of `pytest.raises`** \u2014 Violates `testing.md` \u00a7 Test Quality Rules (rule 4: Arrange-Act-Assert). The test in `test_notifications.py` uses a manual try/except pattern instead of `pytest.raises(ValueError)`. No logic in tests.",
+      "keywords": [
+        "pytest.raises",
+        "testing.md",
+        "test_notifications.py",
+        "pytest.raises(ValueError)",
+        "Test uses try/except instead of `pytest.raises`"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-003",
+      "criterion": "**Missing AC coverage** \u2014 AC2 (`test_order_shipped_skips_notification_when_no_email`) and AC3 (`test_email_failure_is_logged_without_affecting_order`) have no tests in the diff. Every AC must have at least one test.",
+      "keywords": [
+        "test_order_shipped_skips_notification_when_no_email",
+        "test_email_failure_is_logged_without_affecting_order",
+        "Missing AC coverage"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-004",
+      "criterion": "**Missing import in notification_service.py** \u2014 `EmailNotification` is used but not imported. Code won't run.",
+      "keywords": [
+        "EmailNotification",
+        "Missing import in notification_service.py"
+      ]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "DIFF-NOT-001",
+      "criterion": "Rewrite the code in the review \u2014 suggest, reference KB, let the developer fix it",
+      "keywords": [
+        "Rewrite the code"
+      ]
+    },
+    {
+      "id": "DIFF-NOT-002",
+      "criterion": "Invent findings not grounded in KB files",
+      "keywords": [
+        "Invent findings not"
+      ]
+    },
+    {
+      "id": "DIFF-NOT-003",
+      "criterion": "Say \"looks good\" without checking all AC coverage",
+      "keywords": [
+        "Say \"looks good\""
+      ]
+    },
+    {
+      "id": "DIFF-NOT-004",
+      "criterion": "Skip the cognitive debt check (\"Can you explain the key design decision?\")",
+      "keywords": [
+        "Skip the cognitive"
+      ]
+    },
+    {
+      "id": "DIFF-NOT-005",
+      "criterion": "Approve without flagging the `str(e)` security violation",
+      "keywords": [
+        "approve without flagging"
+      ]
+    }
+  ],
+  "quality_signals": [
+    {
+      "id": "DIFF-QUALITY-001",
+      "criterion": "**Magic strings** \u2014 `\"Your order has shipped!\"` and `\"Order {order.id} is on its way.\"` are hardcoded. Extract to constants or a template. Falls under `CLAUDE.md` \u00a7 Definition of Done (\"Code refactored \u2014 no obvious smells\").",
+      "keywords": [
+        "\"Your order has shipped!\"",
+        "\"Order {order.id} is on its way.\"",
+        "CLAUDE.md",
+        "Magic strings"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-002",
+      "criterion": "**SendGridAdapter has no port/interface** \u2014 `email_adapter` parameter in `NotificationService` has no corresponding port defined in the domain layer. Per `CLAUDE.md` \u00a7 Architecture and `design-patterns.md`, infrastructure implements ports defined by the domain.",
+      "keywords": [
+        "email_adapter",
+        "NotificationService",
+        "CLAUDE.md",
+        "design-patterns.md",
+        "SendGridAdapter has no port/interface"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-003",
+      "criterion": "**Bare `except Exception`** \u2014 `notification_service.py` catches all exceptions. Should catch the specific SendGrid exception to distinguish infra failures from bugs.",
+      "keywords": [
+        "except Exception",
+        "notification_service.py",
+        "Bare `except Exception`"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-004",
+      "criterion": "**Observability** \u2014 `logger.error(str(e))` also violates `observability.md` \u00a7 Structured Logging. Error logs must use `exc_info=True` for full traceback, not stringified exceptions.",
+      "keywords": [
+        "logger.error(str(e))",
+        "observability.md",
+        "exc_info=True",
+        "Observability"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-005",
+      "criterion": "**EmailNotification could validate email format** \u2014 Currently only checks non-empty. A simple regex or email validator would catch malformed addresses earlier.",
+      "keywords": [
+        "EmailNotification could validate email format"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-006",
+      "criterion": "**Commit granularity** \u2014 All files appear in one diff. Conventional Commits expects one logical change per commit \u2014 domain, service, and infrastructure could be separate commits.",
+      "keywords": [
+        "Commit granularity"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-007",
+      "criterion": "Every Must Fix cites a specific KB file and section",
+      "keywords": [
+        "Every Must Fix"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-008",
+      "criterion": "AC coverage table shows gaps clearly",
+      "keywords": [
+        "AC coverage table"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-009",
+      "criterion": "Review uses `templates/review-template.md` format",
+      "keywords": [
+        "templates/review-template.md"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-010",
+      "criterion": "Severity levels are correct (security = Must Fix, magic strings = Should Fix, email validation = Suggestion)",
+      "keywords": [
+        "Severity levels are"
+      ]
+    },
+    {
+      "id": "DIFF-QUALITY-011",
+      "criterion": "Cognitive debt check is asked before delivering the verdict",
+      "keywords": [
+        "Cognitive debt check"
+      ]
+    }
+  ]
+}

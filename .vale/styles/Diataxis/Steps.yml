@@ -1,0 +1,12 @@
+# scope: raw is required: in prose scope Markdown strips the ordered-list
+# marker ("1.") so numbered procedures become invisible. The `^\s*` anchor
+# limits matches to line-leading markers; a fenced code block whose lines
+# literally start with "1. run" / "step 2:" is a rare, accepted false positive
+# (BlockIgnores cannot reach raw scope). Dismiss or restructure such blocks.
+extends: existence
+message: "Procedural step marker ('%s') signals task guidance - move it to a how-to guide or tutorial."
+level: warning
+scope: raw
+ignorecase: true
+raw:
+  - '(?m)^\s*(?:step\s+\d+\s*[:.)]|\d+\.\s+(?:run|execute|create|configure|install|open|click|select|enter|copy|paste|send|call|set|add|choose|update|delete|replace|save|start|stop|deploy|verify|check)\b|(?:first|next|then|finally),\s+(?:run|execute|create|configure|install|open|click|select|enter|copy|paste|send|call|set|add|choose|update|delete|replace|save|start|stop|deploy|verify|check)\b)'

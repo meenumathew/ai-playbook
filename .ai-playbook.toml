@@ -1,0 +1,10 @@
+# AI Playbook adopter configuration.
+# Full reference: docs/cli-reference.md (deployed with the playbook).
+# Every key is optional — an empty file means a core-only deploy.
+
+# Adopter-local packs, deployed in declared order (last pack wins on collisions):
+# packs = [".ai-playbook/packs/<name>"]
+
+# Per-agent quality tier overrides ("production" or "prototype"):
+# [quality_tiers.agents]
+# docs-maintainer = "prototype"

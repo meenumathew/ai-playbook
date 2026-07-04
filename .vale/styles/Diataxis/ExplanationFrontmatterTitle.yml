@@ -1,0 +1,7 @@
+extends: existence
+message: "Explanation frontmatter titles should name a topic, not a procedure or lesson. Move '%s' to the appropriate Diataxis section."
+level: warning
+scope: raw
+ignorecase: true
+raw:
+  - '(?m)^title:\s+["'']?(?:How\s+to|Tutorial|Reference)\b'

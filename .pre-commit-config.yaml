@@ -1,0 +1,82 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 2ca41cc1372d1e939a6a879f18cdc19fc1cac1ce  # frozen: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: 0933c147c9d6587653d45fdcb4c497c57a65f9af  # frozen: v1.7.10
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 0671d8ab202c4ac093b78433ae5baf74f3fc7246  # frozen: v0.15.15
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: 996abf60411a8d954288ac9856aae7602b80cbda  # frozen: v0.22.1
+    hooks:
+      - id: markdownlint-cli2
+        args: ["--config", ".markdownlint.jsonc"]
+        exclude: "^(evals|.vale|.pytest_cache)/"
+
+  - repo: local
+    hooks:
+      - id: vale
+        name: vale (doc style linter)
+        entry: vale --minAlertLevel=error
+        language: system
+        types: [markdown]
+        exclude: "^(evals|.vale|.pytest_cache)/"
+      - id: lychee
+        name: lychee (link checker, internal only)
+        entry: lychee --no-progress --offline
+        language: system
+        types: [markdown]
+        exclude: "^(evals|.vale|.pytest_cache)/"
+      - id: teach-back-trailer
+        name: teach-back-trailer
+        entry: harness/check-teachback.sh
+        language: system
+        stages: [commit-msg]
+      - id: kb-frontmatter
+        name: kb-frontmatter (KB + skill contract)
+        entry: uv run python tools/check-kb-frontmatter.py
+        language: system
+        files: '^(knowledge-base/.*\.md|skills/.*/SKILL\.md)$'
+        # workspaces/ only: seeded per-adopter content, not shipped KB.
+        # languages/ ships with real frontmatter and IS validated.
+        exclude: '^knowledge-base/workspaces/'
+        stages: [pre-commit]
+      - id: pyright
+        name: pyright (standard, src)
+        entry: uv run pyright
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: pytest
+        name: pytest (fast suite)
+        entry: uv run pytest -q --no-cov
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

@@ -1,0 +1,17 @@
+extends: existence
+message: "How-to guides should not use '%s' - stay task-focused, don't teach fundamentals."
+level: warning
+ignorecase: true
+tokens:
+  - 'in this tutorial'
+  - 'in this lesson'
+  - 'let us learn'
+  - "let's learn"
+  - 'you will learn'
+  - "you'll learn"
+  - 'to understand why'
+  - 'the theory behind'
+  - 'before we begin, let me explain'
+  - 'first, some background'
+  - 'conceptual overview'
+  - 'mental model'

@@ -1,0 +1,9 @@
+# heading.h1 scope (not raw) so a `# comment` line inside a fenced code block
+# is never mistaken for a document title. Mirrors HowToTitle's scope.
+extends: existence
+message: "Tutorial H1 titles should describe a concrete lesson, not a task, reference page, or explanation topic. Move '%s' to the appropriate Diataxis section."
+level: warning
+scope: heading.h1
+ignorecase: true
+raw:
+  - '^(?:How\s+to|Reference|API\s+reference|About|Understanding|Troubleshoot|Configure|Customize|Customise|Optimize|Optimise|Migrate|Runbook|Best\s+practices)\b'
