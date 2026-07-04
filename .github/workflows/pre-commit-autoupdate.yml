@@ -1,0 +1,67 @@
+# Monthly pre-commit hook SHA rotation.
+#
+# Dependabot covers github-actions and pip but has no pre-commit ecosystem,
+# so the 7 SHA-pinned hook repos in .pre-commit-config.yaml (and the adopter
+# template harness/pre-commit-config.yaml) had no automated update path.
+# This workflow runs `pre-commit autoupdate --freeze` on both files and opens
+# a PR with the bumped pins.
+#
+# Note: PRs created with the workflow GITHUB_TOKEN do not trigger CI runs
+# (GitHub safety default). Close and reopen the PR, or push an empty commit,
+# to start the checks before merging.
+
+name: pre-commit-autoupdate
+
+on:
+  schedule:
+    - cron: "0 6 1 * *" # first day of each month, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Autoupdate pinned hook SHAs
+        run: |
+          uvx pre-commit==4.3.0 autoupdate --freeze --config .pre-commit-config.yaml
+          uvx pre-commit==4.3.0 autoupdate --freeze --config harness/pre-commit-config.yaml
+
+      - name: Open PR when pins changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Hook pins already current — nothing to update."
+            exit 0
+          fi
+          branch="chore/pre-commit-autoupdate-$(date -u +%Y-%m)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add .pre-commit-config.yaml harness/pre-commit-config.yaml
+          git commit -m "build: rotate pre-commit hook SHA pins (autoupdate --freeze)"
+          # Checkout runs with persist-credentials: false (repo contract);
+          # authenticate this one push explicitly instead.
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/$branch"
+          gh pr create \
+            --title "build: rotate pre-commit hook SHA pins" \
+            --body "Monthly \`pre-commit autoupdate --freeze\` over \`.pre-commit-config.yaml\` and \`harness/pre-commit-config.yaml\`. Review the diff against each hook repo's release notes before merging. CI does not auto-run on bot-token PRs — close/reopen this PR to trigger checks." \
+            --base main \
+            --head "$branch" || echo "PR already exists for $branch"

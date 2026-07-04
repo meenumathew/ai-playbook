@@ -1,0 +1,29 @@
+# Lychee link checker config
+# Checks internal cross-references between markdown files
+
+# Only check local/relative links (skip external URLs in CI for speed)
+include_mail = false
+
+# Exclude patterns
+exclude = [
+    "https://diataxis.fr",  # External reference, may be rate-limited
+]
+
+# Exclude directories
+exclude_path = [
+    "evals/",
+    ".vale/",
+    ".pytest_cache/",
+    "stories/",
+    "research/",
+    "plans/",
+]
+
+# Accept these status codes (some sites block bots)
+accept = [200, 204, 301, 302, 403, 429]
+
+# Timeout per request
+timeout = 10
+
+# Max retries
+max_retries = 2

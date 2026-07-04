@@ -1,0 +1,6 @@
+extends: existence
+message: "Avoid em dashes. Rewrite with a comma, colon, semicolon, parentheses, or split the sentence."
+level: error
+nonword: true
+tokens:
+  - "—"

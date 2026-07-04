@@ -1,0 +1,224 @@
+[build-system]
+# Upper-bound pin protects the build from a hypothetical hatchling 2.x.
+# Lower bound = the version that introduced PEP 639 SPDX `license` parsing.
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-playbook"
+version = "1.0.0"
+description = "CLI tool for deploying ai-playbook agents to Claude, Copilot, Cursor, or Kiro"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Meenu Mathew" },
+]
+maintainers = [
+    { name = "Meenu Mathew" },
+]
+keywords = ["ai", "agents", "playbook", "claude", "copilot", "cursor", "kiro", "tdd", "xp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    # License classifier removed — PEP 639 SPDX `license = "MIT"` above is the
+    # canonical declaration. PyPI uploads with both will warn; with SPDX only
+    # the project page renders the license correctly.
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
+    "Topic :: System :: Shells",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "typer>=0.9.0,<1.0",
+    "rich>=13.0.0,<16.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/meenumathew/ai-playbook"
+Repository = "https://github.com/meenumathew/ai-playbook"
+Issues = "https://github.com/meenumathew/ai-playbook/issues"
+Documentation = "https://github.com/meenumathew/ai-playbook/tree/main/docs"
+Changelog = "https://github.com/meenumathew/ai-playbook/blob/main/CHANGELOG.md"
+
+[project.scripts]
+ai-playbook = "deploy_ai_playbook.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deploy_ai_playbook"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"CLAUDE.md"                         = "deploy_ai_playbook/data/CLAUDE.md"
+"agents"                            = "deploy_ai_playbook/data/agents"
+"commands"                          = "deploy_ai_playbook/data/commands"
+# Harness ships only the files paths.HARNESS_FILES enumerates — no glob, so a
+# repo-internal helper dropped into harness/ does not silently end up in the
+# wheel. Keep this list in sync with src/deploy_ai_playbook/paths.py.
+"harness/Makefile"                  = "deploy_ai_playbook/data/harness/Makefile"
+"harness/pre-commit-config.yaml"    = "deploy_ai_playbook/data/harness/pre-commit-config.yaml"
+"harness/ci.yml"                    = "deploy_ai_playbook/data/harness/ci.yml"
+"harness/security.yml"              = "deploy_ai_playbook/data/harness/security.yml"
+"harness/check-teachback.sh"        = "deploy_ai_playbook/data/harness/check-teachback.sh"
+"harness/telemetry.sh"              = "deploy_ai_playbook/data/harness/telemetry.sh"
+"harness/read-budget.sh"            = "deploy_ai_playbook/data/harness/read-budget.sh"
+"harness/settings.example.json"     = "deploy_ai_playbook/data/harness/settings.example.json"
+"knowledge-base"                    = "deploy_ai_playbook/data/knowledge-base"
+"skills"                            = "deploy_ai_playbook/data/skills"
+"templates"                         = "deploy_ai_playbook/data/templates"
+
+[dependency-groups]
+dev = [
+    "anthropic>=0.95.0,<1.0",
+    "hypothesis>=6.100,<7",
+    "mutmut>=3.0.0,<4.0",
+    "pre-commit>=3.7.0,<5.0",
+    "pyright>=1.1.350,<2.0",
+    "pytest>=9.0.0,<10.0",
+    "pytest-cov>=4.0.0,<8.0",
+    "ruff>=0.15.0,<1.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "S",    # flake8-bandit (security)
+    "C90",  # mccabe complexity
+    "PERF", # perflint
+    "PTH",  # flake8-use-pathlib
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "C4",   # flake8-comprehensions
+    "RET",  # flake8-return
+    "ARG",  # flake8-unused-arguments
+    "DTZ",  # flake8-datetimez (naive datetime misuse)
+    "LOG",  # flake8-logging
+    "G",    # flake8-logging-format
+]
+# PLW1514 (explicit encoding= on text I/O) is locked in by a contract test
+# in tests/unit/test_architecture.py § encoding-on-text-io rather than by
+# ruff's preview rule, so we do not have to enable the wider preview ruleset.
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",   # assert is fine in tests
+    "S106",   # hardcoded passwords in test fixtures
+    "B011",   # assert False
+    "PERF203", # try/except in loop ok in tests
+    "ARG",    # stub/fixture signatures (e.g. lambda *a, **k) keep unused args
+]
+"evals/**/*.py" = [
+    "C901",   # complexity limits relaxed for eval tooling
+    "S101",   # assert ok in eval scripts
+]
+
+[tool.pyright]
+include = ["src"]
+extraPaths = ["src", "evals"]
+pythonVersion = "3.12"
+# `standard` today; the strict-mode migration deserves its own RFC + PR
+# (docs/rfcs/README.md has the process). Flipping immediately surfaces
+# ~150 mostly-recoverable findings (untyped third-party generics, list
+# fields needing parameterisation) — worth doing as its own RFC + PR
+# rather than buried in an alignment cleanup.
+typeCheckingMode = "standard"
+reportUnnecessaryTypeIgnoreComment = "warning"
+reportUnnecessaryCast = "warning"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# --strict-markers / --strict-config catch typos in markers and config keys.
+# -ra surfaces the reasons for non-pass outcomes (skipped / xfailed / errors).
+addopts = "--strict-markers --strict-config -ra"
+# pythonpath = ["src"] makes the src-layout importable from the tests
+# directory without relying on an editable install. Required for mutmut,
+# which runs pytest inside a `mutants/` sandbox where the editable link
+# doesn't point to the mutated source.
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.mutmut]
+# Mutation testing — verifies tests actually test behaviour, not just shape.
+# See knowledge-base/testing-techniques.md § Mutation Testing.
+paths_to_mutate = ["src/deploy_ai_playbook/"]
+tests_dir = ["tests/"]
+pytest_add_cli_args = [
+    # Source-inspection contracts already run in normal CI. Mutmut rewrites
+    # source files into trampoline form, so these tests inspect mutmut's
+    # generated code instead of the behaviour under mutation.
+    "--ignore=tests/unit/test_architecture.py",
+]
+# mutmut copies the project into a `mutants/` sandbox before mutating.
+# Default also_copy includes tests/ but not playbook data and support modules.
+# The test suite reads these paths through `get_source_root()` inside mutmut's
+# `mutants/` sandbox, so missing entries make mutation testing fail before it
+# can produce a useful baseline.
+also_copy = [
+    ".ai-playbook.toml",
+    ".deprecations.toml",
+    ".github/",
+    ".gitignore",
+    ".lychee.toml",
+    ".markdownlint.jsonc",
+    ".pre-commit-config.yaml",
+    ".vale/",
+    ".vale.ini",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "GOVERNANCE.md",
+    "LICENSE",
+    "Makefile",
+    "README.md",
+    "RELEASING.md",
+    "SECURITY.md",
+    "agents/",
+    "commands/",
+    "docs/",
+    "evals/",
+    "harness/",
+    "knowledge-base/",
+    "skills/",
+    "templates/",
+    "tools/",
+    "pyproject.toml",
+    "uv.lock",
+]
+# Exclude files that have no logic worth mutating.
+do_not_mutate = [
+    "src/deploy_ai_playbook/__init__.py",
+]

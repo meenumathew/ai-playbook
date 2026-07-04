@@ -1,0 +1,217 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Install Vale
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          GOBIN="$RUNNER_TEMP/bin" go install github.com/errata-ai/vale/v3/cmd/vale@v3.9.6
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Documentation lint
+        run: make docs-lint
+
+  validate:
+    # Matrix scope is event-aware to keep push CI fast without losing coverage:
+    #   - pull_request OR push to main    → full matrix (2 OS × 3 Python = 6 jobs)
+    #   - push to a feature branch        → ubuntu × py3.12 only (1 job)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON((github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && '["ubuntu-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
+        python-version: ${{ fromJSON((github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && '["3.12", "3.13", "3.14"]' || '["3.12"]') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Format check
+        run: make format-check
+
+      - name: Lint
+        run: make lint
+
+      - name: ShellCheck harness scripts
+        run: uvx pre-commit==4.3.0 run shellcheck --all-files
+
+      - name: Lint GitHub workflows (actionlint)
+        # OS/Python-independent — run once, not across the matrix.
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: uvx pre-commit==4.3.0 run actionlint --all-files
+
+      - name: Type check
+        run: make typecheck
+
+      - name: Run tests with coverage
+        # Direct invocation (not `make test`): Codecov needs --cov-report=xml,
+        # which the local target intentionally omits.
+        run: uv run pytest -q --cov=src --cov-report=xml --cov-fail-under=95
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Architecture enforcement
+        run: uv run pytest tests/unit/test_architecture.py -v
+
+      - name: Size budget — CLAUDE.md
+        run: make claude-md-size
+
+      - name: Size budget — agent files
+        run: make agent-size
+
+      - name: KB frontmatter contract
+        # OS/Python-independent content check — run once, not across the matrix.
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: make kb-frontmatter
+
+      - name: Check eval structure
+        run: make eval-structure
+
+      - name: Calibrate structural evals
+        run: make eval-calibrate
+
+      - name: Validate eval samples
+        run: make eval-validate
+
+      - name: Secret scan
+        run: |
+          # Mirrors the shipped local hook coverage so contributors cannot
+          # bypass secret scanning by skipping local pre-commit installation.
+          uvx pre-commit==4.3.0 run detect-private-key --all-files
+          uvx pre-commit==4.3.0 run gitleaks --all-files
+
+      - name: Dependency vulnerability scan
+        run: |
+          # Backs the security.md § Dependencies & Supply Chain claim that
+          # dependency scanning runs in CI. `--strict` fails the run on any
+          # known-vulnerable dependency. `pip-audit` is pinned (same rule as
+          # Actions): a floating `uvx pip-audit` would let upstream changes
+          # silently alter the build's security posture.
+          uv export --no-hashes --no-dev --no-emit-project > /tmp/runtime-requirements.txt
+          uvx pip-audit==2.10.0 --strict --requirement /tmp/runtime-requirements.txt
+
+      - name: Static security scan (Bandit)
+        run: |
+          # Bandit catches Python-specific security smells: hardcoded
+          # passwords, weak crypto, unsafe `subprocess`/`eval`, `assert` in
+          # production paths, etc. Severity floor is medium; confidence
+          # floor is medium to avoid noise from style-level findings.
+          #
+          # `src/` is scanned strictly. `tests/` and `evals/` are scanned
+          # with B101 (assert_used) skipped — pytest depends on `assert`,
+          # so flagging it would be noise; everything else still applies.
+          uvx bandit==1.9.4 -r src/ -ll -ii
+          uvx bandit==1.9.4 -r tests/ evals/ -ll -ii --skip B101
+
+      - name: Smoke-test console script (source)
+        run: |
+          set -euo pipefail
+          uv run ai-playbook list >/dev/null
+          for tool in claude copilot cursor kiro; do
+            tmpdir="$(mktemp -d)"
+            uv run ai-playbook deploy --agent all --tool "$tool" -t "$tmpdir" --no-mcp >/dev/null
+          done
+
+      - name: Build wheel and smoke-test installed artifact
+        run: |
+          set -euo pipefail
+          uv build
+          uvx twine==6.2.0 check dist/*
+          # Install the built wheel into a clean venv so we exercise what users get.
+          venv="$(mktemp -d)/venv"
+          uv venv "$venv"
+          # shellcheck disable=SC1091
+          source "$venv/bin/activate"
+          uv pip install dist/*.whl
+          ai-playbook list >/dev/null
+          for tool in claude copilot cursor kiro; do
+            tmpdir="$(mktemp -d)"
+            ai-playbook deploy --agent all --tool "$tool" -t "$tmpdir" --no-mcp >/dev/null
+            ai-playbook doctor --tool "$tool" -t "$tmpdir" >/dev/null
+          done
+          deactivate
+
+  commit-hygiene:
+    # Teach-back / Conventional Commit trailer is enforced locally by the
+    # `commit-msg` hook (harness/check-teachback.sh). GitHub does not run
+    # commit-msg hooks, so this job backstops it: a contributor who skips hook
+    # install or commits with `--no-verify` cannot land non-trivial commits
+    # without the trailer. PR-only — main's pre-re-init history is squashed and
+    # exempt (see CONTRIBUTING.md § Git History).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (full history for the PR range)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Teach-back trailer on PR commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Reuse the exact script the local commit-msg hook runs, so CI and
+          # local stay in lockstep. Validate every non-merge commit the PR adds;
+          # merge commits carry no Conventional Commit subject and are skipped.
+          fail=0
+          for sha in $(git rev-list --no-merges "${BASE_SHA}..${HEAD_SHA}"); do
+            msg="$(mktemp)"
+            git log -1 --format=%B "$sha" > "$msg"
+            if ! harness/check-teachback.sh "$msg"; then
+              echo "::error::commit ${sha} failed the Teach-back / Conventional Commit check"
+              fail=1
+            fi
+          done
+          exit "$fail"

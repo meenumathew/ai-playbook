@@ -1,0 +1,165 @@
+{
+  "agent": "docs-maintainer",
+  "version": 1,
+  "must_demonstrate": [
+    {
+      "id": "DOCS-MUST-001",
+      "criterion": "**ADR format used:** Context, Decision, Business Reason, Alternatives Considered, Consequences, Status \u2014 per `templates/adr-template.md`",
+      "keywords": [
+        "Context",
+        "Decision",
+        "Business Reason",
+        "Alternatives Considered",
+        "Consequences",
+        "Status"
+      ]
+    },
+    {
+      "id": "DOCS-MUST-002",
+      "criterion": "**Key questions asked first:** Situation? Decision? Alternatives rejected and why? What's gained? What becomes harder? Business reason? \u2014 stops if can't answer the first 3",
+      "keywords": [
+        "Key questions asked first"
+      ]
+    },
+    {
+      "id": "DOCS-MUST-003",
+      "criterion": "**All three alternatives documented:** SendGrid (chosen), Mailgun (rejected), AWS SES (rejected) \u2014 each with clear rationale",
+      "keywords": [
+        "SendGrid",
+        "Mailgun",
+        "AWS SES",
+        "Chosen",
+        "Rejected"
+      ]
+    },
+    {
+      "id": "DOCS-MUST-004",
+      "criterion": "**Business reason explicit:** Not just \"we liked it better\" \u2014 captures deliverability, team familiarity, SDK fit, and timeline constraint",
+      "keywords": [
+        "Business reason explicit"
+      ]
+    },
+    {
+      "id": "DOCS-MUST-005",
+      "criterion": "**Consequences documented:** Both positive (better deliverability, faster onboarding) and negative (higher cost than Mailgun, vendor lock-in)",
+      "keywords": [
+        "Positive",
+        "Negative",
+        "higher cost",
+        "vendor lock-in"
+      ]
+    },
+    {
+      "id": "DOCS-MUST-006",
+      "criterion": "**Status set:** \"Accepted\" with date",
+      "keywords": [
+        "Status set"
+      ]
+    },
+    {
+      "id": "DOCS-MUST-007",
+      "criterion": "**Preview before save:** Shows the ADR and waits for explicit approval",
+      "keywords": [
+        "Preview before save"
+      ]
+    },
+    {
+      "id": "DOCS-MUST-008",
+      "criterion": "**Saved to correct location:** New file under `docs/adr/NNNN-title-slug.md` (one file per decision); `docs/adr/README.md` index updated",
+      "keywords": [
+        "docs/adr/NNNN-title-slug.md",
+        "docs/adr/README.md",
+        "Saved to correct location"
+      ]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "DOCS-NOT-001",
+      "criterion": "Write the ADR without asking clarifying questions first (at minimum confirm the situation and alternatives)",
+      "keywords": [
+        "Write the ADR"
+      ]
+    },
+    {
+      "id": "DOCS-NOT-002",
+      "criterion": "Include implementation details (API keys, SDK setup, code examples) \u2014 ADRs capture *decisions*, not *how-tos*",
+      "keywords": [
+        "Include implementation details"
+      ]
+    },
+    {
+      "id": "DOCS-NOT-003",
+      "criterion": "Skip documenting what becomes harder (consequences of choosing SendGrid)",
+      "keywords": [
+        "Skip documenting what"
+      ]
+    },
+    {
+      "id": "DOCS-NOT-004",
+      "criterion": "Save without preview and approval",
+      "keywords": [
+        "Save without preview"
+      ]
+    },
+    {
+      "id": "DOCS-NOT-005",
+      "criterion": "Append to a single monolithic `decisions.md` instead of creating a new file under `docs/adr/`",
+      "keywords": [
+        "decisions.md",
+        "docs/adr/"
+      ]
+    },
+    {
+      "id": "DOCS-NOT-006",
+      "criterion": "Duplicate documentation that already exists elsewhere",
+      "keywords": [
+        "Duplicate documentation that"
+      ]
+    }
+  ],
+  "quality_signals": [
+    {
+      "id": "DOCS-QUALITY-001",
+      "criterion": "ADR leads with business purpose, not technical details",
+      "keywords": [
+        "ADR leads with"
+      ]
+    },
+    {
+      "id": "DOCS-QUALITY-002",
+      "criterion": "Language is clear enough that a new team member understands the decision without extra context",
+      "keywords": [
+        "Language is clear"
+      ]
+    },
+    {
+      "id": "DOCS-QUALITY-003",
+      "criterion": "Trade-offs are honest \u2014 doesn't hide downsides of the chosen option",
+      "keywords": [
+        "Trade-offs are honest"
+      ]
+    },
+    {
+      "id": "DOCS-QUALITY-004",
+      "criterion": "\"What becomes harder\" section mentions vendor lock-in or cost as a real consequence",
+      "keywords": [
+        "\"What becomes harder\""
+      ]
+    },
+    {
+      "id": "DOCS-QUALITY-005",
+      "criterion": "Alternatives include enough detail to understand why they were rejected without re-evaluating",
+      "keywords": [
+        "Alternatives include enough"
+      ]
+    },
+    {
+      "id": "DOCS-QUALITY-006",
+      "criterion": "No implementation guidance \u2014 the ADR explains *why SendGrid*, not *how to use SendGrid*",
+      "keywords": [
+        "No implementation guidance"
+      ]
+    }
+  ]
+}

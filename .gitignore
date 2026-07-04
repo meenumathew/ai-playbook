@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.whl
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Testing & coverage
+.coverage
+.coverage.*
+.pytest_cache/
+htmlcov/
+coverage.xml
+
+# Linting
+.ruff_cache/
+
+# Type checking
+.mypy_cache/
+
+# Editors / IDEs
+# `.vscode/` is intentionally NOT ignored — Copilot's MCP config lives there
+# (.vscode/mcp.json), and adopters need it tracked.
+.idea/
+*.swp
+*.swo
+*~
+
+# OS scratch
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+
+# Runtime / local
+stories/
+plans/
+research/
+reviews/
+audits/
+logs/
+.kiro/
+.claude/
+.cursor/
+.aider*
+.cline/
+.codex/
+.continue/
+.gemini/
+.goose/
+.playbook-version
+.playbook-backup/
+.cache/
+
+# Mutation testing sandbox
+mutants/
+
+# Generated eval artifacts
+evals/captured/
+.eval-out/
+evals/eval-out-*.md
+
+# Hypothesis example database (property-test cache)
+.hypothesis/

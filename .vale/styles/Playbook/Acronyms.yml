@@ -1,0 +1,5 @@
+extends: conditional
+message: "Spell out '%s' on first use."
+level: suggestion
+first: '\b([A-Z]{3,})\b'
+second: '(?:\b[A-Z][a-z]+){2,}\s*\(%s\)'

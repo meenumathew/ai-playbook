@@ -1,0 +1,7 @@
+extends: occurrence
+message: "How-to guide H1 titles should start with 'How to'."
+level: warning
+scope: heading.h1
+ignorecase: true
+min: 1
+token: '^How to\b'
