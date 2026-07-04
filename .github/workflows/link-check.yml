@@ -1,0 +1,33 @@
+# Weekly external link check.
+#
+# The pre-commit lychee hook runs `--offline` (internal cross-references only)
+# so commits stay fast and network-independent. Nothing else validates the
+# external URLs in docs, so dead links rot silently. This workflow runs the
+# same config online once a week; a failure shows up as a red scheduled run
+# for maintainers to triage. Non-blocking by design — it gates no PR.
+
+name: Link check (external)
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC, alongside the other weekly scans
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linkcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check external links
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
+        with:
+          args: --config .lychee.toml --no-progress './**/*.md'

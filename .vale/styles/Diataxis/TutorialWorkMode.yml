@@ -1,0 +1,22 @@
+extends: existence
+message: "Tutorials should teach first-time familiarity. Move work-mode guidance like '%s' to a how-to guide."
+level: warning
+ignorecase: true
+tokens:
+  - 'best practice'
+  - 'configure for'
+  - 'customize'
+  - 'daily workflow'
+  - 'advanced'
+  - 'hardening'
+  - 'in production'
+  - 'migrate'
+  - 'operational'
+  - 'optimize'
+  - 'optimise'
+  - 'production use'
+  - 'runbook'
+  - 'scale'
+  - 'troubleshoot'
+  - 'when you need to'
+  - 'when your app'

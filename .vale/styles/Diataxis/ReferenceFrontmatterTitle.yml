@@ -1,0 +1,7 @@
+extends: existence
+message: "Reference frontmatter titles should name the API, endpoint, object, field, or feature being described. Move '%s' to the appropriate Diataxis section."
+level: warning
+scope: raw
+ignorecase: true
+raw:
+  - '(?m)^title:\s+["'']?(?:How\s+to|About|Understanding|Tutorial|Getting\s+started|Introduction\s+to|Overview\s+of)\b'

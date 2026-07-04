@@ -1,0 +1,165 @@
+# AI Playbook security workflow — polyglot template.
+#
+# Drop this into `.github/workflows/security.yml` to inherit the playbook's
+# supply-chain hardening posture: CodeQL SAST, OpenSSF Scorecard, gitleaks
+# secret scanning, and Dependency Review on PRs.
+#
+# Every Action is pinned to a full 40-char SHA — Dependabot updates the SHAs
+# weekly via the deployed `.github/dependabot.yml`. Do NOT replace any SHA
+# with a floating tag (`@v3`, `@main`); a moved tag would silently change
+# what runs in CI.
+#
+# What this workflow gives adopters:
+#   - CodeQL static analysis on push, PR, and weekly cron
+#   - Scorecard analysis on push to default branch + weekly cron
+#   - gitleaks secret scan on every PR
+#   - GitHub Dependency Review on every PR (blocks high-severity findings)
+#
+# What it deliberately does NOT do:
+#   - Run language-specific scanners (pip-audit, npm audit, govulncheck) —
+#     those belong in the project's main CI under `make quality`. This file
+#     is the language-neutral hardening floor.
+#   - Sign or attest artifacts. Use a separate release workflow for that
+#     (the playbook ships `harness/ci.yml` for the build path; copy
+#     ai-playbook's own `.github/workflows/release.yml` as a starting point
+#     when wiring Sigstore + SLSA + SBOM).
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Mondays 06:00 UTC — drift detection without burning Actions minutes
+    # on every push. Aligned with ai-playbook's own CodeQL + Scorecard cron.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Add or remove languages as the project's stack evolves. CodeQL
+        # supports: actions, c-cpp, csharp, go, java-kotlin, javascript-typescript,
+        # python, ruby, swift. Pick only what you ship.
+        language: [actions]
+        # Examples — uncomment for your stack:
+        #   - python
+        #   - javascript-typescript
+        #   - go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
+        with:
+          category: /language:${{ matrix.language }}
+
+  scorecard:
+    name: OpenSSF Scorecard
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload SARIF to GitHub
+        uses: github/codeql-action/upload-sarif@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
+        with:
+          sarif_file: results.sarif
+
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          # gitleaks needs full history to scan past commits; the deployed
+          # pre-commit hook only catches new content. Both layers matter.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          # GITHUB_TOKEN is required for SARIF upload on private repos and
+          # for posting summaries; the contents:read permission above is
+          # the only scope this action gets.
+          GITHUB_TOKEN: ${{ github.token }}
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@ce3cf9537a52e8119d91fd484ab5b8a807627bf8 # v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

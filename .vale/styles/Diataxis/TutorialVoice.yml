@@ -1,0 +1,12 @@
+extends: existence
+message: "Tutorials should not use '%s' - guide the reader step-by-step instead of explaining theory."
+level: warning
+ignorecase: true
+tokens:
+  - 'the reason is'
+  - 'this works because'
+  - 'under the hood'
+  - 'the architecture'
+  - 'conceptual model'
+  - 'design rationale'
+  - 'implementation detail'

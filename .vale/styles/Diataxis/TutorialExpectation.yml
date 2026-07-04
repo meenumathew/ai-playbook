@@ -1,0 +1,7 @@
+extends: occurrence
+message: "Tutorials should set expectations with visible results, such as expected output or a response shape."
+level: warning
+scope: raw
+ignorecase: true
+min: 1
+token: "(The output should|The response looks like this|The response has|Check that|Check the response|You should see|You will see|You'll see|should show|returns an empty|responds with|The terminal shows|The command returns|The result is|After a few moments|expected output)"
