@@ -1,0 +1,17 @@
+extends: existence
+message: "Tutorials should give one concrete path. Avoid option language like '%s'."
+level: warning
+ignorecase: true
+tokens:
+  - 'alternatively'
+  - 'another approach'
+  - 'another way'
+  - 'if you prefer'
+  - 'optionally'
+  - 'or you can'
+  - 'as needed'
+  - 'depending on your'
+  - 'pick one'
+  - 'there are several ways'
+  - 'you can also'
+  - 'you could also'

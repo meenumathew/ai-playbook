@@ -1,0 +1,21 @@
+extends: existence
+message: "Avoid passive voice: '%s'. Use active voice for clarity."
+level: warning
+tokens:
+  - 'is being'
+  - 'was being'
+  - 'has been'
+  - 'have been'
+  - 'had been'
+  - 'will be'
+  - 'was done'
+  - 'were done'
+  - 'is performed'
+  - 'was performed'
+  - 'is executed'
+  - 'was executed'
+  - 'is handled'
+  - 'was handled'
+  - 'is created'
+  - 'was created'
+  - 'is called'

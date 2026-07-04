@@ -1,0 +1,31 @@
+# AI Playbook dependabot config — polyglot template.
+#
+# Deployed to `.github/dependabot.yml`. Keeps the SHA-pinned Actions in the
+# deployed workflows (ci.yml, security.yml) fresh: Dependabot proposes weekly
+# PRs that bump each pinned SHA, so pinning never means "frozen forever".
+#
+# Adopters should add a second `updates:` entry for their language ecosystem
+# (pip, npm, gomod, cargo, maven, gradle, ...) — see the commented example.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # Language ecosystem example (uncomment and adapt to your stack):
+  # - package-ecosystem: pip
+  #   directory: /
+  #   schedule:
+  #     interval: weekly
+  #   open-pull-requests-limit: 5
+  #   commit-message:
+  #     prefix: chore
+  #     include: scope

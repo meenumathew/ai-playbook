@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/meenumathew/ai-playbook/evals/rubrics/_schema.json",
+  "title": "AI Playbook Eval Rubric",
+  "description": "Schema for evals/rubrics/<agent>.json. Source of truth for rubric shape; loaded by tests/acceptance/test_eval_contracts.py and by evals/run_eval.py at validate-samples time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agent", "version", "must_demonstrate", "must_not", "quality_signals"],
+  "properties": {
+    "agent": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Agent id — kebab-case, must match the filename stem and the agents/<id>.agent.md frontmatter id."
+    },
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Bump only on breaking rubric-shape changes."
+    },
+    "must_demonstrate": {
+      "type": "array",
+      "description": "Behaviours the agent's output must exhibit.",
+      "items": { "$ref": "#/$defs/RubricItem" }
+    },
+    "must_not": {
+      "type": "array",
+      "description": "Anti-patterns the agent's output must avoid.",
+      "items": { "$ref": "#/$defs/RubricItem" }
+    },
+    "quality_signals": {
+      "type": "array",
+      "description": "Soft signals the LLM judge uses to assess quality.",
+      "items": { "$ref": "#/$defs/RubricItem" }
+    }
+  },
+  "$defs": {
+    "RubricItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "criterion", "keywords"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9-]+-(MUST|NOT|QUALITY)-\\d{3,4}$",
+          "description": "Stable human-readable id like `RELEASE-MUST-001` (must_demonstrate), `XP-NOT-005` (must_not), or `STORY-QUALITY-002` (quality_signals). The middle token is fixed: MUST | NOT | QUALITY. Used by the Stay-rule coverage map; renaming an id is a contract break."
+        },
+        "criterion": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Plain-English statement of the behaviour. The LLM judge sees this verbatim."
+        },
+        "keywords": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Tokens that cheap structural validation greps for before invoking the judge."
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 5,
+          "description": "Optional concrete example the judge can anchor on. Recommended for must_demonstrate; less useful for must_not."
+        }
+      }
+    }
+  }
+}

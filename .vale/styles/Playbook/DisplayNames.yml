@@ -1,0 +1,6 @@
+extends: existence
+message: "Use a professional display name instead of '%s'."
+level: error
+ignorecase: true
+tokens:
+  - "^(name|description):.*\\b(guru|hacker|ninja|rockstar|wizard)\\b"

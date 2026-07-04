@@ -1,0 +1,7 @@
+extends: occurrence
+message: "How-to guide frontmatter titles should start with 'How to'."
+level: warning
+scope: raw
+ignorecase: true
+min: 1
+token: '(?m)^title:\s+["'']?How to\b'

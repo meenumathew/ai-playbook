@@ -1,0 +1,40 @@
+{
+  // Heading style: ATX (# style)
+  "MD003": { "style": "atx" },
+
+  // Unordered list style: consistent
+  "MD004": { "style": "consistent" },
+
+  // Line length: disabled (prose wraps naturally)
+  "MD013": false,
+
+  // Multiple headings with same content: allowed (different sections)
+  "MD024": { "siblings_only": true },
+
+  // Inline HTML: allowed (tables, details, etc.)
+  "MD033": false,
+
+  // Bare URLs: allowed in docs
+  "MD034": false,
+
+  // First line must be top-level heading: disabled (frontmatter files)
+  "MD041": false,
+
+  // Code block style: fenced
+  "MD046": { "style": "fenced" },
+
+  // Emphasis style: consistent
+  "MD049": { "style": "consistent" },
+
+  // Strong style: consistent
+  "MD050": { "style": "consistent" },
+
+  // Table column style: disabled (compact tables are fine)
+  "MD060": false,
+
+  // Heading increment: disabled (agents use h3 after h1 intentionally)
+  "MD001": false,
+
+  // Emphasis as heading: disabled (agents use bold text as section markers)
+  "MD036": false
+}

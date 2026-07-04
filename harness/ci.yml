@@ -1,0 +1,104 @@
+# AI Playbook CI workflow — polyglot template.
+#
+# Repo-own twin: this repository's `.github/workflows/ci.yml` is the
+# playbook's OWN CI (Python-specific, more steps). Deltas between the two
+# are intentional: the template stays stack-neutral. When changing shared
+# behaviour (security hooks, teach-back, quality gates), update both.
+#
+# The `make quality` target auto-detects the stack (Python / Go / Rust / Node /
+# Maven / Gradle) via harness/Makefile, so this workflow stays stack-neutral.
+# Adopters should:
+#   - add a setup step for their language toolchain (see commented examples)
+#   - enable caching for that toolchain to keep CI fast
+#   - extend with a matrix (OS / language version) if their project needs it
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      # --- Language setup (uncomment the block matching your stack) ----------
+      #
+      # Python (uv):
+      # - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      #   with: { python-version: "3.12" }
+      # - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      #   with: { enable-cache: true }
+      # - run: uv sync --dev
+      #
+      # Node:
+      # - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      #   with: { node-version: "20", cache: "npm" }
+      # - run: npm ci
+      #
+      # Go:
+      # - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      #   with: { go-version: "1.22", cache: true }
+      #
+      # Rust:
+      # - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      # - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      # ---------------------------------------------------------------------
+
+      - name: Universal repository checks
+        run: |
+          python -m pip install --user pre-commit==4.3.0
+          python -m pre_commit run --all-files
+
+      - name: Project quality gates
+        run: make quality
+
+  commit-hygiene:
+    # Teach-back / Conventional Commit trailer is enforced locally by the
+    # `commit-msg` hook (harness/check-teachback.sh). GitHub does not run
+    # commit-msg hooks, so this job backstops it: a contributor who skips hook
+    # install or commits with `--no-verify` cannot land non-trivial commits
+    # without the trailer. PR-only — pre-adoption history is exempt.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (full history for the PR range)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Teach-back trailer on PR commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Reuse the exact script the local commit-msg hook runs, so CI and
+          # local stay in lockstep. Validate every non-merge commit the PR adds;
+          # merge commits carry no Conventional Commit subject and are skipped.
+          fail=0
+          for sha in $(git rev-list --no-merges "${BASE_SHA}..${HEAD_SHA}"); do
+            msg="$(mktemp)"
+            git log -1 --format=%B "$sha" > "$msg"
+            if ! harness/check-teachback.sh "$msg"; then
+              echo "::error::commit ${sha} failed the Teach-back / Conventional Commit check"
+              fail=1
+            fi
+          done
+          exit "$fail"

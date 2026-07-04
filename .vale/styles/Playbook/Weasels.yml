@@ -1,0 +1,12 @@
+extends: existence
+message: "Remove weasel word '%s' — be specific."
+level: warning
+tokens:
+  - obviously
+  - simply
+  - basically
+  - easily
+  - clearly
+  - everyone knows
+  - of course
+  - needless to say

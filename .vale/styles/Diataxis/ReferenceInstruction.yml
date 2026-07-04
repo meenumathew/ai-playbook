@@ -1,0 +1,23 @@
+extends: existence
+message: "Reference docs should describe the machinery, not guide a task. Move procedural language like '%s' to a how-to guide."
+level: warning
+ignorecase: true
+tokens:
+  - 'follow these steps'
+  - 'complete the following steps'
+  - 'run the following command'
+  - 'execute the following command'
+  - 'first, run'
+  - 'first, create'
+  - 'first, configure'
+  - 'then run'
+  - 'then create'
+  - 'then configure'
+  - 'next, run'
+  - 'next, create'
+  - 'you will learn'
+  - "you'll learn"
+  - 'walk through'
+  - 'this guide shows you how'
+  - 'in this tutorial'
+  - 'copy and paste the following'

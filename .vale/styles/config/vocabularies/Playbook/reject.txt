@@ -1,0 +1,14 @@
+blacklist
+whitelist
+master
+slave
+sanity check
+dummy
+cripple
+handicap
+blind spot
+tone deaf
+grandfathered
+man-hours
+manpower
+guys

@@ -1,0 +1,244 @@
+{
+  "agent": "xp-pair-programmer",
+  "version": 1,
+  "must_demonstrate": [
+    {
+      "id": "XP-MUST-001",
+      "criterion": "Test before code: for each TDD step, the test file is written before implementation code.",
+      "keywords": ["test before code", "before touching implementation", "RED"],
+      "evidence": "Output shows a test created before the implementation for each TDD step."
+    },
+    {
+      "id": "XP-MUST-002",
+      "criterion": "RED confirmed: each test is run and confirmed failing before any implementation, with failure output shown.",
+      "keywords": ["RED confirmed", "failing", "failure output"],
+      "evidence": "Output includes the failing command or failure excerpt before the GREEN implementation."
+    },
+    {
+      "id": "XP-MUST-003",
+      "criterion": "GREEN minimal: implementation is the simplest code that passes, without extra features or premature abstractions.",
+      "keywords": ["GREEN", "smallest", "no extra features"],
+      "evidence": "Output states the minimal implementation and explicitly avoids out-of-scope features."
+    },
+    {
+      "id": "XP-MUST-004",
+      "criterion": "Format and lint after GREEN: runs formatting and lint fixing immediately after tests pass.",
+      "keywords": ["ruff format", "ruff check --fix", "tests pass"],
+      "evidence": "Output shows format and lint commands after the GREEN test run."
+    },
+    {
+      "id": "XP-MUST-005",
+      "criterion": "Comprehension check: after GREEN, asks a specific question grounded in actual code, not a generic prompt.",
+      "keywords": ["Comprehension check", "debug", "flow"],
+      "evidence": "Output includes one targeted code-understanding question tied to the changed behavior."
+    },
+    {
+      "id": "XP-MUST-006",
+      "criterion": "REFACTOR only when green: design improvements happen after tests pass, not during RED or GREEN.",
+      "keywords": ["Refactor while green", "tests pass", "renamed"],
+      "evidence": "Output sequences refactoring after the passing test evidence."
+    },
+    {
+      "id": "XP-MUST-007",
+      "criterion": "Format and lint after REFACTOR: runs formatting and lint fixing after refactoring.",
+      "keywords": ["Re-ran format", "lint", "focused tests"],
+      "evidence": "Output shows format, lint, and tests after refactoring."
+    },
+    {
+      "id": "XP-MUST-008",
+      "criterion": "Review the diff: re-reads changes with fresh eyes before moving on.",
+      "keywords": ["Reviewed the diff", "git diff", "fresh eyes"],
+      "evidence": "Output includes a diff review command or explicit diff review step."
+    },
+    {
+      "id": "XP-MUST-009",
+      "criterion": "Task ordering respected: later tasks start only after dependencies are complete and checked.",
+      "keywords": ["Dependency check", "Task 1", "Task 2"],
+      "evidence": "Output shows Task 2 starts only after Task 1 completion or commit."
+    },
+    {
+      "id": "XP-MUST-010",
+      "criterion": "One commit per task: no commits inside the inner TDD loop, but each completed plan task is verified, staged, previewed, approved, and committed before the next task starts.",
+      "keywords": ["git diff --cached --stat", "Changes staged", "committed"],
+      "evidence": "Output shows task-boundary staging/preview/approval, not inner-loop commits."
+    },
+    {
+      "id": "XP-MUST-011",
+      "criterion": "Pause before commit: says \"Changes staged. Say 'commit' to proceed.\" and waits for explicit signal.",
+      "keywords": ["Changes staged", "Say 'commit' to proceed"],
+      "evidence": "Output includes the exact approval gate before commit."
+    },
+    {
+      "id": "XP-MUST-012",
+      "criterion": "Plan progress updated after each task commit.",
+      "keywords": ["updated plan progress", "Progress", "Task"],
+      "evidence": "Output records progress updates after task completion."
+    },
+    {
+      "id": "XP-MUST-013",
+      "criterion": "Teach-back at task boundary: asks one targeted question on the riskiest part when the adaptive trigger fires.",
+      "keywords": ["Teach-back", "riskiest", "explain"],
+      "evidence": "Output includes one risk-focused teach-back question at the task boundary."
+    },
+    {
+      "id": "XP-MUST-014",
+      "criterion": "AC verification before staging checks each AC has positive, negative, and edge coverage; critical paths from quality-gates.md are covered at 100%.",
+      "keywords": ["AC verification", "positive", "negative", "edge coverage"],
+      "evidence": "Output maps AC coverage before staging."
+    },
+    {
+      "id": "XP-MUST-015",
+      "criterion": "AT outer loop: before inner unit TDD, writes failing acceptance tests named test_ac_<what>_<condition>, one per AC, testing observable outcomes at the system boundary.",
+      "keywords": ["Outer loop", "test_ac_", "acceptance"],
+      "evidence": "Output shows acceptance tests named with the test_ac_ convention before unit work."
+    },
+    {
+      "id": "XP-MUST-016",
+      "criterion": "Verify before claiming complete: runs the project's test command in this session and shows the runner output before any \"done\", \"tests pass\", or \"all green\" claim. Does not accept the user's word (\"tests pass on my machine\") as evidence.",
+      "keywords": ["pytest", "tests pass", "verify before claiming"],
+      "evidence": "Output shows the test command invocation and its result paired with any pass/done claim — never asserts pass without runner evidence."
+    }
+  ],
+  "must_not": [
+    {
+      "id": "XP-NOT-001",
+      "criterion": "Write multiple tests at once before implementing any.",
+      "keywords": ["wrote multiple tests before implementation", "batch tests first"],
+      "evidence": "Output must not show multiple unit tests written before a GREEN step."
+    },
+    {
+      "id": "XP-NOT-002",
+      "criterion": "Write implementation code without a failing test.",
+      "keywords": ["implementation without a failing test", "skipped RED"],
+      "evidence": "Output must not skip the failing-test evidence."
+    },
+    {
+      "id": "XP-NOT-003",
+      "criterion": "Refactor while tests are red.",
+      "keywords": ["refactor while red", "tests were red"],
+      "evidence": "Output must not refactor before a passing test run."
+    },
+    {
+      "id": "XP-NOT-004",
+      "criterion": "Skip running tests or defer them until later.",
+      "keywords": ["I'll run them later", "skip running tests"],
+      "evidence": "Output must not defer verification."
+    },
+    {
+      "id": "XP-NOT-005",
+      "criterion": "Commit inside the inner TDD loop before the current task's AC coverage is verified.",
+      "keywords": ["committed before AC verification", "inner TDD loop commit"],
+      "evidence": "Output must not commit before task-level AC checks."
+    },
+    {
+      "id": "XP-NOT-006",
+      "criterion": "Batch multiple plan tasks into one end-of-story commit.",
+      "keywords": ["single end-of-story commit", "batched tasks into one commit"],
+      "evidence": "Output must not combine multiple tasks into one commit."
+    },
+    {
+      "id": "XP-NOT-007",
+      "criterion": "Add features not in the plan.",
+      "keywords": ["extra feature", "not in the plan", "scope creep"],
+      "evidence": "Output must not implement discovered or optional features."
+    },
+    {
+      "id": "XP-NOT-008",
+      "criterion": "Guess when an acceptance criterion is ambiguous.",
+      "keywords": ["guess", "ambiguous AC", "assume without asking"],
+      "evidence": "Output should ask when AC ambiguity changes behavior."
+    },
+    {
+      "id": "XP-NOT-009",
+      "criterion": "Push to a remote repository.",
+      "keywords": ["git push", "pushed to remote"],
+      "evidence": "Output must stop at local commits."
+    },
+    {
+      "id": "XP-NOT-010",
+      "criterion": "Skip the comprehension check.",
+      "keywords": ["skip comprehension check", "no comprehension check"],
+      "evidence": "Output must include the adaptive comprehension check when triggered."
+    },
+    {
+      "id": "XP-NOT-011",
+      "criterion": "Commit without explicit user approval.",
+      "keywords": ["committed without approval", "auto-committed"],
+      "evidence": "Output must include the approval gate before commit."
+    },
+    {
+      "id": "XP-NOT-012",
+      "criterion": "Skip format or lint after GREEN or REFACTOR.",
+      "keywords": ["skip ruff format", "skip ruff check --fix", "skipped lint"],
+      "evidence": "Output must not omit post-GREEN or post-REFACTOR cleanup."
+    },
+    {
+      "id": "XP-NOT-013",
+      "criterion": "Claim tests pass, done, or all green based on the user's word, without running the test command in this session.",
+      "keywords": ["trust me", "tests pass on my machine", "claim done without running"],
+      "evidence": "Output must not echo a user-supplied pass claim without producing test runner output."
+    }
+  ],
+  "quality_signals": [
+    {
+      "id": "XP-QUALITY-001",
+      "criterion": "Test names match the test_<what>_<condition> convention.",
+      "keywords": ["test_", "condition", "convention"],
+      "evidence": "Output uses descriptive test names."
+    },
+    {
+      "id": "XP-QUALITY-002",
+      "criterion": "Tests follow Arrange-Act-Assert structure.",
+      "keywords": ["Arrange", "Act", "Assert"],
+      "evidence": "Output or code review notes identify AAA structure."
+    },
+    {
+      "id": "XP-QUALITY-003",
+      "criterion": "Each test covers one behavior only.",
+      "keywords": ["one behaviour", "one behavior"],
+      "evidence": "Output avoids broad multi-assertion scenario tests."
+    },
+    {
+      "id": "XP-QUALITY-004",
+      "criterion": "Unit tests have no I/O: no database, network, or filesystem.",
+      "keywords": ["no database", "no network", "no filesystem"],
+      "evidence": "Output keeps I/O behind integration tests or doubles."
+    },
+    {
+      "id": "XP-QUALITY-005",
+      "criterion": "Domain objects have no infrastructure dependencies.",
+      "keywords": ["port", "domain", "adapter"],
+      "evidence": "Output keeps infrastructure adapters outside domain objects."
+    },
+    {
+      "id": "XP-QUALITY-006",
+      "criterion": "Integration tests use SendGrid test doubles, not real API calls.",
+      "keywords": ["SendGrid test double", "never a real API call"],
+      "evidence": "Output shows a fake or test double for SendGrid."
+    },
+    {
+      "id": "XP-QUALITY-007",
+      "criterion": "Functions are small and single-purpose.",
+      "keywords": ["small", "single-purpose"],
+      "evidence": "Output avoids unnecessary broad abstractions."
+    },
+    {
+      "id": "XP-QUALITY-008",
+      "criterion": "No magic strings: error codes and event names are named constants.",
+      "keywords": ["named constants", "event name constant"],
+      "evidence": "Output names event or error strings as constants."
+    },
+    {
+      "id": "XP-QUALITY-009",
+      "criterion": "Domain vocabulary from domain-language.md is used consistently.",
+      "keywords": ["domain-language.md", "domain vocabulary"],
+      "evidence": "Output names code and tests with project vocabulary."
+    },
+    {
+      "id": "XP-QUALITY-010",
+      "criterion": "Discovered work, if any, is added to the plan's Discovered section and not implemented.",
+      "keywords": ["Discovered", "not implemented"],
+      "evidence": "Output records discovered work without expanding scope."
+    }
+  ]
+}

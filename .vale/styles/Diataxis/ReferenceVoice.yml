@@ -1,0 +1,17 @@
+extends: existence
+message: "Reference docs should stay neutral and factual. Replace advisory or opinion language like '%s' with an authoritative fact."
+level: warning
+ignorecase: true
+tokens:
+  - 'you should'
+  - 'we recommend'
+  - 'we suggest'
+  - 'I recommend'
+  - 'it is recommended'
+  - 'it is best to'
+  - 'the best practice is'
+  - 'you might want to'
+  - 'you may want to'
+  - 'consider using'
+  - 'in my experience'
+  - 'I suggest'

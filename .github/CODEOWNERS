@@ -1,0 +1,3 @@
+# Default owner for everything in this repo.
+# Required reviewer when branch protection enforces Code Owner review.
+* @meenumathew

@@ -1,0 +1,182 @@
+{
+  "agent": "slice-planner",
+  "version": 1,
+  "must_demonstrate": [
+    {
+      "id": "SLICE-MUST-001",
+      "criterion": "**Design questions before planning:** prioritizes unresolved design questions, asks one question at a time, grounds trade-offs in the story and existing code, and waits for answers before proposing approach",
+      "keywords": [
+        "Design questions before planning"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-002",
+      "criterion": "**Approach recommendation:** After answers, recommends a design approach with rationale citing the codebase (e.g. batch exporter approach reading the usage log, because the Stop hook's never-block policy rules out synchronous remote calls)",
+      "keywords": [
+        "batch exporter approach",
+        "because",
+        "Stop hook"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-003",
+      "criterion": "**Vertical slices:** Each slice delivers end-to-end functionality (not \"create entity, then create service, then create handler\")",
+      "keywords": [
+        "Slice 1",
+        "Slice 2",
+        "End-to-end outcome"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-004",
+      "criterion": "**Test checkpoints per slice:** Each slice has a clear \"what passes when this slice is done\" definition",
+      "keywords": [
+        "Test checkpoints per slice"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-005",
+      "criterion": "**TDD steps per task:** Each task has RED/GREEN/REFACTOR/COMMIT steps with test classification (Unit/Integration/E2E)",
+      "keywords": [
+        "RED",
+        "GREEN",
+        "REFACTOR",
+        "COMMIT"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-006",
+      "criterion": "**Dependency ordering:** Tasks with `Depends on:` come after their dependencies",
+      "keywords": [
+        "Depends on:",
+        "Dependency ordering"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-007",
+      "criterion": "**One pair session per slice:** Each slice is scoped to ~2-4 hours of work",
+      "keywords": [
+        "One pair session per slice"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-008",
+      "criterion": "**Plan saved to file:** Uses `templates/plan-template.md` format. For stories >3 points, saved to `plans/`. For stories ≤3 points, appended as `## Implementation` section to the story file. This eval input is 3 points, so either location is valid.",
+      "keywords": [
+        "templates/plan-template.md",
+        "plans/",
+        "## Implementation",
+        "Plan saved to file"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-009",
+      "criterion": "**No source code written:** Agent stops after saving the plan — never writes production or test code",
+      "keywords": [
+        "No source code written"
+      ]
+    },
+    {
+      "id": "SLICE-MUST-010",
+      "criterion": "**Preview before save:** Shows the plan and waits for explicit approval",
+      "keywords": [
+        "Preview before save"
+      ]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "SLICE-NOT-001",
+      "criterion": "Write source code (production or test)",
+      "keywords": [
+        "Write source code"
+      ]
+    },
+    {
+      "id": "SLICE-NOT-002",
+      "criterion": "Skip the design questions phase and jump straight to slicing",
+      "keywords": [
+        "Skip the design"
+      ]
+    },
+    {
+      "id": "SLICE-NOT-003",
+      "criterion": "Create horizontal slices (\"Task 1: create all domain objects, Task 2: create all services\")",
+      "keywords": [
+        "Create horizontal slices"
+      ]
+    },
+    {
+      "id": "SLICE-NOT-004",
+      "criterion": "Plan work beyond the story's acceptance criteria (scope creep — e.g. dashboards, new capture fields)",
+      "keywords": [
+        "Plan work beyond"
+      ]
+    },
+    {
+      "id": "SLICE-NOT-005",
+      "criterion": "Omit the security checkpoint for usage data leaving the machine (security.md § Data Handling)",
+      "keywords": [
+        "Omit the security"
+      ]
+    },
+    {
+      "id": "SLICE-NOT-006",
+      "criterion": "Save the plan without approval",
+      "keywords": [
+        "Save the plan"
+      ]
+    },
+    {
+      "id": "SLICE-NOT-007",
+      "criterion": "Continue working after the plan is saved",
+      "keywords": [
+        "Continue working after"
+      ]
+    }
+  ],
+  "quality_signals": [
+    {
+      "id": "SLICE-QUALITY-001",
+      "criterion": "Slices are ordered so the happy path (AC1) comes before error paths (AC2, AC4)",
+      "keywords": [
+        "Slices are ordered"
+      ]
+    },
+    {
+      "id": "SLICE-QUALITY-002",
+      "criterion": "Domain layer work is separated from infrastructure (vendor adapter for the metrics backend) in different tasks but within vertical slices",
+      "keywords": [
+        "Domain layer work"
+      ]
+    },
+    {
+      "id": "SLICE-QUALITY-003",
+      "criterion": "Risk section identifies the metrics-backend vendor API as the main external dependency risk",
+      "keywords": [
+        "Risk section identifies"
+      ]
+    },
+    {
+      "id": "SLICE-QUALITY-004",
+      "criterion": "Discovered section is empty (nothing to discover yet — this is planning, not implementation)",
+      "keywords": [
+        "Discovered section is"
+      ]
+    },
+    {
+      "id": "SLICE-QUALITY-005",
+      "criterion": "Handoff message mentions xp-pair-programmer as next step with the plan file path",
+      "keywords": [
+        "Handoff message mentions"
+      ]
+    },
+    {
+      "id": "SLICE-QUALITY-006",
+      "criterion": "Progress section has all checkboxes unchecked (ready for xp-pair-programmer to start tracking)",
+      "keywords": [
+        "Progress section has"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+extends: existence
+message: "Explanation docs should not contain step-by-step instructions ('%s') - link to a how-to instead."
+level: warning
+ignorecase: true
+tokens:
+  - 'follow these steps'
+  - 'complete the following steps'
+  - 'first, run'
+  - 'first, create'
+  - 'first, configure'
+  - 'then run'
+  - 'then create'
+  - 'then configure'
+  - 'next, execute'
+  - 'next, run'
+  - 'next, create'
+  - 'run the following command'
+  - 'execute the following'
+  - 'copy and paste the following'
+  - 'this guide shows you how'

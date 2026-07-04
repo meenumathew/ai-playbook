@@ -1,0 +1,78 @@
+# .ai-playbook.toml — adopter configuration for the AI playbook.
+#
+# Copy to the repo root as `.ai-playbook.toml` and edit. All sections are
+# optional; agents fall back to safe defaults when keys are missing.
+#
+# Schema sources:
+#   top-level packs   — docs/cli-reference.md § Packs
+#   [host]            — skills/host-adapter/SKILL.md
+#   [issue-tracker]   — skills/issue-fetch/SKILL.md
+#   [notifier]        — skills/notifier/SKILL.md
+#   [review]          — agents/diff-reviewer.agent.md
+# ----------------------------------------------------------------------------
+# Adopter-local packs
+# ----------------------------------------------------------------------------
+# Project-relative directories layered over the playbook core. Order matters:
+# later packs override earlier packs on the same relative path.
+packs = []
+
+# Example:
+# packs = [".ai-playbook/packs/shared", ".ai-playbook/packs/this-repo"]
+
+# ----------------------------------------------------------------------------
+# Git host (PR/MR open, diff, review, merge, CI checks)
+# ----------------------------------------------------------------------------
+[host]
+provider    = "github"      # github | gitlab | bitbucket | gitea
+remote      = "origin"      # which remote to read for owner/repo parsing
+base_branch = "main"        # default base branch for PR/MR creation
+
+# ----------------------------------------------------------------------------
+# Issue tracker (only set when the tracker differs from the git host)
+# ----------------------------------------------------------------------------
+# Omit this section when host and tracker are the same vendor (GitHub repo +
+# GitHub issues). Set it when the team uses a separate tracker, e.g. GitHub
+# repo + Jira issues.
+#
+# [issue-tracker]
+# provider = "jira"          # jira | github | gitlab | bitbucket | linear | manual
+#                            # provider = "jira" also makes `ai-playbook deploy`
+#                            # auto-configure the Atlassian MCP; any other value
+#                            # (or omitting this section) skips MCP setup.
+# url      = "https://acme.atlassian.net/jira/projects/PROJ"
+
+# ----------------------------------------------------------------------------
+# Outbound notifier (Slack / email / generic webhook)
+# ----------------------------------------------------------------------------
+# Default is `none` — no notifications go out. Opt in by setting `provider`
+# and the matching env vars (SLACK_WEBHOOK_URL, EMAIL_SMTP_URL, WEBHOOK_URL).
+[notifier]
+provider = "none"           # slack | email | webhook | none
+
+# Severity floor — events below this severity are suppressed. Setting this
+# too high silently drops routine records (release_shipped, incident_resolved,
+# postmortem_ready are all severity = info). Floor levels: debug | info | warn | error.
+floor = "info"
+
+# Per-event channel routing. Channel names are provider-specific:
+#   slack   — channel hint, mapped to per-channel webhook env var
+#             (e.g. "#oncall" -> SLACK_WEBHOOK_URL_ONCALL; falls back to SLACK_WEBHOOK_URL)
+#   webhook — routing field passed through in the JSON body
+#   email   — ignored; routing is via EMAIL_TO
+[notifier.events]
+release_shipped   = "#deploys"
+smoke_warn        = "#deploys"
+smoke_fail        = "#oncall"
+incident_sev1     = "#oncall"
+incident_sev2     = "#oncall"
+incident_resolved = "#deploys"
+postmortem_ready  = "#engineering"
+
+# ----------------------------------------------------------------------------
+# diff-reviewer behaviour
+# ----------------------------------------------------------------------------
+# By default the host PR/MR comment thread is the canonical record and no
+# local file is saved. Set save_local = true for compliance / audit-trail
+# environments that require a versioned review file under `reviews/`.
+[review]
+save_local = false

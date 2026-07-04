@@ -1,0 +1,119 @@
+# Copy to `pyproject.toml` (merge into the file) or `.importlinter` at the repo root.
+# Run with: `uv run lint-imports` (uv-first) or plain `lint-imports` after
+# `pip install import-linter` on non-uv stacks.
+# CI: add a step `uv run lint-imports` after the existing lint step.
+#
+# This template enforces the Domain → Service → Infrastructure dependency
+# direction documented in `knowledge-base/design-patterns.md`. It is a
+# *starter*, not a finished config — replace `<root_package>` with your
+# top-level package and adjust the layer modules to match your codebase.
+#
+# Why import-linter (vs ad-hoc AST tests):
+# - Layered contracts express the rule once; you don't write per-module
+#   allow-lists like the playbook's own `tests/unit/test_architecture.py`.
+# - Independence contracts catch cross-cutting domain modules that should
+#   not import each other.
+# - Forbidden contracts let you ban specific imports outright (e.g. flag
+#   SDKs in the domain layer).
+#
+# What this does NOT do:
+# - Enforce dependencies that exist at runtime via reflection / DI.
+# - Catch indirect imports through wildcard `from x import *`.
+# - Run in non-Python codebases (see § Other languages below).
+
+[tool.importlinter]
+root_package = "<root_package>"  # e.g. "myapp" or your top-level Python package
+
+# ---------------------------------------------------------------------------
+# Contract 1 — Layered architecture (the canonical Domain → Service → Infra rule)
+# ---------------------------------------------------------------------------
+# Higher layers may import from lower layers; lower layers must NEVER import
+# from higher layers. List your layer modules here (innermost first if you
+# prefer, but `layers` reads top-to-bottom = highest-to-lowest).
+
+[[tool.importlinter.contracts]]
+name = "Domain → Service → Infrastructure (dependencies inward only)"
+type = "layers"
+layers = [
+  "<root_package>.infrastructure",  # adapters, repos, HTTP clients, DB sessions, flag SDK
+  "<root_package>.service",          # use cases, orchestration, transaction boundaries
+  "<root_package>.domain",           # entities, VOs, aggregates, ports — pure
+]
+# Optional: ignore generated code or test scaffolding from this contract.
+# ignore_imports = [
+#   "<root_package>.infrastructure.generated -> <root_package>.domain",
+# ]
+
+# ---------------------------------------------------------------------------
+# Contract 2 — Domain purity (no framework imports in the domain layer)
+# ---------------------------------------------------------------------------
+# This catches the most common architectural drift: someone slipping a
+# framework or HTTP client into a domain module because it's "convenient".
+# Add the libraries your domain must stay clean of.
+
+[[tool.importlinter.contracts]]
+name = "Domain layer is pure — no framework or I/O imports"
+type = "forbidden"
+source_modules = ["<root_package>.domain"]
+forbidden_modules = [
+  # Framework / web — domain must not depend on the transport layer.
+  "fastapi",
+  "flask",
+  "django",
+  "starlette",
+  # ORM / DB — domain models must not know how they are persisted.
+  "sqlalchemy",
+  "tortoise",
+  "django.db",
+  # HTTP clients — domain must not make network calls.
+  "httpx",
+  "requests",
+  "aiohttp",
+  # Feature flag SDKs — flag evaluation belongs in the service layer.
+  "growthbook",
+  "launchdarkly",
+  "unleash",
+]
+allow_indirect_imports = false
+
+# ---------------------------------------------------------------------------
+# Contract 3 — Domain modules independent of each other (optional)
+# ---------------------------------------------------------------------------
+# Uncomment when your domain is large enough that bounded contexts should
+# not leak into each other. List your top-level domain submodules.
+
+# [[tool.importlinter.contracts]]
+# name = "Bounded contexts do not import each other"
+# type = "independence"
+# modules = [
+#   "<root_package>.domain.billing",
+#   "<root_package>.domain.catalog",
+#   "<root_package>.domain.identity",
+# ]
+
+# ---------------------------------------------------------------------------
+# Wire-up checklist
+# ---------------------------------------------------------------------------
+# 1. Install: `uv add --dev import-linter` (uv-first) or `pip install --upgrade
+#    import-linter` on non-uv stacks.
+# 2. Replace every `<root_package>` placeholder with your top-level package.
+# 3. Adjust layer module names to match your repo layout.
+# 4. Run locally: `uv run lint-imports`.
+# 5. Add to CI: a `uv run lint-imports` step after the existing lint step.
+# 6. Add to `make quality`: append `&& uv run lint-imports` if you want it
+#    in the local quality gate.
+#
+# ---------------------------------------------------------------------------
+# Other languages
+# ---------------------------------------------------------------------------
+# Equivalent linters per stack — adopt the same Domain → Service → Infra
+# contract using your stack's tool:
+# - JS/TS    → dependency-cruiser (`.dependency-cruiser.cjs`)
+# - Java     → ArchUnit (test classes)
+# - Go       → go-cleanarch or custom `go vet` rules
+# - Rust     → cargo-modules + clippy lints; or layered crates
+# - C#       → NetArchTest
+#
+# Architecture-enforcement guidance lives in
+# `knowledge-base/design-patterns.md` § Architecture Layers — the language
+# tool changes, the rule does not.

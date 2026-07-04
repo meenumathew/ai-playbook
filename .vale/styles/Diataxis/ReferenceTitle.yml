@@ -1,0 +1,9 @@
+# heading.h1 scope (not raw) so a `# comment` line inside a fenced code block
+# is never mistaken for a document title. Mirrors HowToTitle's scope.
+extends: existence
+message: "Reference H1 titles should name the API, endpoint, object, field, or feature being described. Move '%s' to the appropriate Diataxis section."
+level: warning
+scope: heading.h1
+ignorecase: true
+raw:
+  - '^(?:How\s+to|About|Understanding|Tutorial|Getting\s+started|Introduction\s+to|Overview\s+of)\b'

@@ -1,0 +1,137 @@
+name: Eval drift
+
+on:
+  # Opt-in only. This job calls the Anthropic API (billable, needs the
+  # ANTHROPIC_API_KEY secret), so it does not run on a schedule by default —
+  # trigger it manually from the Actions tab when you want a drift check.
+  # To restore automatic weekly runs, uncomment the schedule below once a key
+  # is configured.
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 6 * * 1"   # Mondays 06:00 UTC — semantic drift detection
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  judge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Dependency vulnerability scan
+        run: |
+          # The push/PR validation suite does not run pip-audit; this opt-in
+          # job does, so a manual drift run also surfaces any vulnerable dep
+          # that has landed on main since the last release.
+          uv export --no-hashes --no-dev --no-emit-project > /tmp/runtime-requirements.txt
+          uvx pip-audit==2.10.0 --strict --requirement /tmp/runtime-requirements.txt
+
+      - name: Check committed baselines
+        run: uv run python evals/run_eval.py validate-samples
+
+      - name: Check for ANTHROPIC_API_KEY
+        id: secret
+        run: |
+          # Detect-only — do NOT inject the secret into env here. The judge
+          # step below is the single point that touches ANTHROPIC_API_KEY,
+          # narrowing the surface that matters for secret-exfil review.
+          if [ -z "${HAS_KEY}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::error::ANTHROPIC_API_KEY secret not set — eval-drift cannot run the semantic judge."
+            exit 1
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' && '1' || '' }}
+
+      - name: Run LLM judge on committed baselines
+        if: steps.secret.outputs.available == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          # Iterate samples but skip README.md — the README documents the
+          # convention; only files named `<agent>.md` are baselines, and each
+          # must match an `evals/<agent>-expected.md` rubric.
+          samples=()
+          for path in evals/samples/*.md; do
+            [ "$(basename "$path")" = "README.md" ] && continue
+            samples+=("$path")
+          done
+          fail=0
+          mkdir -p judge-output
+          for sample in "${samples[@]}"; do
+            agent="$(basename "$sample" .md)"
+            echo "::group::judge $agent"
+            # Tee per-agent verdicts to files so the artifact upload below
+            # makes drift trendable across runs instead of buried in
+            # job logs. pipefail (set above) preserves the judge exit code.
+            if ! uv run python evals/run_eval.py judge "$agent" "$sample" 2>&1 \
+                | tee "judge-output/${agent}.txt"; then
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          # Adversarial baselines (curated hostile-input handling) must
+          # PASS the judge, exactly like the standard baselines above.
+          for sample in evals/samples/adversarial/*.md; do
+            name="$(basename "$sample" .md)"
+            [ "$name" = "README" ] && continue
+            echo "::group::judge $name (adversarial)"
+            if ! uv run python evals/run_eval.py judge "$name" "$sample" 2>&1 \
+                | tee "judge-output/${name}.txt"; then
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          # Negative controls are deliberately-flawed outputs: the judge
+          # must FAIL them. A pass here means the judge has gone lenient
+          # (or the rubric eroded) — the one drift direction the positive
+          # baselines above cannot detect. Exit code is inverted.
+          for sample in evals/samples/negative/*.md; do
+            name="$(basename "$sample" .md)"
+            [ "$name" = "README" ] && continue
+            echo "::group::judge $name (negative control — must fail)"
+            if uv run python evals/run_eval.py judge "$name" "$sample" 2>&1 \
+                | tee "judge-output/negative-${name}.txt"; then
+              echo "::error::negative control '${name}' PASSED the judge — leniency drift or rubric erosion; investigate before trusting this week's green verdicts"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$fail"
+
+      - name: Upload judge verdicts
+        if: always() && steps.secret.outputs.available == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: judge-verdicts-${{ github.run_id }}
+          path: judge-output/
+          retention-days: 90
+          if-no-files-found: ignore

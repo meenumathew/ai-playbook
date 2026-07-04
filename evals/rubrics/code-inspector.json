@@ -1,0 +1,182 @@
+{
+  "agent": "code-inspector",
+  "version": 1,
+  "must_demonstrate": [
+    {
+      "id": "CODE-MUST-001",
+      "criterion": "**Raw SQL strings in db.py** \u2014 SQL injection risk. Must use parameterised queries. Cites `security.md` \u00a7 Input Validation.",
+      "keywords": [
+        "security.md",
+        "Raw SQL strings in db.py"
+      ]
+    },
+    {
+      "id": "CODE-MUST-002",
+      "criterion": "**token_manager.py has no tests** \u2014 JWT handling is a critical security path. 100% branch coverage required per `testing.md` \u00a7 Coverage Targets.",
+      "keywords": [
+        "testing.md",
+        "token_manager.py has no tests"
+      ]
+    },
+    {
+      "id": "CODE-MUST-003",
+      "criterion": "**No tests for reset_password or change_email** \u2014 Critical auth paths without test coverage. Cites `testing.md` \u00a7 Test Ordering (coverage completeness check).",
+      "keywords": [
+        "testing.md",
+        "No tests for reset_password or change_email"
+      ]
+    },
+    {
+      "id": "CODE-MUST-004",
+      "criterion": "**SSRF in verify_webhook** \u2014 Fetches user-supplied URL with no host allowlist. Must validate target hosts and block internal/private IPs. Cites `security.md` \u00a7 Input Validation (SSRF).",
+      "keywords": [
+        "security.md",
+        "SSRF in verify_webhook"
+      ]
+    },
+    {
+      "id": "CODE-MUST-005",
+      "criterion": "**auth_service.py is a Large Class (450 lines, 6+ responsibilities)** \u2014 Violates single responsibility. Cites `design-patterns.md` \u00a7 Anti-Patterns (Large Class). Recommend splitting into focused services (AuthService, PasswordService, UserManagementService).",
+      "keywords": [
+        "design-patterns.md",
+        "auth_service.py is a Large Class (450 lines, 6+ responsibilities)"
+      ]
+    },
+    {
+      "id": "CODE-MUST-006",
+      "criterion": "**permissions.py inspects `user.role.value` from outside** \u2014 Inquisitive code. The User entity should own its permission logic (`user.has_permission(action)`). Cites `design-patterns.md` \u00a7 Anti-Patterns (Inquisitive Code).",
+      "keywords": [
+        "user.role.value",
+        "user.has_permission(action)",
+        "design-patterns.md",
+        "permissions.py inspects `user.role.value` from outside"
+      ]
+    },
+    {
+      "id": "CODE-MUST-007",
+      "criterion": "**auth_service.py imports db.py directly** \u2014 Domain/service layer depends on infrastructure. Should use a repository port. Cites `CLAUDE.md` \u00a7 Architecture.",
+      "keywords": [
+        "CLAUDE.md",
+        "auth_service.py imports db.py directly"
+      ]
+    },
+    {
+      "id": "CODE-MUST-008",
+      "criterion": "**auth_service.py imports email_sender.py directly** \u2014 Same issue. Email sending is infrastructure; should be behind a port. Cites `design-patterns.md` \u00a7 DDD Tactical Patterns (Port).",
+      "keywords": [
+        "design-patterns.md",
+        "auth_service.py imports email_sender.py directly"
+      ]
+    },
+    {
+      "id": "CODE-MUST-009",
+      "criterion": "**auth_service.py mixes orchestration with business rules** \u2014 Business rules (password validation, token expiry logic) should live in domain objects. Cites `CLAUDE.md` \u00a7 Architecture (\"Business rules live in domain objects, not services\").",
+      "keywords": [
+        "CLAUDE.md",
+        "auth_service.py mixes orchestration with business rules"
+      ]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "CODE-NOT-001",
+      "criterion": "Invent findings that can't be verified from the file structure and observations",
+      "keywords": [
+        "Invent findings that"
+      ]
+    },
+    {
+      "id": "CODE-NOT-002",
+      "criterion": "Suggest fixes beyond what's needed \u2014 recommend, don't implement",
+      "keywords": [
+        "Suggest fixes beyond"
+      ]
+    },
+    {
+      "id": "CODE-NOT-003",
+      "criterion": "Miss the SQL injection risk (P0 security finding)",
+      "keywords": [
+        "Miss the SQL"
+      ]
+    },
+    {
+      "id": "CODE-NOT-004",
+      "criterion": "Miss the SSRF risk in verify_webhook (P0 security finding)",
+      "keywords": [
+        "Miss the SSRF"
+      ]
+    },
+    {
+      "id": "CODE-NOT-005",
+      "criterion": "Miss the Large Class in auth_service.py",
+      "keywords": [
+        "Miss the Large"
+      ]
+    },
+    {
+      "id": "CODE-NOT-006",
+      "criterion": "Rate this module as \"Pass\" or \"Warn\" \u2014 the security gaps mandate \"Fail\"",
+      "keywords": [
+        "Rate this module"
+      ]
+    },
+    {
+      "id": "CODE-NOT-007",
+      "criterion": "Write source code or test code",
+      "keywords": [
+        "Write source code"
+      ]
+    }
+  ],
+  "quality_signals": [
+    {
+      "id": "CODE-QUALITY-001",
+      "criterion": "Report saved to `audits/AUDIT-NNN-auth.md`",
+      "keywords": [
+        "audits/AUDIT-NNN-auth.md"
+      ]
+    },
+    {
+      "id": "CODE-QUALITY-002",
+      "criterion": "Findings grouped by priority (P0 first, then P1, P2, P3, P4, P5, P6)",
+      "keywords": [
+        "Findings grouped by"
+      ]
+    },
+    {
+      "id": "CODE-QUALITY-003",
+      "criterion": "Every finding cites a specific KB file and section",
+      "keywords": [
+        "Every finding cites"
+      ]
+    },
+    {
+      "id": "CODE-QUALITY-004",
+      "criterion": "Recommended actions are concrete (split auth_service.py into X, Y, Z \u2014 not \"consider refactoring\")",
+      "keywords": [
+        "Recommended actions are"
+      ]
+    },
+    {
+      "id": "CODE-QUALITY-005",
+      "criterion": "Cross-file issues section identifies the architecture violation pattern (multiple direct infrastructure imports)",
+      "keywords": [
+        "Cross-file issues section"
+      ]
+    },
+    {
+      "id": "CODE-QUALITY-006",
+      "criterion": "Optional learning loop: suggests recording the \"no direct infrastructure imports in service layer\" rule as an ADR under `docs/adr/` if it's a recurring pattern",
+      "keywords": [
+        "docs/adr/"
+      ]
+    },
+    {
+      "id": "CODE-QUALITY-007",
+      "criterion": "Handoff message mentions xp-pair-programmer for fixing findings",
+      "keywords": [
+        "Handoff message mentions"
+      ]
+    }
+  ]
+}

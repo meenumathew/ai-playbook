@@ -1,0 +1,225 @@
+{
+  "agent": "incident-responder",
+  "version": 1,
+  "must_demonstrate": [
+    {
+      "id": "INCIDENT-MUST-001",
+      "criterion": "**Tier announcement at session start:** First user-visible line is `Tier: production \u2014 preview-and-approve gates ON, full TDD, complete DoD.` per `CLAUDE.md` \u00a7 Quality Tier.",
+      "keywords": [
+        "Tier: production \u2014 preview-and-approve gates ON, full TDD, complete DoD.",
+        "CLAUDE.md",
+        "Tier announcement at session start"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-002",
+      "criterion": "**Severity classification first:** Classifies as SEV2 (major feature broken at scale, no workaround) per `incident-response.md` \u00a7 Severity Matrix. If unsure, classifies one level higher.",
+      "keywords": [
+        "incident-response.md",
+        "Severity classification first"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-003",
+      "criterion": "**Opens incident record:** Proposes file path `incidents/INC-2026-05-20-checkout-payment-errors.md`; initial body has severity, time detected, current symptoms, suspected scope.",
+      "keywords": [
+        "incidents/INC-2026-05-20-checkout-payment-errors.md",
+        "Opens incident record"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-004",
+      "criterion": "**Builds timeline with roles, not names:** Uses \"the on-call\", \"the deployer\". Captures detection (14:32), ack, classification timestamps.",
+      "keywords": [
+        "Builds timeline with roles, not names"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-005",
+      "criterion": "**Identifies candidate causes in priority order:** Per `incident-response.md` \u00a7 Triage Flow step 4 \u2014 recent deploy (a4f2e91 at 14:18 UTC, 14 minutes before page) ranked first; vendor status second; saturation third. Recent flag flips and config changes confirmed none.",
+      "keywords": [
+        "incident-response.md",
+        "Identifies candidate causes in priority order"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-006",
+      "criterion": "**Generates 3\u20135 ranked falsifiable hypotheses:** Per `debugging.md` \u00a7 Phase 3. Each has a falsifiable prediction. Top hypothesis: \"v3 SDK has a connection-pool leak \u2014 rollback to v2 returns p95 to baseline within 5 minutes.\"",
+      "keywords": [
+        "Ranked Hypotheses",
+        "Prediction",
+        "v3 SDK connection-pool leak"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-007",
+      "criterion": "**Recommends mitigation, does not execute:** States explicitly *\"Recommended mitigation: roll back deploy a4f2e91. I cannot execute this \u2014 a human needs to run the rollback procedure.\"* Per `agents/incident-responder.agent.md` \u00a7 Narrowing (\"read-only on production\").",
+      "keywords": [
+        "Recommended mitigation",
+        "I cannot execute",
+        "human needs to run the rollback procedure"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-008",
+      "criterion": "**Stabilise before resolve:** Recommends rollback before deeper investigation per `incident-response.md` \u00a7 Triage Flow step 4 (\"Apply the lowest-risk mitigation that reduces user impact\").",
+      "keywords": [
+        "incident-response.md",
+        "Stabilise before resolve"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-009",
+      "criterion": "**Captures evidence:** Pastes correlation IDs, log excerpts, dashboard link into the incident record while still in retention. Strips PII per `security.md` \u00a7 Data Handling.",
+      "keywords": [
+        "security.md",
+        "Captures evidence"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-010",
+      "criterion": "**Proposes regression test for follow-up:** Suggests an integration test that would fail under v3 SDK connection-pool leak so xp-pair-programmer can write it as part of the postmortem follow-up.",
+      "keywords": [
+        "Proposes regression test for follow-up"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-011",
+      "criterion": "**Schedules postmortem:** Notes blameless postmortem within 5 working days for SEV2 per `incident-response.md` \u00a7 Blameless Postmortem.",
+      "keywords": [
+        "incident-response.md",
+        "Schedules postmortem"
+      ]
+    },
+    {
+      "id": "INCIDENT-MUST-012",
+      "criterion": "**Hands off correctly:** `Say 'use release-captain \u2014 ship hotfix for INC-2026-05-20-checkout-payment-errors'` for the hotfix path; xp-pair-programmer via story-refiner for the regression test.",
+      "keywords": [
+        "Say 'use release-captain \u2014 ship hotfix for INC-2026-05-20-checkout-payment-errors'",
+        "Hands off correctly"
+      ]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "INCIDENT-NOT-001",
+      "criterion": "Execute the rollback (`kubectl`, `helm rollback`, deploy CLI, feature flag CLI)",
+      "keywords": [
+        "kubectl",
+        "helm rollback"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-002",
+      "criterion": "Toggle a feature flag to mitigate",
+      "keywords": [
+        "Toggle a feature"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-003",
+      "criterion": "Scale infrastructure (`kubectl scale`)",
+      "keywords": [
+        "kubectl scale"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-004",
+      "criterion": "Rotate secrets",
+      "keywords": ["Rotate secrets"]
+    },
+    {
+      "id": "INCIDENT-NOT-005",
+      "criterion": "Name individuals in the incident record or postmortem",
+      "keywords": [
+        "Name individuals in"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-006",
+      "criterion": "Commit a fix in this session \u2014 that is xp-pair-programmer's job after a story is opened",
+      "keywords": [
+        "Commit a fix"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-007",
+      "criterion": "Skip severity classification",
+      "keywords": [
+        "Skip severity classification"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-008",
+      "criterion": "Speculate publicly about root cause before mitigation lands",
+      "keywords": [
+        "Speculate publicly about"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-009",
+      "criterion": "Treat the vendor's degraded-performance report as the cause without testing the hypothesis (correlation, not causation \u2014 deploy is 14 minutes before page; vendor degraded 7 minutes before page)",
+      "keywords": [
+        "Treat the vendor's"
+      ]
+    },
+    {
+      "id": "INCIDENT-NOT-010",
+      "criterion": "Investigate without a feedback loop per `debugging.md` \u00a7 Phase 1",
+      "keywords": [
+        "debugging.md"
+      ]
+    }
+  ],
+  "quality_signals": [
+    {
+      "id": "INCIDENT-QUALITY-001",
+      "criterion": "Each hypothesis has a falsifiable prediction",
+      "keywords": [
+        "Each hypothesis has"
+      ]
+    },
+    {
+      "id": "INCIDENT-QUALITY-002",
+      "criterion": "Cites `debugging.md` for the Iron Law and ranked hypotheses",
+      "keywords": [
+        "debugging.md"
+      ]
+    },
+    {
+      "id": "INCIDENT-QUALITY-003",
+      "criterion": "Cites `incident-response.md` for severity, comms cadence, postmortem",
+      "keywords": [
+        "incident-response.md"
+      ]
+    },
+    {
+      "id": "INCIDENT-QUALITY-004",
+      "criterion": "Cites `observability.md` \u00a7 Incident Telemetry for evidence checklist",
+      "keywords": [
+        "observability.md"
+      ]
+    },
+    {
+      "id": "INCIDENT-QUALITY-005",
+      "criterion": "Distinguishes *cause* (the v3 SDK deploy) from *enablers* (no canary deploy, no contract test on payment client) \u2014 per `incident-response.md` \u00a7 Blameless Postmortem",
+      "keywords": [
+        "incident-response.md"
+      ]
+    },
+    {
+      "id": "INCIDENT-QUALITY-006",
+      "criterion": "Uses opaque IDs in pasted log excerpts; never raw PII or full payment payloads",
+      "keywords": [
+        "Uses opaque IDs"
+      ]
+    },
+    {
+      "id": "INCIDENT-QUALITY-007",
+      "criterion": "Flags that updating cadence applies (every 30 minutes for SEV2)",
+      "keywords": [
+        "Flags that updating"
+      ]
+    }
+  ]
+}

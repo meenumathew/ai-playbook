@@ -1,0 +1,37 @@
+# Active deprecation registry — single source of truth for the deprecation
+# cycle defined in `docs/deprecation-policy.md`. Every entry in
+# `CHANGELOG.md § Deprecated` for a released version must have a row here
+# with the same id; pre-release activity may live only in `## [Unreleased]`
+# until the version ships.
+#
+# Schema:
+#   id                — kebab-case identifier (the deprecated surface).
+#   surface           — one of: cli-flag | cli-command | agent-id |
+#                       config-key | kb-path | deployment-layout | skill-op.
+#   added_version     — when the deprecation marker was added (X.Y.Z).
+#   removal_version   — the MAJOR release that removes it (X.0.0).
+#   reason            — one short sentence; the *why*, not the *what*.
+#   replacement       — id or path of the replacement surface, or "(removed)"
+#                       when the deprecated surface has no successor.
+#   status            — active | grace | removed (informational; the
+#                       contract test is driven by version comparisons).
+#
+# When a removal version ships, delete the row (do NOT keep historical
+# entries here — git history is the audit trail). When a deprecation is
+# rescinded, delete the row and note the rationale in CHANGELOG.md §
+# Changed for that release.
+#
+# Validated by `tests/acceptance/test_deprecations.py` — keep in sync with
+# `CHANGELOG.md § Deprecated` for the latest released section.
+
+# No active deprecations.
+# Example (do not uncomment — kept here as schema documentation):
+#
+# [[deprecations]]
+# id = "release-captain"
+# surface = "agent-id"
+# added_version = "1.5.0"
+# removal_version = "2.0.0"
+# reason = "Renamed to release-engineer to match the broader scope it actually owns."
+# replacement = "release-engineer"
+# status = "active"

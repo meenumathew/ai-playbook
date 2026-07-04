@@ -1,0 +1,7 @@
+extends: capitalization
+message: "Use consistent case for headings: '%s'"
+level: suggestion
+match: $title
+scope: heading
+indicators:
+  - ":"
