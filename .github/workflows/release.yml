@@ -171,6 +171,7 @@ jobs:
       - name: Ensure GitHub release exists
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release view "$TAG" >/dev/null 2>&1 || \
@@ -182,6 +183,7 @@ jobs:
       - name: Attach signed artifacts + SBOM to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release upload "$TAG" \
