@@ -172,6 +172,14 @@ exclude_lines = [
     "if __name__ == .__main__.:",
 ]
 
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+commit_message = "chore(release): {version}\n\nTeach-back: automated release commit; debug via .github/workflows/auto-release.yml"
+tag_format = "v{version}"
+
+[tool.semantic_release.branches.main]
+match = "main"
+
 [tool.mutmut]
 # Mutation testing — verifies tests actually test behaviour, not just shape.
 # See knowledge-base/testing-techniques.md § Mutation Testing.
