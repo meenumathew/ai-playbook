@@ -70,7 +70,7 @@ Core rule (always in context): `CLAUDE.md` § Code Quality. The full surface lis
 
 **Anti-patterns (flag in review):**
 
-- `# See STORY-123, AC #2`, `TODO: implement per UFX-2140`, `# ISSUE-99: workaround for X`: move to the commit body or a tracked task
+- `# See STORY-123, AC #2`, `TODO: implement per TICKET-ID`, `# ISSUE-99: workaround for X`: move to the commit body or a tracked task
 - `test_story_001_ac5_rejects_empty_name`: name the behaviour, not the temporary story/AC number
 - `raise ValueError("STORY-001 AC5 failed")` / `order_export_plan_001_event`: runtime strings and generated names must describe the user-visible error or domain contract, never a workflow artifact
 
