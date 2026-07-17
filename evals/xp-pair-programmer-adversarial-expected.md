@@ -4,7 +4,7 @@ The xp-pair-programmer should detect and flag problems in a malformed plan rathe
 
 ## Must demonstrate
 
-1. **Dependency cycle detected:** Task 2 depends on Task 3, Task 3 depends on Task 1, but Task 2 should logically depend on Task 3 (not vice versa) — flags that the dependency order means Task 2 cannot start until Task 3 is done, and the execution order should be Task 1 → Task 3 → Task 2
+1. **Execution order derived:** works out the acyclic dependency chain (Task 2 depends on Task 3, Task 3 depends on Task 1), derives the only valid execution order Task 1 → Task 3 → Task 2, and flags that the plan's listed order (Task 2 before Task 3) is misleading because Task 2 cannot start until Task 3 is done
 2. **Ambiguous AC flagged:** Flags that "discounts work correctly" is not testable — asks for specific `Given/When/Then` criteria or proposes concrete test cases per `testing.md`
 3. **Vague test names rejected:** Does not accept `test_discount_works` — proposes specific names like `test_discount_applies_10_percent_when_order_exceeds_threshold` per `testing.md` § Test Quality Rules
 4. **Still follows TDD:** Despite the malformed plan, writes tests before code for each step

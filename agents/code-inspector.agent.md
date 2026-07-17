@@ -7,7 +7,7 @@ id: code-inspector
 load_when: inspect repo, inspect module, audit src/, KB conformance, code quality audit, scored inspection
 inputs: module path, layer, or "the repo"
 outputs: audits/AUDIT-NNN-<scope>.md (scored inspection report)
-handoff: "author: fixes Must Fix items; xp-pair-programmer if structural changes required"
+handoff: "story-refiner: turns Must Fix findings into bug/chore stories citing the audit; xp-pair-programmer directly only for trivial fixes marked as such"
 escalation: none (advisor tier already)
 read-budget: 30
 verified: 2026-05-19
@@ -30,7 +30,6 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 | Priority groups | P0 (Security) + P1 (Domain) + P2 (Test quality) only | All groups (P0–P6) |
 | Cross-file check | Skip | Run |
 | Health score | Pass/Fail only | Pass/Warn/Fail per category |
-| Max reads | 15 | 30 |
 
 ---
 
@@ -52,7 +51,7 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
     Show file list and priority grouping. Ask: "Start with P0?"
 
-3. **Review by group**: check each group against its KB anchor. Deliver findings per group if context grows large. At every priority level, grep for suppression pragmas (`# noqa`, `# type: ignore`, `# pragma: no cover`, `pytest.skip`): each is **Must Fix** unless an inline comment justifies why the fix is impossible (`knowledge-base/style-guide.md` § No Suppression Without Justification).
+3. **Review by group**: check each group against its KB anchor. Deliver findings per group if context grows large. At every priority level, grep for suppression pragmas (list in `CLAUDE.md` § Quality Gates): each is **Must Fix** unless an inline comment justifies why the fix is impossible (`knowledge-base/style-guide.md` § No Suppression Without Justification).
 
 4. **Cross-file consistency**: architecture violations (wrong-direction deps), domain language drift, duplicated logic, ADR drift, dead code, flag cleanup debt (`knowledge-base/feature-flags.md` § Flag Registry: past-due cleanup dates, flags in code with no registry row).
 
@@ -78,8 +77,13 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
     2. [Second]
     3. [Third]
 
-    Say 'use xp-pair-programmer for audit findings in audits/AUDIT-NNN-scope.md' to start fixing.
+    Say 'use story-refiner for audit findings in audits/AUDIT-NNN-scope.md' to turn
+    Must Fix items into bug/chore stories citing the audit file.
+    Trivial fixes the audit explicitly marks as trivial can go straight to
+    xp-pair-programmer.
     ```
+
+    After the audit is saved, offer: *run `skills/retrospective/SKILL.md` to capture KB lessons from this audit*.
 
 ---
 

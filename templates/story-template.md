@@ -1,6 +1,6 @@
 ---
 issue-ref:
-type: story            # story | spike | bug | chore
+type: story            # story | spike | bug | chore | test-story (test-story keeps the STORY- prefix)
 status: refining       # refining | ready | in-progress | blocked | done
 priority: normal       # low | normal | high | critical: default normal
 workspace:             # optional: name of the workspace this story belongs to (e.g. apps/api). Empty = repo default. See knowledge-base/workspaces/README.md.

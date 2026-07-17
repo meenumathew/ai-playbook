@@ -6,7 +6,7 @@ load_when: release, ship, merge, deploy, post-deploy, smoke test, rollback, vers
 audience: release-captain, xp-pair-programmer (hotfix path), incident-responder (rollback)
 canonical_for: release gates, merge strategies, post-deploy smoke checklist, rollback rules
 cross_refs: incident-response.md, observability.md, security.md, skills/git/SKILL.md, skills/host-adapter/SKILL.md
-verified: 2026-06-10
+verified: 2026-07-17
 ---
 
 # Release Workflow
@@ -33,7 +33,7 @@ Before opening a PR/MR for review:
 | Security scan | Run project-specific secret, dependency, and static-analysis checks; this repo uses `gitleaks`, `detect-private-key`, `pip-audit`, and Bandit in CI |
 | Quality gates | `knowledge-base/quality-gates.md`: all marked Pass |
 | Story `status: done` | Set by xp-pair-programmer on completion |
-| Diff size ≤ 400 hand-written lines | Generated content (lockfiles, codegen, snapshots), mechanical renames/moves, and deletions do not count. Larger PRs split per `working-agreement.md` § Code Review Norms |
+| Diff size ≤ 400 hand-written lines | Line-counting and exemption rules: `working-agreement.md` § Code Review Norms; split larger PRs |
 
 Before requesting merge:
 
@@ -101,17 +101,11 @@ Adopters with a custom release process (`RELEASING.md` at repo root) follow that
 
 After deploy lands in the target environment, run the smoke checklist before declaring release complete:
 
-| Check | Default signal |
-|---|---|
-| Service health endpoint | `GET /health/ready` returns 200 |
-| Error rate | No new ERROR-level surge in the 10 minutes post-deploy |
-| Latency p95 | Within ±20% of pre-deploy baseline |
-| Critical user journey | One scripted journey passes (login, primary action, logout, or equivalent) |
-| Domain signal | One business KPI (orders placed, predictions served, etc.) ticking as expected |
+1. Run one scripted critical user journey (login, primary action, logout, or equivalent).
+2. Check the deploy-time signals: health endpoint, error rate, latency p95, domain KPI. Canonical signal thresholds and the pass/investigate/rollback bands: `observability.md` § Deploy-Time Signals.
+3. Define environment-specific signals in the project's runbook (`docs/runbooks/post-deploy.md`); the defaults are starting points, not a substitute for a thought-through smoke set.
 
-Define environment-specific signals in the project's runbook (`docs/runbooks/post-deploy.md`). The preceding defaults are starting points, not a substitute for a thought-through smoke set.
-
-If any signal fails, **roll back first, debug second**.
+If any signal fails, **roll back first, debug second** (§ Rollback below).
 
 ---
 
@@ -148,7 +142,7 @@ Branch name: `hotfix/<incident-ref>-<short-slug>` (`skills/git/SKILL.md` § Bran
 
 ## Delivery Metrics (DORA)
 
-The four DORA metrics are the industry-standard health check for this whole workflow. The playbook's artifacts already produce the raw data: adopters instrument the measurement in their own analytics:
+Adopters instrument DORA measurement in their own analytics; the playbook's artifacts already produce the raw data:
 
 | Metric | Source in this playbook |
 |--------|------------------------|
@@ -161,17 +155,6 @@ A degrading metric is a signal to inspect the workflow (slice size, review laten
 
 ---
 
-## What release-captain Does
+## Boundaries
 
-- Opens PR/MR via `host.pr.create`.
-- Watches CI via `host.pr.checks` until it reports green or failure.
-- Surfaces review status; requests merge approval from the user.
-- Performs version bump, tag, and push on explicit approval.
-- Runs the post-deploy smoke checklist.
-
-## What release-captain Does NOT Do
-
-- Auto-merge. Merge requires the explicit user signal in `CLAUDE.md` § Shared Rules.
-- Auto-deploy. Deploy commands (`kubectl`, `terraform`, `ansible`, etc.) are out of scope; the agent stops at "tag pushed" and reports.
-- Skip CI. If CI reports red, the agent stops and asks: never with `--admin` or `--no-verify`.
-- Run database migrations independently of the deploy. Migrations are part of the deploy and follow the team's migration runbook.
+release-captain's duties and hard limits (no auto-merge, no auto-deploy, no CI bypass) are canonical in `agents/release-captain.agent.md`. Deploy commands (`kubectl`, `terraform`, `ansible`, etc.) are out of scope: the agent stops at "tag pushed" and reports. Database migrations are part of the deploy and follow the team's migration runbook, never run independently.

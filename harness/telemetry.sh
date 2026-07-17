@@ -95,32 +95,38 @@ if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
 
   # Token roll-up — only when jq is available. Sums across every assistant
   # message that carries .message.usage in the transcript JSONL. Dominant
-  # model = the model with the most output_tokens.
+  # model = the model with the most output_tokens. One slurp pass computes
+  # both, so long transcripts are read once (the Stop hook has a bounded
+  # timeout; two full-transcript passes doubled the risk of losing the row).
   if command -v jq >/dev/null 2>&1; then
-    TOKEN_SUMS="$(jq -r -s '
+    ROLLUP="$(jq -r -s '
       map(select(.type == "assistant" and .message.usage != null)) as $msgs
       | {
           input:          ($msgs | map(.message.usage.input_tokens // 0)                | add // 0),
           output:         ($msgs | map(.message.usage.output_tokens // 0)               | add // 0),
           cache_creation: ($msgs | map(.message.usage.cache_creation_input_tokens // 0) | add // 0),
-          cache_read:     ($msgs | map(.message.usage.cache_read_input_tokens // 0)     | add // 0)
+          cache_read:     ($msgs | map(.message.usage.cache_read_input_tokens // 0)     | add // 0),
+          model: (
+            [$msgs[] | select(.message.model != null)]
+            | sort_by(.message.model)
+            | group_by(.message.model)
+            | map({model: .[0].message.model, out: (map(.message.usage.output_tokens // 0) | add // 0)})
+            | sort_by(.out)
+            | reverse
+            | .[0].model // "unknown"
+          )
         }
-      | "\(.input) \(.output) \(.cache_creation) \(.cache_read)"
-    ' "$TRANSCRIPT" 2>/dev/null || echo "0 0 0 0")"
-    MODEL="$(jq -r -s '
-      map(select(.type == "assistant" and .message.model != null and .message.usage != null))
-      | sort_by(.message.model)
-      | group_by(.message.model)
-      | map({model: .[0].message.model, out: (map(.message.usage.output_tokens // 0) | add // 0)})
-      | sort_by(.out)
-      | reverse
-      | .[0].model // "unknown"
-    ' "$TRANSCRIPT" 2>/dev/null || echo unknown)"
-    [ -z "$MODEL" ] && MODEL="unknown"
+      | "\(.input) \(.output) \(.cache_creation) \(.cache_read) \(.model)"
+    ' "$TRANSCRIPT" 2>/dev/null || echo "0 0 0 0 unknown")"
 
     # shellcheck disable=SC2086
-    set -- $TOKEN_SUMS
-    if [ "$#" -eq 4 ]; then
+    set -- $ROLLUP
+    if [ "$#" -eq 5 ]; then
+      MODEL="$5"
+    fi
+    [ -z "$MODEL" ] && MODEL="unknown"
+
+    if [ "$#" -ge 4 ]; then
       TOKENS_OBJECT="$(jq -nc \
         --argjson input "$1" \
         --argjson output "$2" \

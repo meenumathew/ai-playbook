@@ -103,6 +103,9 @@ HARNESS_FILES: dict[str, str] = {
     "pre-commit-config.yaml": ".pre-commit-config.yaml",
     "ci.yml": ".github/workflows/ci.yml",
     "security.yml": ".github/workflows/security.yml",
+    # security.yml's SHA-pinned Actions rely on Dependabot for weekly bumps —
+    # ship the config that makes that claim true.
+    "dependabot.yml": ".github/dependabot.yml",
     "check-teachback.sh": "harness/check-teachback.sh",
     "telemetry.sh": "harness/telemetry.sh",
     "read-budget.sh": "harness/read-budget.sh",

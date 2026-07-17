@@ -73,5 +73,8 @@ Create an ADR only when all three criteria are true:
 ## Index
 
 - [ADR-0001: Bitbucket Server / Data Center is not supported](0001-bitbucket-server-not-supported.md): Active, 2026-05-20
+- [ADR-0002: CLI module layering (foundation → middle → service → cli)](0002-cli-module-layering.md): Active, 2026-07-17
+- [ADR-0003: Pack overlays resolve last-wins over core](0003-pack-overlay-last-wins.md): Active, 2026-07-17
+- [ADR-0004: Two-phase backup and restore (stage, then swap)](0004-two-phase-backup-restore.md): Active, 2026-07-17
 
 > `tests/acceptance/test_harness_release_contracts.py::test_adr_index_in_readme_matches_adr_files` keeps the index fresh. When you add or update an ADR, run the test: on drift it prints the corrected bullet block ready to paste.

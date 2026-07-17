@@ -4,9 +4,9 @@ size: medium
 tldr: Domain inward; pure domain, no framework imports; ports/adapters; pick patterns only when they solve a real problem.
 load_when: architecture, domain, service boundary, ports, adapters, hexagonal, DDD, dependency direction, anti-pattern
 audience: all
-canonical_for: architecture layers, hexagonal architecture, DDD tactical patterns, dependency inversion
+canonical_for: architecture layers, hexagonal architecture, DDD tactical patterns, dependency inversion, module depth and seams, vendor-neutral operation IDs, design anti-patterns, dual-message error handling
 cross_refs: philosophy.md, refactoring.md, security.md
-verified: 2026-06-08
+verified: 2026-07-17
 ---
 
 # Design Patterns
@@ -54,7 +54,7 @@ Vocabulary for evaluating *whether a module pulls its weight*. Use these terms e
 | **Module** | Anything with an interface and an implementation: function, class, package, slice. Scale-agnostic. |
 | **Interface** | Everything a caller must know to use the module: types, invariants, error modes, ordering, config. Not just the type signature. |
 | **Implementation** | The code inside. |
-| **Depth** | Leverage at the interface: how much behaviour callers get per unit of interface they have to learn. |
+| **Depth** | Leverage at the interface: property definition in `design-fundamentals.md` § Abstraction. |
 | **Seam** | A place where you can change behaviour without editing in place. Where an interface lives. (Avoid "boundary": overloaded with bounded context.) |
 | **Adapter** | A concrete thing satisfying an interface at a seam. |
 
@@ -147,10 +147,7 @@ When an agent needs to talk to an external tool family: git host, notifier, issu
 | `notify(event, …)` with canonical events (`release_shipped`, `smoke_fail`, `incident_sev1`, …) | Slack, email, webhook, `none` | `skills/notifier/SKILL.md` |
 | `issue.fetch(<ref>)` with provider inferred from ref shape or config | Jira, GitHub, GitLab, Bitbucket, Linear | `skills/issue-fetch/SKILL.md` |
 
-**Why this is a separate principle from Adapter / ACL:**
-
-- *Adapter* converts one interface into another at one boundary; *ACL* defends a domain from an external model. **Vendor-neutral operation ID** is the **stable name** the rest of the playbook commits to: it survives provider swaps, lets `.ai-playbook.toml` move config out of agents, and lets escalation triggers fire on the operation, not the vendor command.
-- It is the **citable contract** between agents and skills. Agents may write `host.pr.merge`; they may not write `gh pr merge`.
+**Why this is a separate principle from Adapter / ACL:** *Adapter* converts one interface at one boundary; *ACL* defends a domain from an external model. The operation ID is the **citable contract** between agents and skills: the stable name that survives provider swaps. Agents may write `host.pr.merge`; they may not write `gh pr merge`.
 
 **Rules.**
 
@@ -180,7 +177,7 @@ Adopter-facing artifacts name **capabilities**, not products, by default: same r
 
 **Reviewer prompt.** Story names a product (`Slack`, `Jira`, `S3`, `Stripe`) without an ADR or constraint citation → ask: *"Should this be the capability name? If the vendor is genuinely fixed, point to the ADR or constraint."* Not always a Must Fix: depends on whether the vendor is fixed by an external commitment.
 
-**Make it mechanical when you can.** The OpenAPI precedent (Layer 1) is enforceable by a contract test: a CI check that grep's the spec for `operationId` values matching `*Auth0*` / `*Okta*` / vendor patterns and fails if the public name leaks. The same trick applies to stories: a contract test over `stories/**/*.md` that flags product names outside an `## ADRs` / `## Constraints` block. Optional, recommended for adopters whose stories accumulate vendor leakage.
+**Make it mechanical when you can.** A contract test can grep specs and `stories/**/*.md` for vendor names outside an `## ADRs` / `## Constraints` block. Optional, recommended for adopters whose stories accumulate vendor leakage.
 
 ---
 
@@ -238,17 +235,5 @@ Makes info-leak prevention structural instead of per-handler sanitization. Align
 | **Premature Abstraction**: patterns or layers before you need them | Wait for the pattern to emerge (`refactoring.md` § When to Refactor: Rule of Three) |
 | **Primitive Obsession**: raw `str`/`int`/`float` for domain concepts | Create Value Objects: `UserId`, `Money` |
 | **Anemic Domain Model**: domain objects with only getters/setters; logic lives in services | Move business rules into the domain object; services orchestrate, they don't implement rules |
-
-**Inquisitive vs assertive: worked example:**
-
-```python
-# Inquisitive: the caller reaches in and decides on the order's behalf
-if order.status == "paid" and order.items and not order.refunded:
-    ship(order)
-
-# Assertive: the rule lives on the object; callers just ask
-if order.is_eligible_for_shipping():
-    ship(order)
-```
 
 AI workflow anti-patterns (Silent Misalignment, Flying Blind, Sunk Cost): `philosophy.md` § AI Workflow Anti-Patterns.

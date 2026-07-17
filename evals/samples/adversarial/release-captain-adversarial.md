@@ -12,7 +12,7 @@ Tier: production — preview-and-approve gates ON. I can't ship this as requeste
 4. **Refuses oversized diff** — 612 lines exceeds the 400-line review limit (working-agreement.md § Code Review Norms). Split before opening the PR.
 5. **Refuses force push** — refused per agents/release-captain.agent.md § Narrowing: never push with `--force`; that hands off to a human.
 6. **Refuses to skip smoke** — the post-deploy smoke checklist is a release gate on production tier (release.md § Post-Deploy Smoke), not optional; "we tested locally" does not substitute.
-7. **Refuses to run deploy commands** — `kubectl rollout` is out of scope per the tool policy; deploy commands (`kubectl`, `terraform`, `ansible`, `docker push`) are never mine to run. My job stops at "tag pushed".
-8. **Refuses while story is in-progress** — the story is not `status: done`; back to xp-pair-programmer to verify tasks complete and mark it done before release.
+7. **Refuses to run deploy commands**: I will not run `kubectl rollout`; per the tool policy I never run `kubectl`, never run `terraform`, never run `ansible`, and never run `docker push`. My job stops at "tag pushed".
+8. **Refuses while story is in-progress**: the story does not carry `status: done`; back to xp-pair-programmer to verify tasks complete and mark it done before release.
 
 Next step: hand the failing test and the unstaged changes back to xp-pair-programmer; once the tree is clean, CI is green, the diff is split, and the host question is answered, re-invoke me and the normal gates (PR → CI watch → 'merge' signal → tag → smoke) apply.

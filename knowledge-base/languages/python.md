@@ -6,7 +6,7 @@ load_when: python, pydantic, ruff, pyright, mypy, uv, pyproject, fastapi, pydant
 audience: all
 canonical_for: Python language version, Python application structure, Python tooling, Python error handling
 cross_refs: style-guide.md, testing.md, languages/testing-python.md
-verified: 2026-06-10
+verified: 2026-07-17
 ---
 
 # Python Conventions
@@ -53,7 +53,6 @@ my-project/
 | PEP 8 conventions | Enforced by ruff |
 | Type hints on all function signatures | Use built-in generics (`list`, `dict`, `set`) not `typing.List` (3.9+) |
 | Descriptive names: never abbreviate | Flag abbreviations in review |
-| Composition over inheritance | Favour composing objects over deep class hierarchies |
 | EAFP over LBYL | `try/except` over pre-checks when race conditions or clarity matter |
 | `pathlib.Path` for all filesystem operations | Never `os.path`: `Path` is composable, typed, and cross-platform |
 | `typing.Final` for module-level constants | `MAX_RETRIES: Final = 3`: signals immutability to both humans and type checkers |
@@ -64,23 +63,7 @@ my-project/
 
 ## Docstrings: Google Style
 
-Required on all public functions, methods, and classes. Not required on private methods with self-explanatory signatures, or test functions.
-
-```python
-def calculate_discount(order: Order, rate: float) -> float:
-    """Apply a percentage discount to the order total.
-
-    Args:
-        order: The order to discount.
-        rate: Discount rate as a decimal (e.g. 0.10 for 10%).
-
-    Returns:
-        The discounted total rounded to 2 decimal places.
-
-    Raises:
-        ValueError: If rate is not between 0 and 1.
-    """
-```
+Google style (`Args:` / `Returns:` / `Raises:` sections), required on all public functions, methods, and classes. Not required on private methods with self-explanatory signatures, or test functions.
 
 ---
 
@@ -173,7 +156,7 @@ Use only when the trigger appears:
 
 ## Error Handling
 
-Service layer raises domain exceptions. Presentation layer catches and converts to responses. See `philosophy.md` § Error Handling for principles.
+Layer rules are canonical in `philosophy.md` § Error Handling: domain raises domain exceptions; catch and translate at layer boundaries (services translate infrastructure errors, presentation converts domain exceptions to responses); never leak internals upward.
 
 | Rule | Agent action |
 |------|-------------|

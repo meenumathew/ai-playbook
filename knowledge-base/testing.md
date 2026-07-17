@@ -6,7 +6,7 @@ load_when: test, TDD, AC coverage, retrofit tests, weak test, test quality, char
 audience: all
 canonical_for: TDD discipline, test naming convention, AC standards, test quality rules, retrofitting tests
 cross_refs: testing-techniques.md, languages/testing-python.md, debugging.md, feature-flags.md
-verified: 2026-05-19
+verified: 2026-07-17
 ---
 
 # Testing Rules
@@ -17,7 +17,7 @@ Optional techniques: `testing-techniques.md`.
 ## Agent Use
 
 - **Read first:** TDD Discipline, Choose The Testing Mode, Acceptance Test (AT) Standards, Test Quality Rules.
-- **Load deeper only on trigger:** mutation, property-based, contract, async/event-driven, Python async/time/http/testcontainers/xdist techniques: use `testing-techniques.md`.
+- **Load deeper only on trigger:** mutation, property-based, contract, async/event-driven techniques: `testing-techniques.md`; language-specific techniques: `languages/testing-<lang>.md`.
 
 ---
 
@@ -42,7 +42,7 @@ Use the lightest test strategy that protects the change.
 | Story/plan behaviour with AC | One failing AT per AC, then inner unit/service TDD until the AT passes |
 | Bug fix | Regression test first at the smallest useful boundary |
 | Refactor | Run baseline tests, refactor, rerun same tests; add characterization tests only when coverage is missing |
-| Existing untested code | Characterization tests may pass immediately; capture current behaviour before changing it |
+| Existing untested code | Characterization tests first: § Retrofitting Tests onto Existing Untested Code |
 | Docs/prompt/format-only | No invented tests; validate with docs/lint/search/evals as relevant |
 
 ---
@@ -69,8 +69,6 @@ Non-negotiable. Every test xp-pair-programmer writes and diff-reviewer checks mu
 5. **Unit tests have no I/O**: no DB, filesystem, network, or clock.
 6. **Test independence**: no shared mutable state; tests pass in any order.
 7. **Keep tests simple**: no `if`, `for`, or `while` in the test body; use parametrized tests for input matrices.
-
-The classic **FIRST** mnemonic maps here: Fast (rule 5), Independent (rule 6), Repeatable/Self-validating/Timely (rules 1-7).
 
 ---
 
@@ -115,18 +113,9 @@ Every AC needs positive coverage. User-visible failure paths need negative cover
 
 ## Test Doubles
 
-| Type | Use |
-|------|-----|
-| Stub | Return canned data |
-| Mock | Verify side effects at external seams |
-| Spy | Wrap real behaviour and record calls |
-| Fake | In-memory implementation |
+Heuristic: stub queries, mock commands (verify side effects at external seams); use in-memory fakes for ports. Domain objects do not need mocks.
 
-Heuristic: stub queries, mock commands. Domain objects do not need mocks.
-
-### Python-specific: ban on `unittest.mock`
-
-Applies only to Python projects. Never import from `unittest.mock`; use the pytest `mocker` fixture from `pytest-mock`. Details: `languages/testing-python.md` § Mocking.
+Python projects: never import from `unittest.mock`; use the pytest `mocker` fixture. Details: `languages/testing-python.md` § Mocking.
 
 ### Mock at boundaries only
 
@@ -136,12 +125,7 @@ Mock at seams between your code and something you do not control: external APIs,
 
 ## Coverage Targets
 
-| Scope | Target |
-|-------|--------|
-| New and modified code | 80%+ branch coverage |
-| Critical paths in `knowledge-base/quality-gates.md` | 100% branch coverage |
-
-Coverage is a floor, not a goal. Branch coverage plus scenario coverage matters more than line coverage.
+Numeric thresholds and the critical-path registry are project policy, not universal law: both live in `quality-gates.md` § Coverage Policy. Coverage is a floor, not a goal: branch coverage plus scenario coverage matters more than line coverage.
 
 ---
 

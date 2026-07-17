@@ -3,7 +3,17 @@
 
 `mutmut run` is useful only when the exported stats are treated as a contract.
 This checker fails on new surviving/no-test mutants and on infrastructure-like
-statuses such as suspicious, timeout, interrupted, or segfault.
+statuses such as suspicious, timeout, interrupted, or segfault. It also fails
+on new skipped mutants (`max_skipped`) and on a collapse of the mutant
+population (`min_total`) — without a floor on total, a config change that
+silently stops mutating most of src/ would look like a perfect run.
+
+Baseline value provenance (JSON carries no comments, so it lives here):
+`max_skipped` is pinned to the recorded skipped count of the current baseline
+run (0), and `min_total` to roughly 90% of that run's total mutant count
+(113 mutants -> floor 101). Regenerate with `uv run mutmut run` +
+`uv run mutmut export-cicd-stats` and update both when src/ legitimately
+grows or shrinks.
 
 Usage:
     python tools/check-mutation-baseline.py [STATS_JSON] [BASELINE_JSON]
@@ -39,6 +49,7 @@ STAT_FIELDS = (
 THRESHOLD_TO_FIELD = {
     "max_survived": "survived",
     "max_no_tests": "no_tests",
+    "max_skipped": "skipped",
     "max_suspicious": "suspicious",
     "max_timeout": "timeout",
     "max_check_was_interrupted_by_user": "check_was_interrupted_by_user",
@@ -91,6 +102,17 @@ def check_baseline(stats_path: Path, baseline_path: Path) -> list[str]:
         actual = observed[stat_field]
         if actual > allowed:
             failures.append(f"{stat_field}: observed {actual}, baseline allows {allowed}")
+
+    # Floor on the mutant population: a collapse in `total` means most of the
+    # source stopped being mutated, which would otherwise read as a clean run.
+    min_total = thresholds.get("min_total")
+    if not isinstance(min_total, int) or min_total < 1:
+        raise CheckError(f"{baseline_path}: `thresholds.min_total` must be a positive integer")
+    if observed["total"] < min_total:
+        failures.append(
+            f"total: observed {observed['total']}, baseline requires at least {min_total} "
+            "(mutant population collapsed — check paths_to_mutate/config before lowering)"
+        )
 
     return failures
 

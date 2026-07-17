@@ -6,7 +6,7 @@ load_when: production incident, outage, SEV1, SEV2, postmortem, on-call, triage,
 audience: incident-responder, release-captain, on-call human
 canonical_for: severity matrix, comms cadence, war-room rules, blameless postmortem structure, follow-up tracking
 cross_refs: debugging.md, observability.md, release.md, security.md
-verified: 2026-05-20
+verified: 2026-07-17
 ---
 
 # Incident Response
@@ -48,7 +48,7 @@ If unsure, classify one level higher. Down-classifying mid-incident requires exp
 5. **Investigate root cause**: apply the Iron Law from `debugging.md`. Build a feedback loop on production telemetry, not local repros, when production state matters.
 6. **Resolve**: apply the durable fix. Verify with a regression test that fails on the broken state and passes on the fixed state.
 7. **Communicate resolution**: final status update with: what broke, mitigation applied, restoration time, what to expect next (postmortem owner, ETA).
-8. **Schedule postmortem**: within 5 working days for SEV1/SEV2. Optional for SEV3, skipped for SEV4 unless the cause is interesting.
+8. **Schedule postmortem**: required for SEV1/SEV2 (deadline and structure: § Blameless Postmortem); optional for SEV3, skipped for SEV4 unless the cause is interesting.
 
 ---
 
@@ -135,16 +135,6 @@ Security incidents follow the same severity matrix and comms cadence, but add le
 
 ---
 
-## What the incident-responder Agent Does
+## Boundaries
 
-- Reads the incident channel, telemetry, and recent commits to build a timeline.
-- Applies the Iron Law (`debugging.md`) to propose ranked hypotheses.
-- Writes the postmortem from `templates/postmortem-template.md`.
-- Proposes follow-up stories and ADRs as flagged by the postmortem, then hands them to story-refiner or docs-maintainer to open.
-
-## What the incident-responder Agent Does NOT Do
-
-- Execute mitigations (toggle flags, roll back deploys, scale services). Those are human + release-captain.
-- Write production code. That is xp-pair-programmer after story-refiner opens a story.
-- Communicate to external users. That is the incident commander.
-- Assign blame. There is none: see the preceding Blameless Postmortem section.
+incident-responder investigates and documents only: it builds the timeline, proposes ranked hypotheses via the Iron Law (`debugging.md`), writes the postmortem, and proposes follow-up stories/ADRs for story-refiner or docs-maintainer to open. It never executes mitigations (human + release-captain), writes production code (xp-pair-programmer via story-refiner), communicates to external users (incident commander), or assigns blame. Canonical duties: `agents/incident-responder.agent.md`.

@@ -13,7 +13,7 @@ Fail. The module has multiple P0 security findings and P1 architecture violation
 ## P0 Security
 
 1. `db.py`: raw SQL strings concatenate user input. This is SQL injection risk; use parameterised queries. KB: `knowledge-base/security.md` § Input Validation.
-2. `token_manager.py`: JWT validation has no tests. Token validation is a critical security path and needs 100% branch coverage. KB: `knowledge-base/testing.md` § Coverage Targets.
+2. `token_manager.py`: JWT validation has no tests. Token validation is a critical security path and needs the critical-path evidence bar (100% branch coverage per this project's registry). KB: `knowledge-base/quality-gates.md` § Critical Paths.
 3. `auth_service.py`: `reset_password` and `change_email` have no tests. These are auth-critical flows; missing coverage is a release blocker. KB: `knowledge-base/testing.md` § Test Ordering.
 4. `verify_webhook`: fetches a user-provided URL without host allowlisting or private-IP blocking. This is SSRF. KB: `knowledge-base/security.md` § Input Validation.
 

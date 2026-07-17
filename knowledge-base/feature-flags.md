@@ -6,7 +6,7 @@ load_when: dark launch, gradual rollout, kill switch, A/B test, percentage rollo
 audience: story-refiner, slice-planner, xp-pair-programmer, diff-reviewer
 canonical_for: flag lifecycle, flag evaluation layer, flag test isolation, flag registry process
 cross_refs: security.md, testing.md
-verified: 2026-06-13
+verified: 2026-07-17
 ---
 
 # Feature Flags
@@ -73,7 +73,7 @@ Project flags live in `knowledge-base/feature-flag-registry.md`: seed from `temp
 | Flag created | Add row: name, category, default OFF, owner, story, created date, cleanup-due date. Same commit as the flag's first test; required by `CLAUDE.md` § Definition of Done |
 | Rollout advances | Update Status (dark-launch → 10% → 50% → 100%) |
 | Flag removed | Move the row to Removed Flags with date and outcome |
-| Review / audit | Past-due cleanup date, or release flag older than two cycles, = cleanup debt → diff-reviewer / code-inspector finding |
+| Review / audit | Past-due cleanup date, or a flag past its § Flag Categories lifetime, = cleanup debt → diff-reviewer / code-inspector finding |
 
 A flag in a diff with no registry row is a **Must Fix** review finding.
 

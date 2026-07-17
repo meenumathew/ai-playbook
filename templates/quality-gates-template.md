@@ -71,11 +71,7 @@ Baseline scores:
 
 ## Behaviour Coverage Checklist
 
-- [ ] Positive path tests for expected success
-- [ ] Negative path tests for rejected/failed inputs
-- [ ] Edge cases such as empty, null, zero, max, whitespace, or unicode where relevant
-- [ ] Boundary cases such as threshold transitions and off-by-one risks
-- [ ] Error handling tests for exception type, safe message, and layer translation
+Before claiming done, verify the changed behaviour covers all five behaviour classes in `testing.md` § Test Ordering and Completeness (happy, unhappy, edge, boundary, error handling): positive coverage for every AC, negative coverage for user-visible failure paths.
 
 ---
 
@@ -102,4 +98,4 @@ Some gates are non-command checks and must be reviewed manually.
 | Security scan failure | Treat exploitable findings as Must Fix before approval |
 | Tool unavailable | Name the blocker and run the closest smaller verification; do not claim the gate passed |
 
-Never bypass gates with `--no-verify`, blanket suppressions, or skipped tests without an explicit reason.
+Bypass and suppression rules (`--no-verify`, blanket suppressions, skips): `CLAUDE.md` § Quality Gates and `style-guide.md` § No Suppression Without Justification.

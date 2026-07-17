@@ -4,38 +4,32 @@ size: small
 tldr: Agents declare advisor or executor tier; tier names are the contract, not model IDs.
 load_when: model tier, advisor, executor, model config, escalation, single model setup
 audience: all
-canonical_for: tier definitions, escalation triggers, single-model setups, quality floor
+canonical_for: tier definitions, single-model setups, quality floor
 cross_refs: working-agreement.md
-verified: 2026-07-02
+verified: 2026-07-17
 ---
 
 # Model Tier
 
 ## Agent Use
 
-- **Read first:** Tier Definitions, Escalation Triggers, Single-Model Setups, Quality Floor.
+- **Read first:** Tier Definitions, Single-Model Setups, Quality Floor.
 - **Load deeper only on trigger:** provider examples and cost/latency background.
 
 ---
 
 ## Why Tier Names, Not Model IDs
 
-Each agent declares `model: advisor` or `model: executor` in its frontmatter. These names are the contract: agents never reference Opus, Sonnet, GPT-4, or any specific model. The mapping from tier to actual model lives in `.ai-playbook.toml` and the AI tool's config.
-
-Tier-based abstraction means:
-
-- Swapping models is a config change, not a repo edit
-- The same agent files work on Anthropic, OpenAI, Google, or local models
-- Free, paid, mixed-provider, and local-only setups all use identical agents
+The contract and the escalation triggers live in `CLAUDE.md` § Model Tier: agents declare `model: advisor` or `model: executor`, never a vendor model ID. The tier-to-model mapping lives in `.ai-playbook.toml` and the AI tool's config, so swapping models is a config change, not a repo edit: the same agent files work on Anthropic, OpenAI, Google, or local models: free, paid, mixed-provider, or single-model.
 
 ---
 
 ## Tier Definitions
 
-| Tier       | Role                                              | Used by                                                  |
-|------------|---------------------------------------------------|----------------------------------------------------------|
-| `advisor`  | Deeper reasoning; planning, review, audit, ship/incident judgement | story-refiner, slice-planner, diff-reviewer, code-inspector, release-captain, incident-responder |
-| `executor` | High-volume execution; TDD cycles, drafting docs  | xp-pair-programmer, docs-maintainer                                 |
+| Tier       | Role                                              |
+|------------|---------------------------------------------------|
+| `advisor`  | Deeper reasoning; planning, review, audit, ship/incident judgement |
+| `executor` | High-volume execution; TDD cycles, drafting docs  |
 
 Per-agent assignment lives in each agent file's frontmatter (`agents/<name>.agent.md`).
 
@@ -67,9 +61,7 @@ If the tool exposes only one Ollama model, set both tiers to the same identifier
 
 ## Deploying to Claude Code
 
-`ai-playbook deploy --tool claude` materializes the `[model_tiers]` mapping into deployed agent frontmatter: `model: advisor`/`model: executor` becomes `model: opus`/`model: sonnet`/`model: haiku`/`model: inherit` (or a full `claude-*` model ID) wherever the configured value is one Claude Code understands natively. Source files under `agents/` always keep the tier name: only the deployed copy in `.claude/agents/` is rewritten, and only the frontmatter `model:` line, never prose.
-
-Values Claude Code can't interpret directly (e.g. `ollama:qwen3:32b`) are left as the tier name in the deployed copy, and `deploy` prints a note explaining why: those adopters' tools do their own tier-to-model mapping, same as before this feature existed. `diff` and `doctor` apply the identical rewrite when checking for drift, so a clean deploy always reports up to date. Other targets (copilot, cursor, kiro) have no per-agent model field and are never rewritten.
+`ai-playbook deploy --tool claude` materializes the `[model_tiers]` mapping into deployed agent frontmatter; source files under `agents/` always keep the tier name. Rewrite mechanics and edge cases: `docs/cli-reference.md` § Deploy agents.
 
 ---
 
@@ -88,16 +80,6 @@ The pattern is *capability gap*, not specific brands. Any stronger / faster pair
 
 ---
 
-### Escalation Triggers
-
-When an executor-tier agent hits one of these, stop the current session and re-run the agent on the advisor tier: no silent model switching mid-session:
-
-- **xp-pair-programmer:** 3 failed fix attempts (`debugging.md` § Iron Law + § 3-Fix Architectural Stop Rule) before attempting fix #4
-- **docs-maintainer:** writing an ADR or architecture-level doc
-- **Any executor agent:** "I don't know" twice in one session on the same question
-
----
-
 ### Single-Model Setups (Free Tier, Local-Only)
 
 If your AI tool runs one model for everything (no advisor/executor distinction available), declare both tiers with the same model name:
@@ -111,7 +93,7 @@ executor = "same-local-model"
 Then:
 
 - Agents still work: the workflow honours tier names even if both resolve to the same model
-- Escalation triggers route to a **human review checkpoint** instead of a model switch: pause, surface the blocker, ask the user before proceeding
+- Escalation triggers (`CLAUDE.md` § Model Tier) route to a **human review checkpoint** instead of a model switch: stop the session, surface the blocker, ask the user before proceeding: never switch models silently mid-session
 - This is *stricter* than the paid path, not weaker: TDD red-green, quality gates, and Definition of Done remain unchanged
 
 ---

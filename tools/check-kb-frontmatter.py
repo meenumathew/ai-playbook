@@ -239,7 +239,11 @@ def discover_targets(args: list[str]) -> tuple[list[Path], list[Path]]:
                 skill.append(path)
         return kb, skill
 
+    # Top-level KB plus shipped language conventions. `workspaces/` stays
+    # excluded deliberately: its files are seeded per-adopter content, not
+    # shipped KB, so the contract does not apply to them.
     kb = sorted(p for p in KB_DIR.glob("*.md"))
+    kb.extend(sorted((KB_DIR / "languages").glob("*.md")))
     skill = sorted(SKILLS_DIR.glob("*/SKILL.md"))
     return kb, skill
 

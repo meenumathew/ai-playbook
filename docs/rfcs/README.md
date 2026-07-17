@@ -112,6 +112,7 @@ The list below is kept fresh by hand. When you accept, reject, withdraw, or supe
 
 | RFC | Title | Status | Date |
 |---|---|---|---|
+| [0002](0002-lessons-log.md) | A seeded, adopter-owned lessons log for negative results | Proposed | 2026-07-17 |
 
 ---
 

@@ -88,3 +88,16 @@ def test_chained_baselines_describe_the_same_story():
         "slice-planner baseline shares no test behaviours with story-refiner's AC — "
         "the committed baselines no longer chain into one story"
     )
+
+
+def test_retrospective_skill_is_reachable_from_closing_agents():
+    """The retrospective skill only fires if the chain's closing agents offer
+    it: story close (xp-pair-programmer), audit close (code-inspector), and
+    release close (release-captain) must each hand off to the skill."""
+    root = get_source_root()
+    for agent in ("xp-pair-programmer", "code-inspector", "release-captain"):
+        text = (root / "agents" / f"{agent}.agent.md").read_text(encoding="utf-8")
+        # STRUCTURE-MARKER: the skill path is the wiring; offer wording is free.
+        assert "skills/retrospective" in text, (
+            f"{agent} must offer skills/retrospective after its closing step"
+        )

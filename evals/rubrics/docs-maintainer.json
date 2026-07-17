@@ -106,8 +106,7 @@
       "id": "DOCS-NOT-005",
       "criterion": "Append to a single monolithic `decisions.md` instead of creating a new file under `docs/adr/`",
       "keywords": [
-        "decisions.md",
-        "docs/adr/"
+        "decisions.md"
       ]
     },
     {

@@ -1,7 +1,8 @@
 ---
 # REQUIRED machine-readable contract: every key below must be present and non-empty.
 # Validated by `tests/acceptance/test_agent_contracts.py`
-# § test_every_agent_declares_required_frontmatter_keys.
+# § test_every_agent_declares_required_frontmatter_keys and
+# § test_every_agent_declares_machine_readable_read_budget.
 
 # Display name shown to humans (the agent's brand).
 name: <Title Case Agent Name>
@@ -40,6 +41,16 @@ handoff: <agent-id> [or <agent-id-A> / <agent-id-B>]
 # Used by Section-1 honesty audits.
 escalation: <e.g. "ADR (advisor tier) if architectural decision surfaces; ask user if scope ambiguous">
 
+# Per-session read cap: an integer, or the literal `self-tracked` when the
+# agent tracks its own reads without a numeric cap. Feeds the read-budget
+# hook; state the cap once more (at most) in § Tool Policy prose, never in
+# a third place.
+read-budget: <e.g. 20>
+
+# OPTIONAL: KB files or sections loaded on every invocation of this agent.
+# Use sparingly: preloads are paid in full each session.
+# preload: <comma-separated KB files, e.g. "testing.md">
+
 # Last verification date in YYYY-MM-DD. The maintainer re-runs the agent
 # against its eval rubric and updates this date when behaviour is confirmed
 # to match the contract. Stale dates >180 days are flagged by Section-1.
@@ -75,27 +86,37 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 | <step name>           | <prototype>     | <production>    |
 
 <Only list rows where this agent's behaviour deviates from the master table.
-Do not restate the master ceremony rows verbatim.>
+Do not restate the master ceremony rows verbatim, and do not restate the
+read budget here: it lives in frontmatter plus at most one Tool Policy mention.>
 
 ---
 
 ## Steps
 
-<Numbered procedural steps. Lead with the action, then a one-line outcome.
-Cite KB / skill / template files by backtick-quoted path so
-`test_pointer_contracts.py` validates them.>
+<Numbered procedural steps (or `### Phase N:` groups for multi-phase agents).
+Lead with the action, then a one-line outcome. Cite KB / skill / template
+files by backtick-quoted path so `test_pointer_contracts.py` validates them.
+Artifact-saving steps preview first and use the canonical artifact-approval
+prompt (`CLAUDE.md` § Shared Rules § Approval gate).>
 
 1. **<Action>**: <outcome>. Cite: `knowledge-base/<file>.md` § <Heading>.
 2. **<Action>**: <outcome>.
-3. ...
+3. **Handoff**: <the closing step: name the next agents, the exact
+   "Say 'use <agent-id> for ...'" line the user should run, and any
+   end-of-session offers (e.g. `skills/retrospective/SKILL.md`)>.
+
+<Small agents keep Handoff as the final numbered step (diff-reviewer,
+code-inspector); agents with a distinct closing sequence promote it to a
+dedicated `## Handoff` section (xp-pair-programmer).>
 
 ---
 
 ## Tool Policy
 
-This agent inherits `knowledge-base/tool-policy.md` § Per-Agent Matrix. List only true deltas below; do not restate unchanged matrix cells.
+See `knowledge-base/tool-policy.md` § Per-Agent Matrix. List only true deltas below; do not restate unchanged matrix cells.
 
-- Read/write caps: <only if different from the matrix or agent default>.
+- Read cap: <one prose mention at most, e.g. "read capped at N per session">.
+- Write scope: <the directories/files this agent may write, or "none">.
 - Additional operations: <only if this agent uses a skill not already covered by the matrix>.
 - Denied actions: <role-specific anti-patterns, destructive actions, or external side effects>.
 
@@ -105,17 +126,22 @@ lock the anti-pattern with a reason.>
 
 ---
 
-## Failure modes
+## Narrowing
 
-| Symptom                                    | Likely cause                            | Action                                       |
-|--------------------------------------------|-----------------------------------------|----------------------------------------------|
-| <observable failure>                       | <root cause>                            | <recovery, escalation, or KB pointer>        |
+<Bullet list of hard boundaries and edge-case rules: the "always / never"
+lines that keep the agent inside its lane. Every shipped agent has this
+section; keep each bullet to one bolded rule plus one sentence.>
+
+- **<Rule>**: <one sentence of guidance>.
+- **<Edge case>?**: <what to do>.
 
 ---
 
-## Approval gate
+## When to go back
 
-This agent follows `CLAUDE.md` § Shared Rules § Approval gate. Specifically:
+<OPTIONAL: include when this agent sits mid-chain and failure modes route to
+other agents (release-captain, incident-responder, xp-pair-programmer use it).>
 
-- <list the artifacts / actions this agent gates on approval: preview-only
-  by default at production tier; save-and-summarize at prototype tier>.
+| Symptom | Go to |
+|---|---|
+| <observable symptom> | <agent-id or human, with the reason> |

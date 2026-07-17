@@ -6,7 +6,7 @@ load_when: design decision, principle, bounded context, cognitive health, contex
 audience: all
 canonical_for: development principles, bounded contexts, teach-back gate, context engineering
 cross_refs: design-patterns.md, working-agreement.md, performance.md
-verified: 2026-05-19
+verified: 2026-07-17
 ---
 
 # Development Philosophy
@@ -29,7 +29,7 @@ verified: 2026-05-19
 | **Tidying = optionality** | Tidy code that blocks the current change (separate commit). Leave code cleaner than you found it. See `CHEATSHEET.md` § Decision Guide. |
 | **Progress over perfection** | Ship the smallest useful change. Don't over-polish: better code exists, perfect code doesn't. |
 | **Constantine's Equivalence** | `cost(software) ≈ cost(change) ≈ coupling`: prefer designs that reduce coupling between modules. See `design-fundamentals.md` § Coupling for the underlying property. |
-| **Strategic over tactical** | Working code is not the finish line: the design is what every future change pays for. Invest continuously (REFACTOR step, better names, deeper interfaces), never in deferred cleanup sprints. See `design-fundamentals.md` § Building Software That Lasts. |
+| **Strategic over tactical** | The design is what every future change pays for: invest continuously, never in deferred cleanup sprints. Canonical: `design-fundamentals.md` § Building Software That Lasts. |
 
 ---
 
@@ -86,16 +86,16 @@ Background sections: load only when the `## Agent Use` trigger matches; skip for
 
 ### Context Engineering
 
+KB loading discipline (smallest source, stop when actionable) is canonical in `CLAUDE.md` § Knowledge Base. Beyond it:
+
 | Rule | Agent action |
 |------|-------------|
-| Context is scarce | Load only KB files needed for the current task |
 | Predictable context | Pre-fetch files named in the plan before starting implementation |
 | Context too large | Break work into smaller pieces: don't try to hold everything |
 | Prompt caching when available | Repeated context (KB files, system prompts) costs ~10% rate via `cache_control` / cached_tokens: order static content first so the cache prefix is stable |
 | Edit over Write for changes | Edit sends the diff; Write resends the whole file. Use Write only for new files or full rewrites |
 | Targeted reads | Use file offset/limit when you know which lines you need; full-file reads burn tokens for content you won't use |
 | Subagents for branched investigation | Spawn fresh-context subagents for parallel research; don't bloat the parent conversation with content you only need once |
-| Stop early | Stop reading once you have the answer, even mid-budget: don't pad coverage to "use the budget" |
 
 ---
 
@@ -123,7 +123,7 @@ On request, the active agent pauses and explains the smallest useful map: what c
 
 #### Decision Rationale in Commits (Intent Debt defense)
 
-Commit body explains *why*, not just *what*. The `Teach-back:` trailer (one sentence: what the change does and where to debug it) survives in `git log --oneline`; the body carries the longer rationale. Requirement: `CLAUDE.md` § Definition of Done; format and type lists: `skills/git/SKILL.md` § Teach-back Trailer. For stories with multiple design choices, add `## Decisions` to the story file: one bullet per choice: so choices live where AC live.
+Commit body explains *why*, not just *what*. Requirement and trailer format: `CLAUDE.md` § Definition of Done + `skills/git/SKILL.md` § Teach-back Trailer. For stories with multiple design choices, add `## Decisions` to the story file (one bullet per choice) so choices live where AC live.
 
 #### Agent responsibilities
 
@@ -142,7 +142,7 @@ Commit body explains *why*, not just *what*. The `Teach-back:` trailer (one sent
 |-------------|--------|-------------|
 | **Silent Misalignment** | Plausible output, doesn't match intent | Check alignment before implementation; show plan preview |
 | **Flying Blind** | Output accepted without review | Enforce TDD; use diff-reviewer / code-inspector |
-| **Sunk Cost** | 3+ failed attempts, code getting messier | 3-attempt rule → stash and retry (`working-agreement.md` § Shared Values) |
+| **Sunk Cost** | 3+ failed attempts, code getting messier | STOP per `debugging.md` § 3-Fix Architectural Stop Rule: reset to last green, question the architecture before any fix #4 |
 | **LLM Non-Determinism** | Same prompt produces different output across runs (sampling, batching, tokenization, silent model updates) | Pin behaviour with tests, not chat memory: outcomes via running tests, state in markdown artifacts, deterministic quality gates. Pin model versions where possible. Don't rely on "the model did X last time." See `testing.md` § Test Quality Rules + `CLAUDE.md` § Shared Rules. |
 
 ---

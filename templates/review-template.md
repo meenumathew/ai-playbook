@@ -18,7 +18,7 @@ For audits across whole modules / repos, code-inspector saves to
 # Code Review: STORY-NNN [Title]
 
 **Reviewer:** [name or agent]
-**Type:** diff-review | code-audit
+**Type:** diff-review
 **Date:** YYYY-MM-DD
 **Story:** stories/STORY-NNN-slug.md | PROJ-NNNN
 

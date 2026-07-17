@@ -6,7 +6,7 @@ load_when: naming, file structure, comments, suppression, lint, format, dead cod
 audience: all
 canonical_for: naming conventions, no-suppression rule, refactoring commit discipline, comment policy
 cross_refs: refactoring.md, languages/python.md, doc-linting.md
-verified: 2026-05-19
+verified: 2026-07-17
 ---
 
 # Code Style Guide
@@ -66,24 +66,13 @@ Docstrings/JSDoc format: see `languages/`.
 
 ### Ticket Context Belongs in Commits, Not Code
 
-**Never embed story IDs, acceptance criteria numbers, plan steps, issue references, or other workflow artifact IDs in delivered code surfaces.** This includes production code, tests, comments, docstrings, TODOs, public strings, generated contract names, migration names, and telemetry/event names. Operational metadata decays: stories are archived, PR links rot, plan references become orphaned. Code explains *why* a technical choice exists; tickets explain *why* the feature was built.
-
-Allowed places: story/plan/review/audit/research artifacts, commit messages, PR/MR descriptions, release notes, and test fixtures that are explicitly exercising artifact handling.
-
-**Correct approach:**
-
-- **Code:** *"We defer validation to layer boundary to allow partial updates"* (explains the design choice)
-- **Commit:** `feat(api): defer validation to layer boundary (STORY-042)` + body explains the pattern (see `skills/git/SKILL.md`)
-- **PR/MR description:** links the issue tracker reference
+Core rule (always in context): `CLAUDE.md` § Code Quality. The full surface list it covers: production code, tests, comments, docstrings, TODOs, public strings, generated contract names, migration names, telemetry/event names. Operational metadata decays; code explains *why* a technical choice exists, tickets explain *why* the feature was built. Allowed places: workflow artifacts, commit messages, PR/MR descriptions, release notes, and test fixtures explicitly exercising artifact handling.
 
 **Anti-patterns (flag in review):**
 
-- `# See STORY-123, AC #2 for context`: move to commit body
-- `TODO: implement per UFX-2140`: move to commit or log a separate task
-- `# ISSUE-99: workaround for X`: move to commit body with full explanation
-- `test_story_001_ac5_rejects_empty_name`: name the behavior, not the temporary story/AC number
-- `raise ValueError("STORY-001 AC5 failed")`: public/runtime strings must describe the user-visible error
-- `order_export_plan_001_event`: generated names must describe the domain event or contract
+- `# See STORY-123, AC #2`, `TODO: implement per UFX-2140`, `# ISSUE-99: workaround for X`: move to the commit body or a tracked task
+- `test_story_001_ac5_rejects_empty_name`: name the behaviour, not the temporary story/AC number
+- `raise ValueError("STORY-001 AC5 failed")` / `order_export_plan_001_event`: runtime strings and generated names must describe the user-visible error or domain contract, never a workflow artifact
 
 ### TODO Annotations
 
@@ -118,14 +107,7 @@ Full guide: `refactoring.md`.
 
 ## Formatting and Linting
 
-Run after every GREEN and REFACTOR step (see `CLAUDE.md` § Code Quality).
-
-| Language | Commands | Config source of truth |
-|----------|---------|----------------------|
-| Python | `ruff format` + `ruff check --fix` | `pyproject.toml [tool.ruff]` |
-| TypeScript | `npx eslint src/` + `npx prettier --check src/` | `eslint.config.ts` + `.prettierrc` |
-
-If the project has a local config file, use it. CI enforces the same rules. Language-specific details: `languages/`.
+When to run: `CLAUDE.md` § Code Quality. Per-language commands and detection rules: `quality-gates.md` § Per-Language Formatter & Lint Defaults. If the project has a local config file, use it; CI enforces the same rules. Language-specific details: `languages/`.
 
 ### No Suppression Without Justification
 

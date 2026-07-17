@@ -9,7 +9,7 @@ cross_refs:
   - CLAUDE.md § Quality Tier
   - knowledge-base/INDEX.md
   - templates/story-template.md
-verified: 2026-06-08
+verified: 2026-07-17
 ---
 
 # Workspaces
@@ -80,7 +80,7 @@ A workspace's `quality-tier.md` contains a single fenced block:
 quality-tier: prototype (gates skipped, save-and-summarize, lean artifacts).
 ```
 
-Agents use this for stories declared in that workspace when no per-agent override exists in `.ai-playbook.toml` `[quality_tiers.agents]`. The session-start tier announcement reflects the resolved tier.
+Where this sits in the tier resolution order (below per-agent overrides, above the repo root) and the announcement wording: `quality-tier-resolution.md`.
 
 ## What workspaces do *not* do today
 

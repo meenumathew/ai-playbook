@@ -2,11 +2,11 @@
 id: testing-techniques
 size: large
 tldr: Optional testing techniques loaded only on trigger; extends testing.md, never relaxes its rules.
-load_when: property-based, mutation, hypothesis, fast-check, contract test, pact, async test, queue, stream, eventual consistency, frozen time, httpx, respx, testcontainers, pytest-xdist
+load_when: property-based, mutation, hypothesis, fast-check, contract test, pact, async test, queue, stream, eventual consistency
 audience: all
 canonical_for: property-based testing, mutation testing, contract testing, async event-driven test patterns
 cross_refs: testing.md, languages/testing-python.md
-verified: 2026-05-19
+verified: 2026-07-17
 ---
 
 # Testing Techniques
@@ -104,29 +104,7 @@ After writing a test, mentally flip a condition in the production code it covers
 | Rust | `cargo-mutants` |
 | JS/TS | `stryker` |
 
-Define critical paths in `knowledge-base/quality-gates.md`. Starting points (teams shrink or expand): auth/authorisation, payment/billing, security-sensitive parsing, PII access control. Focus on *decision logic* around irreversible or security-sensitive operations: not every DB write.
-
-### When it runs
-
-| Trigger | Behaviour | Blocks PR? |
-|---------|-----------|-----------|
-| PR touches a critical-path file | Parallel CI job scoped to changed paths; report-only, regression check decides | Only if score regresses below baseline |
-| Weekly scheduled CI run | Full scan, report as artifact | No: advisory |
-| Manual / on-demand | Developer runs locally before marking a critical-path story Done | No |
-
-Never on pre-commit (too slow). Never a blocking gate on every PR: teams quietly disable gates they can't meet.
-
-### CI wiring
-
-Run `mutmut` (or equivalent) in a separate workflow triggered by `paths:` matching your critical paths plus a weekly `schedule:`. Fail only on regression against a stored baseline: not on absolute score. Cache the tool's generated workspace only when it is stable on your CI runner; never commit `mutants/`.
-
-### Timing
-
-| Codebase | Full run | Changed-files only |
-|---|---|---|
-| < 5k LOC | 2–5 min | < 1 min |
-| 5k–20k LOC | 5–20 min | 2–5 min |
-| > 20k LOC | 20–60 min | 5–15 min |
+The critical-path registry, run triggers, and the CI gate are policy: `quality-gates.md` § Mutation Testing Policy. Technique rule: fail only on regression against a stored baseline, never on absolute score; never run on pre-commit (too slow).
 
 ### Running locally
 
@@ -162,48 +140,6 @@ Never suppress by adding an assertion that just exercises the mutated line witho
 
 ---
 
-## Python pytest Techniques
+## Language-Specific Techniques
 
-Load this section only for Python projects that need the named technique. Core pytest rules stay in `languages/testing-python.md`.
-
-### Async Tests
-
-`asyncio_mode = "auto"` removes the need for `@pytest.mark.asyncio`.
-
-```python
-async def test_checkout_saves_confirmed_order(mocker):
-    mock_repo = mocker.AsyncMock()
-    service = OrderService(repository=mock_repo)
-
-    result = await service.checkout(Order())
-
-    # Assert behaviour (the returned state), not just that the mock was
-    # touched — a save-call-only assertion is the mock-only anti-pattern
-    # testing.md bans.
-    assert result.status == OrderStatus.CONFIRMED
-    saved_order = mock_repo.save.await_args.args[0]
-    assert saved_order.status == OrderStatus.CONFIRMED
-```
-
-Use `mocker.AsyncMock()` for async dependencies; plain `Mock()` does not support `await`.
-
-### Time-Dependent Tests
-
-Use `time-machine` rather than `freezegun` on Python 3.12+.
-
-| Rule | Agent action |
-|------|-------------|
-| Never call `datetime.now()` directly in domain objects | Inject a clock or freeze time in tests |
-| Freeze only the smallest needed scope | Prefer context-manager scope when possible |
-
-### HTTP Client Mocking (respx + httpx)
-
-Use `respx` to mock `httpx` clients without starting a real server. Assert the returned behaviour and the outbound request shape that is part of the external contract.
-
-### Integration Tests with Real Services
-
-Use `testcontainers` for real DB/service integration tests. Unit tests must never import `testcontainers`; if a test does, it belongs in `tests/integration/`.
-
-### Parallel Execution (pytest-xdist)
-
-Parallel-safe tests require no shared filesystem state, no shared mutable globals, and DB isolation per worker.
+Language-specific applications of these techniques (Python: async pytest, frozen time, HTTP mocking, testcontainers, xdist) live in `languages/testing-<lang>.md`; for Python see `languages/testing-python.md` § Python pytest Techniques.

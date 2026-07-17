@@ -105,3 +105,29 @@ def test_claude_md_size_runs_from_any_cwd(tmp_path: Path) -> None:
     """Default path is anchored to the script, not the invocation cwd."""
     result = run_check(cwd=tmp_path)
     assert result.returncode == 0, result.stderr
+
+
+def test_claude_md_size_missing_file_fails_cleanly(tmp_path: Path) -> None:
+    """A missing target reports a clean error, not a raw traceback."""
+    result = run_check(tmp_path / "does-not-exist.md")
+    assert result.returncode == 1
+    assert "ERROR: cannot read" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_claude_md_size_over_word_budget_fails(tmp_path: Path) -> None:
+    """A dense file within the line cap but over MAX_WORDS fails.
+
+    The word budget is the companion ratchet: without it, packing words onto
+    fewer lines defeats the line cap invisibly.
+    """
+    max_words = int(_SCRIPT.MAX_WORDS)
+    words_per_line = (max_words // 10) + 1
+    path = tmp_path / "dense.md"
+    path.write_text(
+        "\n".join(" ".join(f"w{i}" for i in range(words_per_line)) for _ in range(10)) + "\n",
+        encoding="utf-8",
+    )
+    result = run_check(path)
+    assert result.returncode == 1
+    assert str(max_words) in result.stderr

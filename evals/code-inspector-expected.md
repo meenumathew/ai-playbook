@@ -7,7 +7,7 @@ The code-inspector should produce the following findings when given `code-inspec
 ### P0 — Security
 
 1. **Raw SQL strings in db.py** — SQL injection risk. Must use parameterised queries. Cites `security.md` § Input Validation.
-2. **token_manager.py has no tests** — JWT handling is a critical security path. 100% branch coverage required per `testing.md` § Coverage Targets.
+2. **token_manager.py has no tests** — JWT handling is a critical security path. 100% branch coverage required per the project's critical-path registry, `quality-gates.md` § Critical Paths.
 3. **No tests for reset_password or change_email** — Critical auth paths without test coverage. Cites `testing.md` § Test Ordering (coverage completeness check).
 4. **SSRF in verify_webhook** — Fetches user-supplied URL with no host allowlist. Must validate target hosts and block internal/private IPs. Cites `security.md` § Input Validation (SSRF).
 

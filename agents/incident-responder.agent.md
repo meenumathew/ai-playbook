@@ -42,7 +42,6 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 | Postmortem | Optional, terse | Required for SEV1/SEV2 within 5 working days |
 | Follow-up artifacts | Note in record | Propose one per action item |
 | Comprehension check | Skip | Trigger on unfamiliar service / new domain |
-| Max reads | 20 | 40 |
 
 ---
 
@@ -78,7 +77,7 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 ### Phase 3: Postmortem (within 5 working days for SEV1/SEV2)
 
-1. **Draft**: copy `templates/postmortem-template.md` to `incidents/INC-YYYY-MM-DD-<slug>.md` (extending the record), fill every section. Roles, not names. Blameless rules: `incident-response.md` § Blameless Postmortem.
+1. **Draft**: append the `templates/postmortem-template.md` sections to the existing incident record `incidents/INC-YYYY-MM-DD-<slug>.md` (opened in Phase 1: never copy over it), fill every section. Roles, not names. Blameless rules: `incident-response.md` § Blameless Postmortem.
 2. **Detection time analysis**: populate the table; propose monitoring/process changes for unacceptable gaps.
 3. **List follow-up artifacts (do not create yet)**: propose the artifact and destination path for each action item. **Do not write follow-up files unless the user explicitly approves the list.** The postmortem documents what should happen; humans decide whether to open trackers.
 

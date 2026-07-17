@@ -501,6 +501,7 @@ def test_doctor_handles_missing_source_dir(tmp_path: Path, monkeypatch: pytest.M
     (target / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
     (target / ".github" / "workflows" / "ci.yml").write_text("")
     (target / ".github" / "workflows" / "security.yml").write_text("")
+    (target / ".github" / "dependabot.yml").write_text("")
     (target / "harness").mkdir(exist_ok=True)
     teachback = target / "harness" / "check-teachback.sh"
     teachback.write_text("#!/bin/sh\n")

@@ -17,11 +17,12 @@ verified: 2026-05-19
 
 Validate assumptions before accepting input as complete. Split input into objective questions, research the codebase, challenge assumptions, surface contradictions, then produce output.
 
-Three modes:
+Four modes:
 
 - **Idea in → refine → write story** (Mode A)
 - **Story in → refine → verify/update story** (Mode B)
 - **Greenfield repo → discover product context → seed KB → then Mode A** (Mode C)
+- **Too big + foggy → map open decisions → resolve before planning** (Mode D)
 
 ---
 
@@ -42,7 +43,6 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 | Step | prototype | production |
 |------|-----------|------------|
 | Objective questions | 2–3 questions | 3–8 questions |
-| Research | Max 10 reads | Max 20 reads |
 | Design options | Skip unless unclear | 2–3 options, do not select the final approach |
 | Structure outline | Skip | Full file list by layer |
 
@@ -58,6 +58,7 @@ Research is mandatory at every tier; the artifact shape scales with the story. C
    | "We do not know whether / which / how to …": unanswered question gating a future decision; no code on main | **spike** | `spike` | `templates/story-spike-template.md` |
    | "Add / change / extend / replace …": new or evolving user-visible behaviour | **story** | `story` | `templates/story-template.md` |
    | "Bump / clean up / rename / move …": tidy/upkeep, no user-visible change | **chore** | `chore` | `templates/story-template.md` (lean) |
+   | Existing code with no tests: retrofit coverage onto current behaviour | **test-story** | `test-story` | `templates/story-template.md` (AC = coverage targets, not feature outcomes) |
 
    **Inference.** Apply CLAUDE.md § Shared Rules (Prompt minimization): infer the shape when one signal dominates. Ask only when genuinely ambiguous. Examples:
 
@@ -66,12 +67,12 @@ Research is mandatory at every tier; the artifact shape scales with the story. C
    - "Add a /v1/refresh endpoint" → **story**, no question
    - "Investigate why login is slow": could be bug or spike. Ask: *"Is this a known broken behaviour to fix, or are we still trying to find out what is happening?"*
 
-   **Filename + frontmatter follow the shape.** `BUG-NNN-`, `SPIKE-NNN-`, `STORY-NNN-`, `CHORE-NNN-`: shared number space (see `skills/story-writing/SKILL.md` § File Naming).
+   **Filename + frontmatter follow the shape.** `BUG-NNN-`, `SPIKE-NNN-`, `STORY-NNN-`, `CHORE-NNN-`: shared number space (see `skills/story-writing/SKILL.md` § File Naming). `type: test-story` keeps the `STORY-NNN-` prefix.
 
    **Once shape is set:**
    - **bug** → skip the five anchors; step 1 captures Symptom, Reproduction, Severity.
    - **spike** → skip the five anchors; step 1 captures Question, Timebox, Decision-this-enables. No AC, no points.
-   - **story** / **chore** → continue with step 1 as written.
+   - **story** / **chore** / **test-story** → continue with step 1 as written.
 
 1. **Capture intent anchors**: *(story / chore only)*. State problem, desired outcome, why now, key constraint, smallest useful change before implementation. Apply CLAUDE.md § Shared Rules (Prompt minimization): infer high-confidence anchors as assumptions; ask only when missing one would change scope, user-visible behaviour, safety, or the smallest useful slice. When the request is genuinely ambiguous and an anchor is missing, follow `skills/intent-interview/SKILL.md` for the propose-then-ask interrogation pattern.
 
@@ -157,7 +158,7 @@ Research is mandatory at every tier; the artifact shape scales with the story. C
 12. **Save after approval**: both files (chore/1-point shapes: story with `## Research notes` section only).
 
     a. `mkdir -p research stories`
-    b. Write research FIRST → `research/RESEARCH-NNN-slug.md` via `templates/research-template.md`. Must contain: questions (step 2), findings with `file:line` citations (step 3), design questions and options (5-6), ADR candidates (7), scope exclusions, read budget used.
+    b. Write research FIRST → `research/RESEARCH-NNN-slug.md` via `templates/research-template.md`. Must contain: questions (step 2), findings with `file:line` citations (step 3), design questions and options (5-6), ADR candidates (7), scope exclusions, read budget used. If the file already exists (a spike run extends the refinement research with its findings), append new sections: never overwrite.
     c. Write story → `stories/<PREFIX>-NNN-slug.md` with `status: ready`. Prefix per step 0; shared number space.
     d. Verify every saved artifact exists before handoff.
 
@@ -184,7 +185,7 @@ Research is mandatory at every tier; the artifact shape scales with the story. C
     is only for stories that arrive from outside.)
     ```
 
-    Substitute the real prefix.
+    Substitute the real prefix. **Spikes (`SPIKE-` prefix) never go to slice-planner: it refuses them.** Replace the slice-planner line with: *run the spike within its timebox, extend `research/RESEARCH-NNN-slug.md` with the findings (append: never overwrite), then return to story-refiner to convert the findings into stories.*
 
 ---
 
@@ -209,7 +210,7 @@ Same flow as Mode A with these deltas:
 | 10. Self-review | Apply only if revised |
 | 11. Preview | Apply only if revised |
 | 12. Save | Always save research. Update story only if revised. |
-| 13. Handoff | `Research saved to research/RESEARCH-NNN-slug.md. Story [verified / updated] at stories/<PREFIX>-NNN-slug.md. Say 'use slice-planner for <PREFIX>-NNN' to design and plan.` |
+| 13. Handoff | `Research saved to research/RESEARCH-NNN-slug.md. Story [verified / updated] at stories/<PREFIX>-NNN-slug.md. Say 'use slice-planner for <PREFIX>-NNN' to design and plan.` Spikes: apply the Mode A spike handoff instead. |
 
 **Test-story AC checks** (step 4 additions): each AC targets a specific module/risk area, coverage targets measurable (routes/functions/branches), refactoring-for-testability separated from writing tests, testability assessed (`testing.md` § When Tests Are Hard to Write).
 
@@ -237,6 +238,12 @@ Same flow as Mode A with these deltas:
     `Run 'use docs-maintainer: adr' to write docs/adr/NNNN-initial-product-guardrails.md from the candidate above.`
 
 4. **Proceed to Mode A** for the first story.
+
+### Mode D: Decision Mapping
+
+**Trigger:** the effort is too big for one session and blocked by several coupled **open decisions** (design forks, cross-team ownership, sequencing), not just missing detail.
+
+Chart the open decisions as a tracked **Decision Map**, resolve them one at a time (propose your answer, ask, record the resolution or ADR), and stop when nothing is left to decide before planning. Produces resolved decisions + a story or ADR, never slices or code. Full method: `knowledge-base/decision-mapping.md`. Hand off to slice-planner once the fog clears.
 
 ---
 

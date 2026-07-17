@@ -17,6 +17,14 @@ ARTIFACT_DIRECTORIES: Mapping[str, str] = {
 ARTIFACT_IGNORE_BLOCK_START = "# ai-playbook artifacts (managed)"
 ARTIFACT_IGNORE_BLOCK_END = "# end ai-playbook artifacts"
 ARTIFACT_IGNORE_LINES = tuple(f"{directory}/" for directory in ARTIFACT_DIRECTORIES)
+# Hook state written by the shipped harness hooks: read-budget.sh counters and
+# telemetry.sh usage log, including rotated archives (usage-<ts>.jsonl[.gz]).
+# Machine-local by nature — the managed block keeps it out of version control.
+HOOK_STATE_IGNORE_LINES = (
+    ".claude/read-budget/",
+    ".claude/usage*.jsonl*",
+)
+MANAGED_IGNORE_LINES = (*ARTIFACT_IGNORE_LINES, *HOOK_STATE_IGNORE_LINES)
 
 
 class ArtifactPolicy(StrEnum):
@@ -98,7 +106,7 @@ def has_managed_artifact_block(content: str) -> bool:
     return (
         ARTIFACT_IGNORE_BLOCK_START in content
         and ARTIFACT_IGNORE_BLOCK_END in content
-        and all(line in content for line in ARTIFACT_IGNORE_LINES)
+        and all(line in content for line in MANAGED_IGNORE_LINES)
     )
 
 
@@ -127,5 +135,5 @@ def _normalise_gitignore_content(content: str) -> str:
 
 def _managed_artifact_block() -> str:
     return "\n".join(
-        [ARTIFACT_IGNORE_BLOCK_START, *ARTIFACT_IGNORE_LINES, ARTIFACT_IGNORE_BLOCK_END]
+        [ARTIFACT_IGNORE_BLOCK_START, *MANAGED_IGNORE_LINES, ARTIFACT_IGNORE_BLOCK_END]
     )

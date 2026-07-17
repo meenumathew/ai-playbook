@@ -3,10 +3,10 @@ id: regression-and-contracts
 size: medium
 tldr: Validate existing behavior and contracts before and after changes. Validate code generation for completeness. Scope changes trigger regression checks.
 load_when: plan changes, scope changes, code generation, OpenAPI, protobuf, GraphQL, migrations, API breaking change, contract change, behavior regression
-audience: xp-pair-programmer, diff-reviewer
-canonical_for: regression testing, contract preservation, code generation validation, UFX-2140 pattern
+audience: xp-pair-programmer, diff-reviewer, slice-planner, release-captain
+canonical_for: regression testing, contract preservation, code generation validation, migration safety, UFX-2140 pattern
 cross_refs: testing.md, testing-techniques.md, debugging.md, quality-gates.md, CLAUDE.md § Shared Rules
-verified: 2026-06-10
+verified: 2026-07-17
 ---
 
 # Regression & Contract Validation
@@ -22,7 +22,7 @@ Prevent plan-driven execution from masking quality debt. This file covers three 
 ## Agent Use
 
 - **Read first:** Validate Existing Behavior, Regression Detection, Code Generation Validation.
-- **Load deeper only on trigger:** Contract Preservation, The UFX-2140 Failure Pattern.
+- **Load deeper only on trigger:** Contract Preservation, Migration Safety.
 
 | Agent | Usage |
 |-------|-------|
@@ -40,11 +40,7 @@ Prevent plan-driven execution from masking quality debt. This file covers three 
 | Step | Action |
 |------|--------|
 | 1 | On `main` branch, run the full test suite. Record: pass/fail, execution time, test count. |
-| 2 | **For code generators:** run the generator on current code. Validate output completeness: |
-| |: OpenAPI: all endpoints documented? All real response statuses present (not just happy-path)? |
-| |: Protobuf / GraphQL: all message types / fields present? No aliases or experimental fields missing? |
-| |: DB migrations: schema matches current models? Foreign keys and constraints present? |
-| |: If gaps found, log them in plan's `## Discovered` section with priority. Do not proceed until you understand the gaps. |
+| 2 | **For code generators:** run the generator on current code and validate output completeness per § Code Generation Validation. Log gaps in plan's `## Discovered` with priority; do not proceed until you understand them. |
 | 3 | **For API or contract changes:** read the current contract definition (OpenAPI spec, protobuf schema, type definitions). Document exported fields and client dependencies. Identify backward-compatibility constraints. |
 
 **Example.** UFX-2140 failure mode: should have caught at this step:
@@ -75,18 +71,10 @@ Prevent plan-driven execution from masking quality debt. This file covers three 
 **Bash workflow (xp-pair-programmer use).** Prefer structured results over scraping runner output: emit machine-readable reports (`pytest --junitxml=...`, `go test -json`, `jest --json`) and diff the per-test outcomes: a summary line can stay identical while one test starts failing and another starts passing.
 
 ```bash
-# Baseline (before first slice)
-make test PYTEST_ARGS="--junitxml=baseline.xml" || true
-
-# After slice completion
-make test PYTEST_ARGS="--junitxml=slice.xml" || true
-# Diff per-test outcomes (name + status), not the summary line
-for f in baseline slice; do
-  python -c "import xml.etree.ElementTree as ET;\
-[print(tc.get('classname'), tc.get('name'), 'FAIL' if tc.find('failure') is not None else 'PASS')\
- for tc in ET.parse('$f.xml').iter('testcase')]" | sort > "$f.txt"
-done
-diff baseline.txt slice.txt && echo OK || { echo "REGRESSION: per-test outcomes changed"; exit 1; }
+make test PYTEST_ARGS="--junitxml=baseline.xml" || true   # before first slice
+make test PYTEST_ARGS="--junitxml=slice.xml"    || true   # after each slice
+# Extract (test name, status) from each report and diff those lines:
+# pass→fail and fail→pass can cancel out in the summary counts.
 ```
 
 ---
@@ -111,18 +99,7 @@ diff baseline.txt slice.txt && echo OK || { echo "REGRESSION: per-test outcomes 
 - Generator output includes experimental/deprecated items marked as stable
 - Documentation/comments reference generated artifacts that are incomplete, for example "See OpenAPI spec for all endpoints" when spec is incomplete
 
-**Incomplete generator = Must Fix.** Log the gap in commit message and plan the fix as a separate story.
-
-```text
-// Example commit message
-feat(openapi): add payment webhook endpoints
-
-Generated OpenAPI spec now includes POST /payments/webhook.
-Known limitations: error responses (4xx, 5xx) not yet included in spec.
-See [PLAN-123] for OpenAPI completeness task.
-
-Co-authored-by: Copilot <...>
-```
+**Incomplete generator = Must Fix.** Log the gap in the commit body ("Known limitations: error responses (4xx, 5xx) not yet in spec; completeness task in [PLAN-123]") and plan the fix as a separate story.
 
 ---
 
@@ -160,28 +137,24 @@ Migration: See [URL] for client upgrade guide.
 
 ---
 
-## The UFX-2140 Failure Pattern
+## Migration Safety
 
-**What went wrong:**
+A data or schema migration is the highest-blast-radius change a slice can carry: it runs once, against live data, and a bad one is not a simple rollback. Plan it as reversible steps, not one destructive edit.
 
-1. OpenAPI generation added; spec had gaps (missing error responses)
-2. Spec gaps not validated at impl time: assumed "plan says add these AC, so add them"
-3. Implementation followed plan, added new response types
-4. But OpenAPI spec still incomplete: new response types missing from spec
-5. Quality degraded: contract is now inaccurate
+**Expand → migrate → contract (never rename in place).** Split every schema change into phases that each keep old and new readers/writers working:
 
-**How to prevent it:**
+1. **Expand:** add the new column/table/field; deploy code that writes both old and new but still reads old. Nothing breaks because old shape is untouched.
+2. **Migrate:** backfill existing rows into the new shape in batches; switch reads to the new shape once backfill is verified.
+3. **Contract:** after a bake period with no old readers, drop the old column/field in a *later* deploy.
 
-- At pre-flight (xp-pair-programmer § 8): *"Validate OpenAPI completeness on main. Gaps found? Document in Discovered."*
-- In diff-reviewer (step 2 regression check): *"OpenAPI spec changed? Verify all real status codes present."*
-- At merge (release-captain): check Definition of Done § Contracts: "All exported contracts validated for completeness"
+Each phase is independently deployable and reversible; a single "rename column + change code" deploy is not.
 
----
+**Backfill in batches, idempotently.** Never one giant `UPDATE` that locks the table. Batch by key range, make each batch re-runnable (so a mid-backfill failure resumes, not corrupts), and throttle to protect live traffic.
 
-## See Also
+**Reversibility is the plan, not an afterthought.** Every migration step states how to undo it. The expand/contract split exists precisely so that until the contract phase, rollback is a code deploy, not a data restore. Once the contract phase drops data, forward-fix is the only path, so gate it behind a bake period and an explicit go/no-go.
 
-- `testing-techniques.md` § Contract Testing: consumer-driven contracts (Pact) as the automated form of § Contract Preservation
-- `testing.md` § Test Quality Rules: ensure regression tests are isolation-clean
-- `debugging.md` § Iron Law: root cause before fixing
-- `quality-gates.md`: gate definitions; add "no regression" and "contract preservation" to your DoD
-- `CLAUDE.md` § Shared Rules: verification discipline
+**Decouple migration from deploy.** Run migrations as their own step with their own runbook, not implicitly inside app startup: an app that migrates on boot cannot roll back cleanly (`release.md` § Rollback: do not auto-rollback migrations).
+
+**Verify against real-shaped data.** Test the migration on a production-shaped dataset (volume and edge cases), not a toy fixture: row counts before/after, no silent drops, constraints hold. Pair with a characterization test of the behaviour that reads the migrated data.
+
+**Where it fits.** slice-planner plans the expand/migrate/contract slices when the migration-safety gate fires; release-captain runs the migration on its own step and holds the contract phase behind the bake period.

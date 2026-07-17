@@ -65,9 +65,17 @@ def write_lines(path: Path, lines: int) -> Path:
 
 
 def make_root(tmp_path: Path) -> Path:
+    """Synthetic repo root with a minimal valid baseline.
+
+    Seeds one small agent file and every budgeted surface so the missing-file
+    and empty-glob guards don't fire; tests then break exactly one thing.
+    """
     root = tmp_path / "root"
     (root / "agents").mkdir(parents=True)
     (root / "skills").mkdir()
+    write_lines(root / "agents" / "baseline.agent.md", 5)
+    for rel in SURFACE_MAX_LINES:
+        write_lines(root / rel, 5)
     return root
 
 
@@ -137,6 +145,31 @@ def test_within_budget_passes(tmp_path: Path) -> None:
     result = run_check(root)
 
     assert result.returncode == 0
+
+
+def test_empty_agents_glob_fails_loudly(tmp_path: Path) -> None:
+    """No agents/*.agent.md files must FAIL, not silently pass — a silent
+    pass would disable the gate entirely (e.g. run from the wrong root)."""
+    root = make_root(tmp_path)
+    (root / "agents" / "baseline.agent.md").unlink()
+
+    result = run_check(root)
+
+    assert result.returncode == 1
+    assert "no agent files found" in result.stderr
+
+
+def test_missing_budgeted_surface_fails_loudly(tmp_path: Path) -> None:
+    """A SURFACE_MAX_LINES cap whose file no longer resolves must FAIL —
+    a silently dropped cap means the budget stopped being enforced."""
+    root = make_root(tmp_path)
+    (root / "knowledge-base" / "CHEATSHEET.md").unlink()
+
+    result = run_check(root)
+
+    assert result.returncode == 1
+    assert "knowledge-base/CHEATSHEET.md" in result.stderr
+    assert "cap no longer resolves" in result.stderr
 
 
 def test_skip_flag_bypasses_check(tmp_path: Path) -> None:

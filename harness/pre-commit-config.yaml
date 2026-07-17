@@ -6,6 +6,10 @@
 # shared core (secrets scanning, shellcheck, teach-back-trailer) must match;
 # `tests/acceptance/test_harness_release_contracts.py` pins the shared hooks.
 exclude: ^(node_modules|dist|build|target|vendor|\.venv|\.mypy_cache|\.pytest_cache)/
+# Install commit-msg hooks by default: without this, a plain `pre-commit
+# install` never installs the teach-back-trailer hook below (it runs at the
+# commit-msg stage, which pre-commit does not install unless asked).
+default_install_hook_types: [pre-commit, commit-msg]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0

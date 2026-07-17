@@ -23,7 +23,7 @@ Format: `{type}/{short-description}`. With issue tracker: `{type}/PROJ-1234-{sho
 |------|------|
 | `feature/` | New feature |
 | `fix/` | Bug fix |
-| `hotfix/` | Urgent production fix: branch off main, merge back immediately |
+| `hotfix/` | Urgent production fix: branch off the production tag, not `main` (`knowledge-base/release.md` § Hotfix); forward-merge into `main` after deploy |
 | `refactor/` | Code refactor |
 | `test/` | Add/update tests |
 | `docs/` | Documentation |

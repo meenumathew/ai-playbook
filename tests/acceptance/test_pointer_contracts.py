@@ -147,6 +147,7 @@ def _heading_candidates(captured: str) -> list[str]:
         r"\s+requires\b.*$",
         r"\s+rows?\b.*$",
         r"\s+checklist\b.*$",
+        r"\s+citations?\b.*$",
         r"\s+step\s+\d+\b.*$",
         r"\s+still\b.*$",
         r"\s+when\b.*$",

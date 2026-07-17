@@ -881,6 +881,8 @@ def test_deploy_copies_harness_files(tmp_path: Path):
     assert (tmp_path / ".pre-commit-config.yaml").exists()
     assert (tmp_path / ".github" / "workflows" / "ci.yml").exists()
     assert (tmp_path / ".github" / "workflows" / "security.yml").exists()
+    # Backs security.yml's claim that Dependabot bumps its pinned SHAs weekly.
+    assert (tmp_path / ".github" / "dependabot.yml").exists()
     assert (tmp_path / "harness" / "check-teachback.sh").exists()
     assert (tmp_path / "harness" / "telemetry.sh").exists()
     assert (tmp_path / "harness" / "settings.example.json").exists()

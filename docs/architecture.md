@@ -107,6 +107,17 @@ These are plain markdown: not stored in `~/.claude/` or any tool-specific locati
 
 The root tier cascades through all eight agents unless an agent-specific override is present.
 
+Resolution order (first match wins):
+
+```mermaid
+flowchart TD
+    start([Resolve active tier]) --> agent{Per-agent override<br/>in .ai-playbook.toml?}
+    agent -->|yes| useagent([Use that tier])
+    agent -->|no| ws{Story declares a<br/>workspace overlay?}
+    ws -->|yes| usews([Use overlay tier])
+    ws -->|no| root([Use root quality-tier:<br/>in CLAUDE.md])
+```
+
 ### 6. Model tiers as an adapter contract
 
 Each agent declares a `model: advisor` or `model: executor` field in its frontmatter. These are abstract tier names: not model IDs. The intended tier mapping is declared in `.ai-playbook.toml`. For Claude deploys, `ai-playbook deploy` materializes that mapping into the deployed agent frontmatter (tier name to the configured model) when the value is one Claude Code recognizes, so Claude Code routes each agent natively; for other tools, or for model identifiers Claude Code does not recognize, the actual model selection lives in the AI tool config. Detail: `knowledge-base/model-tier.md` § Deploying to Claude Code.
@@ -123,6 +134,16 @@ This means:
 - Single-model setups (e.g. free tier): escalation triggers route to a human review checkpoint instead of a model switch: this preserves strictness
 
 The tier split is a **cost / latency optimisation**, not a quality safety net. TDD red-green, quality gates, the Definition of Done, and the Cognitive Health Gates enforce quality: none of which depend on which model maps to which tier.
+
+When an executor-tier agent hits an escalation trigger (e.g. 3 failed fixes), it escalates: to a stronger model in a multi-model setup, or to a human checkpoint in a single-model one:
+
+```mermaid
+flowchart TD
+    exec[executor-tier agent] --> trigger{Escalation trigger?<br/>e.g. 3 failed fixes,<br/>"I don't know" twice}
+    trigger -->|no| continue([Continue on executor])
+    trigger -->|yes, multi-model| advisor([Re-run on advisor tier])
+    trigger -->|yes, single-model| human([Human review checkpoint])
+```
 
 Detail: `knowledge-base/model-tier.md`.
 
@@ -158,6 +179,24 @@ Detail: `knowledge-base/model-tier.md`.
   Standalone:  code-inspector (health check)  |  docs-maintainer (documentation, ADRs)
 ```
 
+```mermaid
+flowchart TD
+    idea([Idea / ticket]) --> refiner[story-refiner]
+    refiner -->|story file| planner[slice-planner]
+    planner -->|plan file| xp[xp-pair-programmer]
+    xp -->|tested code at commit gate| review[diff-reviewer]
+    review -->|approved review| release[release-captain]
+    release --> shipped([Shipped])
+
+    incident([Production incident]) --> responder[incident-responder]
+    responder -.->|triage, postmortem,<br/>follow-up artifacts| refiner
+
+    inspector[code-inspector<br/><i>standalone health check</i>]
+    docs[docs-maintainer<br/><i>standalone docs / ADRs</i>]
+```
+
+*The diagram and the ASCII block above are the same handoff sequence; keep them in step if you edit one. `incident-responder` is read-only on production and feeds follow-up work back to `story-refiner`; `code-inspector` and `docs-maintainer` run standalone.*
+
 Each agent reads artifacts from the previous stage. This is a human- or tool-invoked handoff sequence, not an automated multi-agent orchestrator: the CLI deploys markdown instructions and artifacts, and approval gates stay attached to each step. Code changes move through git status, staged diffs, PRs, and explicit approval gates; durable context moves through markdown artifacts.
 
 **Two-layer testing: acceptance tests + unit TDD:** xp-pair-programmer enforces both acceptance tests and unit TDD on the adopter's code. This follows [Acceptance Test-Driven Development (ATDD)](https://www.agilealliance.org/glossary/atdd/): also known as double-loop TDD: from Freeman & Pryce's *Growing Object-Oriented Software, Guided by Tests*.
@@ -179,6 +218,17 @@ Agents don't load the entire knowledge base upfront. Each agent loads the smalle
 2. Search `knowledge-base/INDEX.md` for the exact topic.
 3. Load one KB file or section at a time.
 4. Stop once the rule is actionable.
+
+```mermaid
+flowchart TD
+    task([Task needs a rule]) --> claude{In CLAUDE.md<br/>already in context?}
+    claude -->|yes| act([Apply rule, stop])
+    claude -->|no| cheat{CHEATSHEET.md<br/>has the one-liner?}
+    cheat -->|yes| act
+    cheat -->|no| index[Search INDEX.md<br/>topic → file]
+    index --> section[Load one canonical<br/>file or section]
+    section --> act
+```
 
 Examples:
 

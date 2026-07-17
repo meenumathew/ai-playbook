@@ -222,6 +222,10 @@ def test_ac_artifact_policy_local_adds_managed_gitignore_block(tmp_path: Path):
     assert "# ai-playbook artifacts (managed)" in content
     assert "stories/" in content
     assert "incidents/" in content
+    # Hook state (read-budget counters, telemetry usage log + rotated
+    # archives) is machine-local and belongs in the managed block too.
+    assert ".claude/read-budget/" in content
+    assert ".claude/usage*.jsonl*" in content
 
 
 def test_ac_artifact_policy_local_uses_guarded_gitignore_write(tmp_path: Path, monkeypatch) -> None:

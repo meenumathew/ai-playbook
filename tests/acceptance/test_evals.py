@@ -194,6 +194,32 @@ class TestCalibrate:
         for agent in [*AGENTS, *ADVERSARIAL_EVALS]:
             assert f"✓ {agent}:" in output
 
+    @pytest.mark.parametrize("agent", [*AGENTS, *ADVERSARIAL_EVALS])
+    def test_near_echo_bad_case_fails_structural_validation(self, agent):
+        """A keyword join diluted with filler words must still fail — the echo
+        guard uses token-overlap ratio, not exact equality."""
+        from run_eval import _calibration_near_echo_output
+
+        rubric = parse_rubric(agent)
+        result = validate(agent, _calibration_near_echo_output(rubric))
+
+        assert not result.ok
+        assert result.rubric_echoes, f"{agent}: near-echo case must trip the echo guard"
+
+    @pytest.mark.parametrize("agent", [*AGENTS, *ADVERSARIAL_EVALS])
+    def test_must_not_violation_case_fails_via_violates(self, agent):
+        """An output that concretely performs a forbidden action must fail
+        through the must-not violation path, not merely low keyword score."""
+        from run_eval import _calibration_violation_output
+
+        rubric = parse_rubric(agent)
+        if not rubric.must_not:
+            pytest.skip(f"{agent} rubric has no must_not items")
+        result = validate(agent, _calibration_violation_output(rubric))
+
+        assert not result.ok
+        assert result.violations, f"{agent}: violation case must trigger violates()"
+
 
 class TestValidateSamples:
     def test_committed_samples_pass_structural_validation(self):

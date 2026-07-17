@@ -6,7 +6,7 @@ load_when: collaboration, review size, ownership, disagreement, escalation, agen
 audience: all
 canonical_for: AI-as-peer norms, code review norms, disagreement protocol
 cross_refs: philosophy.md, model-tier.md, security.md
-verified: 2026-05-19
+verified: 2026-07-17
 ---
 
 # Working Agreement
@@ -14,7 +14,7 @@ verified: 2026-05-19
 ## Agent Use
 
 - **Read first:** AI as Peer Programmer, Code Review Norms, Disagreement Protocol.
-- **Load deeper only on trigger:** Agent-First Automation and team operating model guidance.
+- **Load deeper only on trigger:** team operating-model guidance (`docs/how-to/scale-agent-automation.md`).
 
 ---
 
@@ -53,7 +53,7 @@ Anyone: human or AI agent: can change any part of the codebase. No one "owns" a 
 
 | Situation | Agent action |
 |-----------|-------------|
-| **Stuck** | Compare with last working version. If 3 attempts fail, stash and retry from last green commit. |
+| **Stuck** | Compare with the last working version. If 3 fix attempts fail: STOP per `debugging.md` § 3-Fix Architectural Stop Rule: reset to the last green commit and question the design before any fix #4. |
 | **Succeed** | Update knowledge base with the lessons. Use `skills/retrospective/SKILL.md` for structured process. |
 
 ---
@@ -91,22 +91,4 @@ Anyone: human or AI agent: can change any part of the codebase. No one "owns" a 
 
 ## Reference: Agent-First Automation
 
-Optional operating-model guidance for teams with high agent throughput. Three patterns to encode once and run continuously:
-
-| Pattern | What it does | When to apply |
-|---------|--------------|---------------|
-| **Teaching lint messages** | Every custom lint/architecture rule names the violation and the fix (cite KB section). Agents read the message and self-correct. | Any custom linter or CI check an agent might trigger |
-| **Doc gardening** | Scheduled scan of docs/KB for dead references, stale cross-links, outdated examples; opens a fix-up PR per finding | Weekly for active repos, monthly for stable ones |
-| **Quality sweeps (GC)** | Background agent scans for pattern violations (duplicate utils, raw exception logging, dead code, `Any` types) and opens small targeted refactors; auto-merge on green | When manual cleanup no longer scales |
-
-**Lint message example:** instead of `"Import not allowed here"`, write `"Import from 'infrastructure' in 'domain' violates dependency direction: see design-patterns.md § Architecture Layers."` The 30 seconds spent writes the fix for every future occurrence.
-
-**Scaling:**
-
-| Team size | Automation level |
-|-----------|------------------|
-| Solo | Manual: run `code-inspector` when drift feels real |
-| 2–4 | Monthly doc gardening + improve lint messages as you hit them |
-| 5+ / high throughput | All three patterns automated on a schedule |
-
-The patterns compound: teaching lint messages → fewer bad PRs → less GC needed → less doc drift.
+Operating-model guidance for teams with high agent throughput (teaching lint messages, doc gardening, quality sweeps, scaling by team size): `docs/how-to/scale-agent-automation.md`. One rule worth keeping in-session: custom lint/CI messages should name the violation **and** the fix with a KB citation, so agents self-correct.

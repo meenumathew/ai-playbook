@@ -70,6 +70,24 @@ def test_kb_frontmatter_clean_repo_passes() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_kb_frontmatter_default_scan_includes_languages() -> None:
+    """The no-args scan must cover shipped languages/*.md (they carry real
+    frontmatter) while keeping seeded workspaces/ content excluded."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("check_kb_frontmatter", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    kb_files, _skills = module.discover_targets([])
+    relative = {p.relative_to(REPO_ROOT).as_posix() for p in kb_files}
+
+    assert "knowledge-base/languages/python.md" in relative
+    assert "knowledge-base/languages/testing-python.md" in relative
+    assert not any(rel.startswith("knowledge-base/workspaces/") for rel in relative)
+
+
 def test_kb_frontmatter_missing_required_keys_fails(tmp_path: Path) -> None:
     body = "---\nid: demo\nsize: small\n---\n\n# Demo\n"
     path = write_kb(tmp_path, body)

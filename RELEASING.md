@@ -10,6 +10,7 @@ How to cut a new version of ai-playbook.
 4. Coverage gate green (`uv run pytest --cov=src --cov-fail-under=95`)
 5. Any breaking change to a covered surface (CLI, agent IDs, config schema, KB paths, deployment layout) has gone through the deprecation cycle described in [`docs/deprecation-policy.md`](docs/deprecation-policy.md), or is justified by an ADR that explicitly skips the cycle
 6. If testing against a project deployed with the previous version, `ai-playbook upgrade-check --tool claude` exits non-zero before redeploy and `0` after the new wheel deploys
+7. Manually dispatch the eval-drift workflow (Actions tab, "Eval drift", Run workflow) and confirm it is green before tagging: the LLM judge must pass every committed baseline and fail every negative control. The workflow runs only on `workflow_dispatch` by default (it bills against `ANTHROPIC_API_KEY`); a maintainer who prefers automatic weekly runs can uncomment the `schedule:` cron block in `.github/workflows/eval-drift.yml` once the secret is configured
 
 ## Steps
 

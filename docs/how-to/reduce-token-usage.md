@@ -2,7 +2,7 @@
 
 Goal: cut the playbook's per-session token cost while keeping the gates that protect quality.
 
-The cost structure drives every lever below: the always-loaded rules file (~20 KB, capped by a ratcheted CI size gate) is paid on **every turn**; agent files load once per invocation; knowledge-base files load only when their `load_when:` keywords fire.
+The cost structure drives every lever below. The fixed per-session surface is the always-loaded rules file (~20 KB, capped by a ratcheted CI size gate) plus `CHEATSHEET.md` (the one KB file whose `load_when:` is `always`); together they are paid on **every turn**. Agent files load once per invocation, and an agent's `preload:` frontmatter inlines the named KB files with it, so an agent's real cost is its file plus its preloads. Every other knowledge-base file loads only when its `load_when:` keywords fire, with `INDEX.md` loaded on a CHEATSHEET miss to route the lookup.
 
 ## Prerequisites
 
@@ -23,7 +23,7 @@ Skip what you do not use: `--no-mcp` when you have no issue tracker, `--no-harne
 
 ### 2. Use the built-in loading discipline
 
-The knowledge base is designed for on-demand loading: agents try `CHEATSHEET.md` first, escalate through `INDEX.md`, and stop when the rule is actionable. Do not paste knowledge-base files into prompts: the `load_when:` routing makes that redundant and doubles the cost.
+The knowledge base is designed for on-demand loading: agents try `CHEATSHEET.md` first, escalate through `INDEX.md`, and stop when the rule is actionable. Do not paste knowledge-base files into prompts: the `load_when:` routing makes that redundant and doubles the cost. The one sanctioned exception is agent `preload:` frontmatter, which inlines a KB file an agent needs on effectively every run; treat each preload as a per-invocation cost you are choosing to pay, and keep the list minimal.
 
 ### 3. Keep the always-loaded prefix stable
 

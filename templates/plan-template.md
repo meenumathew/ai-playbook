@@ -59,9 +59,10 @@
 
 TDD Steps:
 
-- [AT] RED `test_ac_<what>_<condition>` (real entry point, fakes at external boundaries) → GREEN → COMMIT
-- [Unit] RED `test_name` → GREEN → REFACTOR → COMMIT `feat(scope): ...`
-- [Integration] RED `test_name` (real external service) → GREEN → REFACTOR → COMMIT `feat(scope): ...`
+- [AT] RED `test_ac_<what>_<condition>` (real entry point, fakes at external boundaries) → GREEN
+- [Unit] RED `test_name` → GREEN → REFACTOR
+- [Integration] RED `test_name` (real external service) → GREEN → REFACTOR
+- COMMIT `feat(scope): ...` once, after the task's last step (one commit per task, never per TDD step)
 
 ---
 

@@ -6,7 +6,7 @@ load_when: quality gate, coverage threshold, critical path, mutation score, make
 audience: all
 canonical_for: project-specific gate commands, coverage policy, critical path registry, mutation testing policy
 cross_refs: testing.md, testing-techniques.md, security.md, style-guide.md
-verified: 2026-06-10
+verified: 2026-07-17
 ---
 
 # Quality Gates
@@ -36,7 +36,7 @@ Use these when Make targets are absent and the project config makes the language
 | C/C++ | `clang-format` |
 | C# | `dotnet format` |
 
-Detection rule: read project config (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, `pom.xml`, `*.csproj`) before applying any of these: never assume a language. Run formatter and lint immediately after GREEN and after REFACTOR per `CLAUDE.md` § Code Quality. See also `knowledge-base/style-guide.md` for naming, formatting, and suppression rules.
+Detection rule: read project config (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, `pom.xml`, `*.csproj`) before applying any of these: never assume a language. When to run: `CLAUDE.md` § Code Quality. Naming and suppression rules: `knowledge-base/style-guide.md`.
 
 ---
 
@@ -59,15 +59,13 @@ Coverage is a safety signal, not a goal by itself. Prefer branch coverage and be
 
 | Scope | Target | Rationale |
 |-------|--------|-----------|
-| New/modified code | Behaviour tests for changed branches and error paths | Branch coverage catches untested else/error paths better than line coverage |
+| New/modified code | Behaviour tests for changed branches and error paths | Changed branches and error paths are where regressions hide |
 | Critical paths | Focused tests for positive, negative, edge, rollback, and unsafe-input paths; mutation baseline must not regress | Deploy, release, security, and instruction-contract defects are high impact in this repo |
-| Whole repository | >=95% branch coverage for `src/` via `make test` | 95% fits *this* repo: deploy/rollback safety, instruction-contract validity, and supply-chain integrity are high-impact. Keep it realistic: improve tests, don't game the metric |
+| Whole repository | >=95% branch coverage for `src/` via `make test` | 95% fits *this* repo: deploy/rollback safety, instruction-contract validity, and supply-chain integrity are high-impact. Improve tests, don't game the metric |
 
-If this project chooses **100% line coverage**, state why here and pair it with behaviour review. 100% line coverage does not prove correctness; tests must still cover positive, negative, edge, and boundary behaviours.
+**Adopter projects:** 95% is this repo's target, not a universal law. Set your own threshold from risk (safety-critical higher, early prototype lower) and state the reasoning here; if you choose 100% line coverage, say why and pair it with behaviour review.
 
-**Adopter projects:** 95% is this repo's target, not a universal law. Set your own threshold from risk: a safety-critical service may justify higher, an early prototype lower: and state the reasoning here the way this file does.
-
-**Legacy codebases:** when the repo-wide number is unreachable, gate on changed lines instead (`diff-cover` over the PR diff, e.g. >=90%). New code stays fully tested without forcing a retrofit of the whole baseline; ratchet the repo-wide threshold up as coverage grows.
+**Legacy codebases:** when the repo-wide number is unreachable, gate on changed lines instead (`diff-cover` over the PR diff, e.g. >=90%) and ratchet the repo-wide threshold up as coverage grows.
 
 ---
 
@@ -105,13 +103,7 @@ Record baseline scores here:
 
 ## Behaviour Coverage Checklist
 
-Before claiming done, verify the changed behaviour has:
-
-- [ ] Positive path tests for expected success
-- [ ] Negative path tests for rejected/failed inputs
-- [ ] Edge cases such as empty, null, zero, max, whitespace, or unicode where relevant
-- [ ] Boundary cases such as threshold transitions and off-by-one risks
-- [ ] Error handling tests for exception type, safe message, and layer translation
+Before claiming done, verify the changed behaviour covers all five behaviour classes in `testing.md` § Test Ordering and Completeness (happy, unhappy, edge, boundary, error handling): positive coverage for every AC, negative coverage for user-visible failure paths.
 
 ---
 
@@ -138,4 +130,4 @@ Cannot be expressed as a single command: reviewers verify:
 | Security scan failure | Treat exploitable findings as Must Fix before approval |
 | Tool unavailable | Name the blocker and run the closest smaller verification; do not claim the gate passed |
 
-Never bypass gates with `--no-verify`, blanket `# noqa`, bare `# type: ignore`, or skipped tests without an explicit reason.
+Bypass and suppression rules (`--no-verify`, `# noqa`, `# type: ignore`, skips): `CLAUDE.md` § Quality Gates and `style-guide.md` § No Suppression Without Justification.

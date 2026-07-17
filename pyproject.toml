@@ -65,6 +65,7 @@ packages = ["src/deploy_ai_playbook"]
 "harness/pre-commit-config.yaml"    = "deploy_ai_playbook/data/harness/pre-commit-config.yaml"
 "harness/ci.yml"                    = "deploy_ai_playbook/data/harness/ci.yml"
 "harness/security.yml"              = "deploy_ai_playbook/data/harness/security.yml"
+"harness/dependabot.yml"            = "deploy_ai_playbook/data/harness/dependabot.yml"
 "harness/check-teachback.sh"        = "deploy_ai_playbook/data/harness/check-teachback.sh"
 "harness/telemetry.sh"              = "deploy_ai_playbook/data/harness/telemetry.sh"
 "harness/read-budget.sh"            = "deploy_ai_playbook/data/harness/read-budget.sh"
@@ -110,6 +111,8 @@ select = [
     "DTZ",  # flake8-datetimez (naive datetime misuse)
     "LOG",  # flake8-logging
     "G",    # flake8-logging-format
+    "PGH004",  # blanket noqa — a bare `# noqa` hides every rule, not one
+    "TRY401",  # redundant str(e) in logging.exception calls
 ]
 # PLW1514 (explicit encoding= on text I/O) is locked in by a contract test
 # in tests/unit/test_architecture.py § encoding-on-text-io rather than by
@@ -132,7 +135,7 @@ max-complexity = 10
 ]
 
 [tool.pyright]
-include = ["src"]
+include = ["src", "tools", "evals"]
 extraPaths = ["src", "evals"]
 pythonVersion = "3.12"
 # `standard` today; the strict-mode migration deserves its own RFC + PR
@@ -212,6 +215,7 @@ also_copy = [
     "evals/",
     "harness/",
     "knowledge-base/",
+    "mutation-baseline.json",
     "skills/",
     "templates/",
     "tools/",

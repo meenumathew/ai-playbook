@@ -30,10 +30,12 @@ def _baseline(**overrides: int) -> dict:
     thresholds = {
         "max_survived": 0,
         "max_no_tests": 13,
+        "max_skipped": 0,
         "max_suspicious": 0,
         "max_timeout": 0,
         "max_check_was_interrupted_by_user": 0,
         "max_segfault": 0,
+        "min_total": 101,
     }
     thresholds.update(overrides)
     return {"version": 1, "thresholds": thresholds}
@@ -83,3 +85,53 @@ def test_rejects_infrastructure_statuses(tmp_path: Path):
 
     assert result.returncode == 1
     assert "segfault: observed 2, baseline allows 0" in result.stderr
+
+
+def test_rejects_skipped_mutant_regression(tmp_path: Path):
+    stats_path = tmp_path / "stats.json"
+    baseline_path = tmp_path / "baseline.json"
+    _write_json(stats_path, _stats(skipped=3))
+    _write_json(baseline_path, _baseline())
+
+    result = _run_checker(stats_path, baseline_path)
+
+    assert result.returncode == 1
+    assert "skipped: observed 3, baseline allows 0" in result.stderr
+
+
+def test_rejects_collapsed_mutant_population(tmp_path: Path):
+    """A total below min_total means most of src/ stopped being mutated."""
+    stats_path = tmp_path / "stats.json"
+    baseline_path = tmp_path / "baseline.json"
+    _write_json(stats_path, _stats(total=40, killed=27))
+    _write_json(baseline_path, _baseline())
+
+    result = _run_checker(stats_path, baseline_path)
+
+    assert result.returncode == 1
+    assert "total: observed 40, baseline requires at least 101" in result.stderr
+
+
+def test_rejects_baseline_missing_min_total(tmp_path: Path):
+    stats_path = tmp_path / "stats.json"
+    baseline_path = tmp_path / "baseline.json"
+    _write_json(stats_path, _stats())
+    baseline = _baseline()
+    del baseline["thresholds"]["min_total"]
+    _write_json(baseline_path, baseline)
+
+    result = _run_checker(stats_path, baseline_path)
+
+    assert result.returncode == 1
+    assert "min_total" in result.stderr
+
+
+def test_accepts_total_at_exact_floor(tmp_path: Path):
+    stats_path = tmp_path / "stats.json"
+    baseline_path = tmp_path / "baseline.json"
+    _write_json(stats_path, _stats(total=101, killed=88))
+    _write_json(baseline_path, _baseline())
+
+    result = _run_checker(stats_path, baseline_path)
+
+    assert result.returncode == 0

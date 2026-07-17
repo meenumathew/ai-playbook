@@ -253,6 +253,24 @@ def test_teachback_trailer_enforced_and_documented():
     pre_commit = (source_root / "harness" / "pre-commit-config.yaml").read_text()
     assert "check-teachback.sh" in pre_commit
     assert "commit-msg" in pre_commit
+    # A plain `pre-commit install` must install the commit-msg stage too,
+    # otherwise the teach-back gate is silently opt-in for adopters.
+    assert "default_install_hook_types: [pre-commit, commit-msg]" in pre_commit
+
+    # Both CI twins must backstop the commit-msg hook server-side: GitHub
+    # never runs commit-msg hooks, so a commit-hygiene job replays
+    # check-teachback.sh over the PR range in the repo's own CI AND in the
+    # deployed adopter template.
+    repo_ci = (source_root / ".github" / "workflows" / "ci.yml").read_text()
+    shipped_ci = (source_root / "harness" / "ci.yml").read_text()
+    for name, text in (("ci.yml", repo_ci), ("harness/ci.yml", shipped_ci)):
+        assert "commit-hygiene:" in text, f"{name} must declare a commit-hygiene job"
+        assert "harness/check-teachback.sh" in text, (
+            f"{name} commit-hygiene must reuse the local commit-msg hook script"
+        )
+        assert "git rev-list --no-merges" in text, (
+            f"{name} commit-hygiene must replay the check over the PR range"
+        )
 
     git_skill = (source_root / "skills" / "git" / "SKILL.md").read_text()
     assert "teach-back trailer" in git_skill.lower()
@@ -739,7 +757,13 @@ def test_mutation_testing_is_dedicated_baseline_regression_gate():
 
     pyproject = tomllib.loads(_repo_file("pyproject.toml").read_text(encoding="utf-8"))
     mutmut_config = pyproject["tool"]["mutmut"]
-    for required_copy in ("agents/", "knowledge-base/", "tools/", ".deprecations.toml"):
+    for required_copy in (
+        "agents/",
+        "knowledge-base/",
+        "tools/",
+        ".deprecations.toml",
+        "mutation-baseline.json",
+    ):
         assert required_copy in mutmut_config["also_copy"]
     assert "--ignore=tests/unit/test_architecture.py" in mutmut_config["pytest_add_cli_args"]
 
@@ -789,6 +813,18 @@ def test_harness_security_template_is_shipped_and_hardened():
     assert '"harness/security.yml"' in pyproject, (
         "pyproject.toml [tool.hatch.build.targets.wheel.force-include] must "
         "ship harness/security.yml"
+    )
+
+    # security.yml's header claims Dependabot updates the pinned SHAs weekly —
+    # the deployed dependabot.yml is what makes that claim true.
+    dependabot = source_root / "harness" / "dependabot.yml"
+    assert dependabot.exists(), "harness/dependabot.yml must ship alongside security.yml"
+    dependabot_text = dependabot.read_text()
+    assert "package-ecosystem: github-actions" in dependabot_text
+    assert "interval: weekly" in dependabot_text
+    assert '"dependabot.yml": ".github/dependabot.yml"' in paths_py, (
+        "src/deploy_ai_playbook/paths.py HARNESS_FILES must map dependabot.yml "
+        "to .github/dependabot.yml"
     )
 
 

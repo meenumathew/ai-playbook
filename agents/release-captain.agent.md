@@ -42,7 +42,6 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 | Tag annotation | Tag name only | Annotated tag with release notes |
 | Approval gates | Follow `knowledge-base/release.md` § Release Gates; prototype commit flow only where `CLAUDE.md` allows | Follow `knowledge-base/release.md` § Release Gates. Gated actions: merge, release commit, tag creation, tag push |
 | Branch-protection check | Skip warning | Warn if missing |
-| Max reads | 15 | 25 |
 
 ---
 
@@ -81,7 +80,7 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 ### Phase 5: Smoke
 
-1. **Run checklist**: `release.md` § Post-Deploy Smoke. Production: full list. Prototype: health + error rate.
+1. **Run checklist**: `release.md` § Post-Deploy Smoke. Production: full list. Prototype: health + error rate. **First run:** if `docs/runbooks/post-deploy.md` is missing, seed it from `templates/runbook-template.md` through the standard preview-and-approve gate (`CLAUDE.md` § Shared Rules § Approval gate) and fill the smoke signal thresholds before running the checklist.
 2. **Report:**
 
     ```text
@@ -106,6 +105,8 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
     [If WARN/FAIL: 'use incident-responder: investigate post-deploy <signal> regression']
     [If docs need updating: 'use docs-maintainer: update CHANGELOG / runbook']
     ```
+
+4. **Offer the retrospective**: after the release closes, offer: *run `skills/retrospective/SKILL.md` to capture KB lessons from this release*.
 
 ---
 

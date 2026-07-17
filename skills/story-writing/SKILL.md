@@ -87,6 +87,7 @@ Pick by work shape: `type:` frontmatter selects it:
 | `bug` | `BUG-NNN-` | [`templates/story-bug-template.md`](../../templates/story-bug-template.md) | Broken behaviour: repro, expected vs actual, regression coverage |
 | `spike` | `SPIKE-NNN-` | [`templates/story-spike-template.md`](../../templates/story-spike-template.md) | Timeboxed learning: research file deliverable, no code on main, no AC, no points |
 | `chore` | `CHORE-NNN-` | [`templates/story-template.md`](../../templates/story-template.md) | Tidy/upkeep, no user-visible change: default template, lean AC |
+| `test-story` | `STORY-NNN-` | [`templates/story-template.md`](../../templates/story-template.md) | Retrofitting coverage onto existing untested code: AC are coverage targets (modules, routes, risk areas), not feature outcomes |
 
 Can't tell story / bug / spike? Ask. Wrong shape produces a bad story.
 
@@ -94,7 +95,7 @@ Can't tell story / bug / spike? Ask. Wrong shape produces a bad story.
 
 Frontmatter is the machine-readable layer. Agents grep `stories/` for ready-set, blockers, dependencies: keep accurate.
 
-**`type:`**: `story` | `spike` | `bug` | `chore`. Must match filename prefix.
+**`type:`**: `story` | `spike` | `bug` | `chore` | `test-story`. Must match filename prefix (`test-story` keeps the `STORY-NNN-` prefix).
 
 **`status:`**: lifecycle, advanced by the agent owning the transition:
 
@@ -115,9 +116,9 @@ diff-reviewer may revert `done` → `in-progress` if changes are requested.
 
 Use story IDs (`STORY-NNN`), not file paths. Empty arrays `[]` when no dependencies.
 
-**`priority:`**: `low` | `normal` | `high` | `critical`. Optional; default `normal`. Set by incident-responder (postmortem follow-ups → `high`), story-refiner (named urgency), release-captain (hotfix). Tie-breaker among `ready` stories.
+**`priority:`**: `low` | `normal` | `high` | `critical`. Optional; default `normal`. Set by story-refiner when creating incident-originated stories from the postmortem follow-up checklist (→ `high`) or on named urgency, and by release-captain (hotfix). Tie-breaker among `ready` stories.
 
-**`incident-ref:`**: `INC-YYYY-MM-DD-slug`. Optional. Set by incident-responder on postmortem-originated stories. Traces back to `incidents/`.
+**`incident-ref:`**: `INC-YYYY-MM-DD-slug`. Optional. Set by story-refiner when creating stories from the postmortem follow-up checklist. Traces back to `incidents/`.
 
 ---
 

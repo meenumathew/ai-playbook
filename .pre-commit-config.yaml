@@ -64,7 +64,9 @@ repos:
         entry: uv run python tools/check-kb-frontmatter.py
         language: system
         files: '^(knowledge-base/.*\.md|skills/.*/SKILL\.md)$'
-        exclude: '^knowledge-base/(languages|workspaces)/'
+        # workspaces/ only: seeded per-adopter content, not shipped KB.
+        # languages/ ships with real frontmatter and IS validated.
+        exclude: '^knowledge-base/workspaces/'
         stages: [pre-commit]
       - id: pyright
         name: pyright (standard, src)

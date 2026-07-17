@@ -2,11 +2,11 @@
 id: languages-testing-python
 size: large
 tldr: pytest + pytest-mock + pytest-cov; fixtures in conftest.py; mock at service boundary; extends testing.md.
-load_when: pytest, python test, fixture, conftest, pytest-mock, parametrize, pytest-cov, pytest-asyncio, pytest-randomly
+load_when: pytest, python test, fixture, conftest, pytest-mock, parametrize, pytest-cov, pytest-asyncio, pytest-randomly, frozen time, time-machine, httpx, respx, testcontainers, pytest-xdist
 audience: all
 canonical_for: pytest test runner, pytest fixtures, pytest mocking, pytest parametrize, pytest exception testing
 cross_refs: testing.md, testing-techniques.md, languages/python.md
-verified: 2026-06-10
+verified: 2026-07-17
 ---
 
 # Testing: Python (pytest)
@@ -16,7 +16,7 @@ verified: 2026-06-10
 ## Agent Use
 
 - **Read first:** Test Runner, Fixtures, Mocking, Parametrize, Exception Testing.
-- **Load deeper only on trigger:** async tests, frozen time, HTTP client mocking, testcontainers, or parallel pytest execution: use `testing-techniques.md` § Python pytest Techniques.
+- **Load deeper only on trigger:** async tests, frozen time, HTTP client mocking, testcontainers, or parallel pytest execution: § Python pytest Techniques below.
 
 ---
 
@@ -79,22 +79,7 @@ tests/
 
 ## Fixtures
 
-Use fixtures for reusable setup: avoid copy-pasting arrange blocks:
-
-```python
-# conftest.py
-@pytest.fixture
-def empty_order():
-    return Order()
-
-@pytest.fixture
-def order_with_items():
-    order = Order()
-    order.add_item(Item("book", 10.00))
-    return order
-```
-
-Use `yield` for teardown:
+Use fixtures (in `conftest.py` when shared) for reusable setup instead of copy-pasted arrange blocks; use `yield` for teardown:
 
 ```python
 @pytest.fixture
@@ -119,57 +104,19 @@ Use the narrowest scope that keeps tests independent.
 
 ## Mocking
 
-**Do not use `unittest.mock`.** Never import `from unittest.mock import Mock, patch, MagicMock` or any other `unittest.mock` symbol. Always use the `pytest-mock` `mocker` fixture: a thin wrapper over `unittest.mock` that exposes the same API but undoes every patch automatically at test teardown and integrates with pytest's fixture lifecycle.
+**Do not use `unittest.mock`.** Never import any `unittest.mock` symbol. Always use the `pytest-mock` `mocker` fixture: same API (`mocker.Mock()`, `mocker.MagicMock()`, `mocker.patch()`, `mocker.AsyncMock()` replace the imports; `mocker.patch(...)` inside the test replaces the `@patch` decorator), but every patch is undone automatically at teardown.
 
-| Banned | Use instead |
-|--------|-------------|
-| `from unittest.mock import Mock` | `mocker.Mock()` |
-| `from unittest.mock import MagicMock` | `mocker.MagicMock()` |
-| `from unittest.mock import patch` | `mocker.patch()` |
-| `from unittest.mock import AsyncMock` | `mocker.AsyncMock()` |
-| `@patch(...)` decorator | `mocker.patch(...)` inside the test |
+Where `mocker` seems unavailable, it isn't:
 
-**Common escape hatches: and how to avoid them:**
-
-The temptation to reach for `unittest.mock` appears in two places where `mocker` seems unavailable. Both have clean pytest solutions:
-
-| Escape hatch | Why it seems needed | Correct approach |
-|---|---|---|
-| **Fixtures**: `AsyncMock(spec=SomePort)` in a `@pytest.fixture` | "`mocker` isn't a parameter of my fixture" | Add `mocker` as a fixture parameter: pytest injects it like any other fixture |
-| **Module-level helpers**: `def _make_thing(): return AsyncMock(...)` | "`mocker` isn't in scope at module level" | Convert the helper to a fixture, or pass `mocker` as an argument: `def _make_thing(mocker): return mocker.AsyncMock(...)` |
-
-```python
-# ✗ Wrong: reaches for unittest.mock because mocker seems unavailable
-from unittest.mock import AsyncMock
-
-@pytest.fixture()
-def client():
-    mock_repo = AsyncMock(spec=CaseRepositoryPort)
-    ...
-
-# ✓ Correct: mocker is just another fixture
-@pytest.fixture()
-def client(mocker):
-    mock_repo = mocker.AsyncMock(spec=CaseRepositoryPort)
-    ...
-```
+| Escape hatch | Correct approach |
+|---|---|
+| `AsyncMock(spec=SomePort)` inside a `@pytest.fixture` | Add `mocker` as a fixture parameter: pytest injects it like any other fixture |
+| Module-level helper building mocks | Convert the helper to a fixture, or pass `mocker` in: `def _make_thing(mocker): return mocker.AsyncMock(...)` |
 
 **Agent enforcement:**
 
 - **xp-pair-programmer:** never write `unittest.mock` imports. If existing code uses them, migrate to `mocker` in a separate refactor commit.
 - **diff-reviewer / code-inspector:** any `unittest.mock` import in the diff is a **Must Fix**.
-
-Use `pytest-mock` at the service layer:
-
-```python
-def test_order_service_saves_order(mocker):
-    mock_repo = mocker.Mock()
-    service = OrderService(repository=mock_repo)
-
-    service.place_order(Order())
-
-    mock_repo.save.assert_called_once_with(mocker.ANY)
-```
 
 ---
 
@@ -199,10 +146,39 @@ def test_payment_raises_when_order_is_empty():
 
 ---
 
-## Reference Notes
+## Python pytest Techniques
 
-Advanced pytest techniques live outside the core Python testing rules so agents do not load them for routine test work:
+Load a subsection only when its trigger appears. Language-agnostic technique rules (property-based, mutation, contract, async patterns): `testing-techniques.md`.
 
-| Topic | Load when |
-|-------|-----------|
-| `testing-techniques.md` § Python pytest Techniques | Python async, frozen time, HTTP mocking, testcontainers, or xdist are in scope |
+### Async Tests
+
+`asyncio_mode = "auto"` removes the need for `@pytest.mark.asyncio`. Use `mocker.AsyncMock()` for async dependencies; plain `Mock()` does not support `await`.
+
+```python
+async def test_checkout_saves_confirmed_order(mocker):
+    mock_repo = mocker.AsyncMock()
+    service = OrderService(repository=mock_repo)
+
+    result = await service.checkout(Order())
+
+    # Assert behaviour, not only that the mock was touched (testing.md § TDD Fidelity)
+    assert result.status == OrderStatus.CONFIRMED
+    saved_order = mock_repo.save.await_args.args[0]
+    assert saved_order.status == OrderStatus.CONFIRMED
+```
+
+### Time-Dependent Tests
+
+Use `time-machine` rather than `freezegun` on Python 3.12+. Never call `datetime.now()` directly in domain objects: inject a clock or freeze time in tests, at the smallest needed scope (prefer context-manager scope).
+
+### HTTP Client Mocking (respx + httpx)
+
+Use `respx` to mock `httpx` clients without starting a real server. Assert the returned behaviour and the outbound request shape that is part of the external contract.
+
+### Integration Tests with Real Services
+
+Use `testcontainers` for real DB/service integration tests. Unit tests must never import `testcontainers`; if a test does, it belongs in `tests/integration/`.
+
+### Parallel Execution (pytest-xdist)
+
+Parallel-safe tests require no shared filesystem state, no shared mutable globals, and DB isolation per worker.

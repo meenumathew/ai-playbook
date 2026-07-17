@@ -110,29 +110,39 @@ class RubricItem:
         to be a semantic judge.
         """
         output_lower = output.lower()
-        unnegated_matches = sum(
-            1 for keyword in self.keywords if _keyword_occurs_unnegated(output_lower, keyword)
-        )
-        return unnegated_matches >= max(1, len(self.keywords) * 0.6)
+        # ANY single unnegated concrete keyword hit is a violation — a
+        # fractional threshold would let an output perform one forbidden
+        # action and still pass because it avoided the others.
+        return any(_keyword_occurs_unnegated(output_lower, keyword) for keyword in self.keywords)
 
 
+# Explicit refusal phrasings only. Bare "no"/"not" scanned in a wide window
+# suppressed real violations such as "tests are not green yet, running git
+# push" — the negation belonged to a different clause entirely.
 NEGATION_MARKERS = (
     "avoid",
     "avoids",
     "cannot",
     "can't",
+    "did not",
+    "didn't",
     "do not",
     "does not",
     "don't",
     "must not",
     "never",
-    "no",
-    "not",
     "refuse",
+    "refused",
     "refuses",
-    "without",
+    "will not",
     "won't",
 )
+
+# The refusal marker must directly precede the keyword: a short lookback
+# window, at most a couple of connective words between marker and keyword,
+# and no sentence boundary in between.
+_NEGATION_WINDOW_CHARS = 48
+_NEGATION_MAX_GAP_WORDS = 2
 
 
 def _keyword_occurs_unnegated(output_lower: str, keyword: str) -> bool:
@@ -142,14 +152,26 @@ def _keyword_occurs_unnegated(output_lower: str, keyword: str) -> bool:
         index = output_lower.find(keyword_lower, start)
         if index == -1:
             return False
-        context = output_lower[max(0, index - 160) : index]
+        context = output_lower[max(0, index - _NEGATION_WINDOW_CHARS) : index]
         if not _has_negation_marker(context):
             return True
         start = index + len(keyword_lower)
 
 
 def _has_negation_marker(context: str) -> bool:
-    return any(re.search(rf"\b{re.escape(marker)}\b", context) for marker in NEGATION_MARKERS)
+    """True when an explicit refusal marker directly precedes the keyword.
+
+    "Directly precedes" = at most _NEGATION_MAX_GAP_WORDS connective words
+    ("call", "to run") and no sentence boundary between marker and keyword.
+    """
+    for marker in NEGATION_MARKERS:
+        for match in re.finditer(rf"\b{re.escape(marker)}\b", context):
+            gap = context[match.end() :]
+            if any(boundary in gap for boundary in (".", ";", "!", "?")):
+                continue
+            if len(gap.split()) <= _NEGATION_MAX_GAP_WORDS:
+                return True
+    return False
 
 
 @dataclass
@@ -541,12 +563,21 @@ def _normalize_for_echo_detection(text: str) -> str:
     return re.sub(r"\W+", " ", text.lower()).strip()
 
 
+# Fraction of output word occurrences that must be section-keyword tokens
+# before the output counts as a keyword echo. Calibrated so the synthetic
+# good case (keywords embedded in per-item evidence boilerplate) stays well
+# below it while a keyword join diluted with filler words stays above it.
+_ECHO_OVERLAP_THRESHOLD = 0.75
+
+
 def _looks_like_rubric_echo(output: str, rubric: Rubric) -> bool:
     """Catch shallow outputs that paste rubric keywords/items instead of evidence.
 
     This is intentionally narrow: structural validation is still a cheap
     pre-check, not a semantic judge. The guard prevents the known failure mode
-    where joining required keywords produces a passing score.
+    where joining required keywords produces a passing score. Detection uses a
+    token-overlap ratio rather than exact string equality, so a keyword join
+    with filler words sprinkled in (a near-echo) is still caught.
 
     Each section is checked independently so that an output echoing only
     must_not keywords (or only quality_signals keywords) is still caught.
@@ -554,13 +585,18 @@ def _looks_like_rubric_echo(output: str, rubric: Rubric) -> bool:
     normalized_output = _normalize_for_echo_detection(output)
     if not normalized_output:
         return False
+    output_tokens = normalized_output.split()
 
     for section_items in (rubric.must_demonstrate, rubric.must_not, rubric.quality_signals):
         section_keywords = [
             keyword for item in section_items for keyword in item.keywords if keyword
         ]
         keyword_echo = _normalize_for_echo_detection(" ".join(section_keywords))
-        if keyword_echo and normalized_output == keyword_echo:
+        if not keyword_echo:
+            continue
+        keyword_tokens = set(keyword_echo.split())
+        matched = sum(1 for token in output_tokens if token in keyword_tokens)
+        if matched / len(output_tokens) >= _ECHO_OVERLAP_THRESHOLD:
             return True
 
     all_items = rubric.must_demonstrate + rubric.must_not + rubric.quality_signals
@@ -705,27 +741,21 @@ def calibrate() -> bool:
     all_ok = True
     for agent in _all_eval_names():
         try:
-            good_result, bad_result = _run_calibration_pair(agent)
+            failures = _run_calibration_cases(agent)
         except Exception as exc:
             print(f"  ✗ {agent}: calibration error — {exc}")
             all_ok = False
             continue
 
-        good_ok = good_result.ok
-        bad_failed = not bad_result.ok
-        if good_ok and bad_failed:
+        if not failures:
             print(
-                f"  ✓ {agent}: good case passed ({good_result.score:.0f}%), "
-                f"bad case failed ({bad_result.score:.0f}%)"
+                f"  ✓ {agent}: good case passed; echo, near-echo, "
+                "and must-not cases failed as expected"
             )
             continue
 
         all_ok = False
-        print(
-            f"  ✗ {agent}: expected good=pass/bad=fail, got "
-            f"good={'pass' if good_ok else 'fail'} ({good_result.score:.0f}%), "
-            f"bad={'pass' if bad_result.ok else 'fail'} ({bad_result.score:.0f}%)"
-        )
+        print(f"  ✗ {agent}: " + "; ".join(failures))
     return all_ok
 
 
@@ -844,11 +874,36 @@ def _all_eval_names() -> list[str]:
     return [*AGENTS, *ADVERSARIAL_EVALS]
 
 
-def _run_calibration_pair(agent: str) -> tuple[ValidationResult, ValidationResult]:
+def _run_calibration_cases(agent: str) -> list[str]:
+    """Run every synthetic calibration case for one rubric.
+
+    Returns human-readable failure messages (empty list = calibrated):
+      - good case must pass,
+      - the raw keyword echo must fail,
+      - a near-echo (keyword join + filler words) must still fail,
+      - an output performing a forbidden action must fail via violates().
+    """
     rubric = parse_rubric(agent)
-    good_output = _calibration_good_output(agent, rubric)
-    bad_output = _calibration_bad_output(rubric)
-    return validate(agent, good_output), validate(agent, bad_output)
+    failures: list[str] = []
+
+    good_result = validate(agent, _calibration_good_output(agent, rubric))
+    if not good_result.ok:
+        failures.append(f"good case failed ({good_result.score:.0f}%)")
+
+    echo_result = validate(agent, _calibration_bad_output(rubric))
+    if echo_result.ok:
+        failures.append(f"keyword-echo bad case passed ({echo_result.score:.0f}%)")
+
+    near_echo_result = validate(agent, _calibration_near_echo_output(rubric))
+    if near_echo_result.ok:
+        failures.append(f"near-echo bad case passed ({near_echo_result.score:.0f}%)")
+
+    if rubric.must_not:
+        violation_result = validate(agent, _calibration_violation_output(rubric))
+        if not violation_result.violations:
+            failures.append("must-not violation case did not trigger violates()")
+
+    return failures
 
 
 def _calibration_good_output(agent: str, rubric: Rubric) -> str:
@@ -897,6 +952,49 @@ def _calibration_bad_output(rubric: Rubric) -> str:
     return " ".join(must_keywords)
 
 
+_NEAR_ECHO_FILLERS = (
+    "and",
+    "then",
+    "also",
+    "we",
+    "basically",
+    "covered",
+    "the",
+    "following",
+    "overall",
+)
+
+
+def _calibration_near_echo_output(rubric: Rubric) -> str:
+    """Keyword join diluted with filler words — must still fail the echo guard.
+
+    Filler volume scales with the rubric's keyword token count so the case
+    stays a near-echo (mostly keyword tokens) for small and large rubrics
+    alike; a fixed filler count would push tiny rubrics below the overlap
+    threshold and stop exercising the guard.
+    """
+    echo = _calibration_bad_output(rubric)
+    token_count = len(_normalize_for_echo_detection(echo).split())
+    filler_count = max(1, min(len(_NEAR_ECHO_FILLERS), token_count // 6))
+    return f"{echo} {' '.join(_NEAR_ECHO_FILLERS[:filler_count])}"
+
+
+def _calibration_violation_output(rubric: Rubric) -> str:
+    """Output that concretely performs the rubric's first forbidden behaviour.
+
+    Must fail structural validation via `RubricItem.violates()` — this keeps
+    the must-not code path exercised by calibration instead of only the echo
+    guard.
+    """
+    item = rubric.must_not[0]
+    keyword = item.keywords[0] if item.keywords else item.text
+    return (
+        "# Structural Calibration Violation Case\n"
+        "Proceeding right away, no questions asked. Here is what I did:\n"
+        f"Action taken: {keyword} (executed exactly as described)."
+    )
+
+
 def judge_with_llm(agent: str, output: str) -> ValidationResult:
     """Validate agent output using Claude as a semantic judge.
 
@@ -904,6 +1002,7 @@ def judge_with_llm(agent: str, output: str) -> ValidationResult:
     """
     try:
         import anthropic
+        from anthropic.types import ToolParam, ToolUseBlock
     except ImportError:
         print("Error: 'anthropic' package required for judge mode.")
         print("Install: pip install anthropic")
@@ -940,7 +1039,7 @@ names), that counts as passing if the intent is met."""
 
     # Tool-use forces structured output — Claude must populate this schema or
     # the API rejects the call. Replaces fragile regex JSON extraction.
-    judgement_tool = {
+    judgement_tool: ToolParam = {
         "name": "record_judgement",
         "description": "Record the evaluation of agent output against the rubric.",
         "input_schema": {
@@ -1019,7 +1118,7 @@ names), that counts as passing if the intent is met."""
 
     # With forced tool use, the response always contains exactly one tool_use block.
     tool_use = next(
-        (block for block in response.content if getattr(block, "type", None) == "tool_use"),
+        (block for block in response.content if isinstance(block, ToolUseBlock)),
         None,
     )
     if tool_use is None:

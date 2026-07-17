@@ -454,6 +454,121 @@ def test_kb_file_has_required_frontmatter(kb_file: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Cross-file duplication guard
+#
+# The INDEX/frontmatter contract tests keep *routing* in sync; this guard keeps
+# *substance* single-homed. Duplicated rule text drifts: the coverage-threshold
+# and smoke-signal contradictions fixed in 2026-07 both started as copies of a
+# rule that later diverged in one home but not the other.
+# ---------------------------------------------------------------------------
+
+# Word-sequence length that counts as duplicated substance. Long enough that
+# shared idioms don't trip it; short enough to catch a copied rule sentence.
+_NGRAM_WORDS = 12
+
+# Known deliberate parallels: pairs allowed to share n-grams because the text
+# is an intentional template echo, not a rule that can drift.
+_NGRAM_ALLOWED_PAIRS: set[tuple[str, str]] = {
+    # Both files open with the same "Reference implementation" notice by design.
+    (
+        "knowledge-base/languages/python.md",
+        "knowledge-base/languages/testing-python.md",
+    ),
+    # The three adapter skills share one rigorous schema (operations tables,
+    # config precedence, untrusted-input sections) as a deliberate pattern.
+    ("skills/host-adapter/SKILL.md", "skills/issue-fetch/SKILL.md"),
+    ("skills/host-adapter/SKILL.md", "skills/notifier/SKILL.md"),
+    ("skills/issue-fetch/SKILL.md", "skills/notifier/SKILL.md"),
+}
+
+# Lines exempt from n-gram extraction: blockquotes carry canonical prompt
+# templates that agents must instantiate verbatim (pinned by
+# test_approval_gate_contracts), and every agent opens its Tool Policy and
+# Tier-aware ceremony sections with the same mandated leader sentence
+# (pinned by the agent anatomy contracts) — contractual echoes, not drift.
+_NGRAM_EXEMPT_LINE = re.compile(
+    r"^\s*>"
+    r"|Reply 'approved'"
+    r"|tool-policy\.md` § Per-Agent Matrix"
+    r"|Master table: `CLAUDE\.md` § Quality Tier"
+)
+
+
+def _guarded_corpus() -> list[Path]:
+    """Every always- or per-invocation-loaded prose surface.
+
+    commands/*.md shims are excluded: they are 7-line generated-style
+    forwarders whose mutual similarity is the template, not a rule.
+    """
+    return sorted(
+        [
+            *KB_DIR.rglob("*.md"),
+            *AGENTS_DIR.glob("*.agent.md"),
+            *(REPO_ROOT / "skills").glob("*/SKILL.md"),
+            REPO_ROOT / "CLAUDE.md",
+        ]
+    )
+
+
+def _kb_word_ngrams(path: Path) -> set[str]:
+    body = _read(path)
+    if body.startswith("---\n"):
+        parts = body.split("---", 2)
+        body = parts[2] if len(parts) == 3 else body
+    lines = [line for line in body.splitlines() if not _NGRAM_EXEMPT_LINE.search(line)]
+    words = re.findall(r"[a-z0-9'`._-]+", "\n".join(lines).lower())
+    return {" ".join(words[i : i + _NGRAM_WORDS]) for i in range(len(words) - _NGRAM_WORDS + 1)}
+
+
+def test_kb_files_do_not_duplicate_rule_text() -> None:
+    """No two loaded surfaces share a 12-word text run (minus allowlisted parallels).
+
+    Corpus: knowledge-base/, agents/, skills/, and CLAUDE.md — everything an
+    agent session pays tokens for. If this fails, keep one canonical statement
+    and replace the other side with a `file.md § Section` pointer (loading
+    rule: CLAUDE.md § Knowledge Base). Only extend _NGRAM_ALLOWED_PAIRS for
+    deliberate template echoes.
+    """
+    seen: dict[str, Path] = {}
+    offenders: dict[tuple[str, str], str] = {}
+    for path in _guarded_corpus():
+        rel = str(path.relative_to(REPO_ROOT))
+        for gram in _kb_word_ngrams(path):
+            other = seen.setdefault(gram, path)
+            if other is not path:
+                pair_key = tuple(sorted((str(other.relative_to(REPO_ROOT)), rel)))
+                if pair_key not in _NGRAM_ALLOWED_PAIRS:
+                    offenders.setdefault((pair_key[0], pair_key[1]), gram)
+    assert not offenders, (
+        "KB files share duplicated rule text (12+ identical words). "
+        "Single-home the rule and cite it from the other file:\n"
+        + "\n".join(f'  {a} <-> {b}: "{gram}"' for (a, b), gram in sorted(offenders.items()))
+    )
+
+
+# Only the CHEATSHEET may join the fixed per-session context. Every other KB
+# file must be trigger-loaded; an `always` load_when silently grows the
+# overhead every adopter pays on every turn (INDEX was demoted in 2026-07).
+_ALWAYS_LOADED_KB_FILES = {"knowledge-base/CHEATSHEET.md"}
+
+
+def test_only_cheatsheet_declares_load_when_always() -> None:
+    """No KB file outside the allowlist may declare `load_when: always`."""
+    offenders = []
+    for path in sorted(KB_DIR.rglob("*.md")):
+        rel = str(path.relative_to(REPO_ROOT))
+        for line in _read(path).splitlines():
+            if line.startswith("load_when:") and "always" in line.split(":", 1)[1]:
+                if rel not in _ALWAYS_LOADED_KB_FILES:
+                    offenders.append(f"  {rel}: {line.strip()}")
+                break
+    assert not offenders, (
+        "KB files outside the always-loaded allowlist declare `load_when: always` "
+        "(this grows the fixed per-session token surface):\n" + "\n".join(offenders)
+    )
+
+
+# ---------------------------------------------------------------------------
 # Agent ↔ command shim consistency
 # ---------------------------------------------------------------------------
 
@@ -506,6 +621,9 @@ IGNORED_INTERNAL_PATHS: set[str] = {
     # follow-up move stories. Removing each entry is part of the
     # accepting move story's slice.
     "knowledge-base/definition-of-done.md",
+    # Proposed in RFC-0002 (docs/rfcs/0002-lessons-log.md); the seed file
+    # lands with the implementation if accepted. Remove this entry then.
+    "knowledge-base/lessons.md",
 }
 
 # Path patterns whose `NNNN` / `NNN` / `<scope>` segments are placeholder

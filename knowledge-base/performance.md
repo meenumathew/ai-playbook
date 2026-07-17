@@ -6,7 +6,7 @@ load_when: hot path, performance, N+1, caching, data-heavy, collections, latency
 audience: all
 canonical_for: performance review checklist, data structure selection, when-to-care thresholds
 cross_refs: design-patterns.md, observability.md
-verified: 2026-05-19
+verified: 2026-07-17
 ---
 
 # Performance Awareness
@@ -31,21 +31,7 @@ Never optimize without measurement: but recognize obvious inefficiency in review
 
 If the expected data scale is unknown, ask before choosing an approach.
 
----
-
-## Big-O Quick Reference
-
-| Complexity | Example | Agent action |
-|-----------|---------|-------------|
-| O(1) | Dict/set lookup, array index |: |
-| O(log n) | Binary search, balanced tree |: |
-| O(n) | Single pass over a list | Fine for most cases |
-| O(n log n) | Sorting | Fine for most cases |
-| O(n^2) | Nested loop over same collection | **Flag in review if n > 100** |
-| O(n³) | Triple nested loop | **Almost always wrong: flag** |
-| O(2ⁿ) | Brute-force subsets | Only acceptable for tiny n with no alternative |
-
-**AI agents frequently generate O(n²) code.** Flag nested loops and `in` checks on lists during review.
+**AI agents frequently generate O(n^2) code.** Flag nested loops over the same collection when n can exceed 100, and `in` checks on lists inside loops; triple-nested loops are almost always wrong.
 
 ---
 
@@ -73,17 +59,7 @@ If the expected data scale is unknown, ask before choosing an approach.
 | Priority queue | `heapq` | Sorting after every insert |
 | Counted items | `collections.Counter` | Manual dict incrementing |
 
-Choose the structure that makes the **dominant operation** cheap.
-
----
-
-## Memory Awareness
-
-| Pattern | When to prefer |
-|---------|---------------|
-| **Generator / iterator** | Processing items one at a time: don't need the whole list in memory |
-| **Streaming / chunked reads** | Files or API responses larger than available memory |
-| **Materialised list** | Need random access, `len()`, or multiple passes |
+Choose the structure that makes the **dominant operation** cheap. Prefer generators/streaming for single-pass or larger-than-memory data; materialise a list only for random access, `len()`, or multiple passes.
 
 ---
 
@@ -102,32 +78,13 @@ Never cache mutable business state without an explicit invalidation strategy.
 
 ## Token and Context Budget
 
-AI-assisted development has a performance dimension too: context windows, tool calls, and model cost. Large prompts can hide important facts through truncation and make workflows expensive.
-
-| Pattern | Agent action |
-|---------|-------------|
-| Read budget | Start with targeted search and small file sets. If research expands, state your findings and narrow the next read. |
-| Context pressure | When a task needs many files, summarise stable findings into an artifact before continuing rather than repeatedly re-reading the same context. |
-| Large codebases | Prefer indexes, dependency graphs, test maps, and architecture docs before opening many implementation files. |
-| Multi-agent workflows | Reuse artifacts from story-refiner, slice-planner, and xp-pair-programmer instead of restating everything in each step. |
-| Cost awareness | For team workflows, track unusually large sessions and split stories when one session becomes too broad to review safely. |
-
-Rule of thumb: if the agent cannot name the relevant files, risks, and next verification step, it needs a narrower slice before more context.
+Context is a performance surface too: read budgets and loading discipline are canonical in `CLAUDE.md` (§ Shared Rules, § Knowledge Base) and `philosophy.md` § Context Engineering. Rule of thumb: if the agent cannot name the relevant files, risks, and next verification step, it needs a narrower slice before more context.
 
 ---
 
 ## Performance Review Checklist
 
-For diff-reviewer and code-inspector: check on hot paths and data-heavy code:
-
-- [ ] No DB/API calls inside loops (N+1)
-- [ ] No `in` checks on lists inside loops: use sets
-- [ ] No string concatenation in loops: use `join()`
-- [ ] No unbounded collection materialisation
-- [ ] Appropriate data structure for the dominant operation
-- [ ] Generators used where the code only needs a single pass
-- [ ] Sorting happens once, not repeatedly
-- [ ] No redundant re-computation
+For diff-reviewer and code-inspector: on hot paths and data-heavy code, verify every § Common Pitfalls row plus data-structure fit for the dominant operation (§ Data Structure Selection).
 
 **Scope:** request-path code, collection-processing code, loops whose count depends on input size. Skip: setup, config, CLI parsing, test fixtures.
 
@@ -153,3 +110,21 @@ Use `PERF:` annotations (`style-guide.md` § Comments) for performance opportuni
 ```python
 # PERF: linear scan fine for <100 items; revisit if catalog grows beyond 10k
 ```
+
+---
+
+## Load & Stress Testing
+
+Static review (the checklist above) catches algorithmic and query problems in the code. It does not tell you whether the system holds up under real concurrency, so a data-heavy, high-throughput, or hot-path change needs a load test *before* release, not a production surprise.
+
+**When to load-test.** Plan one (at slice-planner time) when the change touches: a request path expected to see concurrency, a queue/stream consumer, a batch job over large data, a new external-service dependency on a hot path, or anything with a stated latency/throughput SLO. Skip it for isolated, low-traffic, or internal-only changes.
+
+**Set a target first.** A load test with no target only produces numbers. Before running, state the expected peak (requests/sec, messages/sec, concurrent users), the acceptable p95/p99 latency, and the error-rate ceiling. Without a target you cannot say "pass" or "fail".
+
+**What to measure.** Throughput at the target rate, latency distribution (p50/p95/p99, not just mean), error rate under load, and resource saturation (CPU, memory, connection-pool, DB/queue depth): the saturation point matters more than the average.
+
+**Test shapes.** *Load*: steady expected peak. *Stress*: ramp past the peak to find the breaking point. *Soak*: sustained load over hours to surface leaks and slow degradation. *Spike*: sudden burst to test elasticity and backpressure.
+
+**Tools are a detail, not the point.** k6, Locust, JMeter, or Gatling all work; pick whatever the team already runs. State the tool in the plan; keep the scenario in the repo so it reruns.
+
+**Where it fits.** slice-planner adds a load-test task when the performance gate fires; release-captain confirms the target was met before cutover on performance-sensitive changes. A failing load test is a release blocker, not a nice-to-have.

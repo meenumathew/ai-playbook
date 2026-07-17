@@ -164,14 +164,15 @@ KB_CONTRACTS = {
                 "Async and Event-Driven Test Patterns",
                 "Mutation Testing",
                 "Contract Testing",
-                "Python pytest Techniques",
+                "Language-Specific Techniques",
             ),
-            terms=("Message consumer acceptance tests", "critical paths", "Never on pre-commit"),
+            terms=("Message consumer acceptance tests", "critical-path registry", "pre-commit"),
         ),
     ],
     "languages/testing-python.md": [
         contract(
             "python testing conventions",
+            headings=("Python pytest Techniques",),
             terms=("pytest-mock", "unittest.mock", "Parametrize", "Exception Testing"),
             references=("testing-techniques.md",),
         ),

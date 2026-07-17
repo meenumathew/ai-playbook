@@ -24,7 +24,7 @@ Creating PR through `skills/host-adapter/SKILL.md` only:
 host.pr.create(branch, title, body, base)
 ```
 
-No direct `gh pr create` call.
+I never call `gh pr create` directly.
 
 ## Watch
 
@@ -40,7 +40,7 @@ If CI is red, stop and hand off: `Say 'use xp-pair-programmer — fix CI failure
 
 Ready to merge feature/email-shipment into main via squash. Say 'merge' to proceed.
 
-After approval, call `host.pr.merge(ref, method='squash')`. No auto-merge and no branch-protection bypass.
+After approval, call `host.pr.merge(ref, method='squash')`. I never auto-merge and never bypass branch protection.
 
 ## Release
 

@@ -12,7 +12,7 @@ Default path: refine before build.
 |---|---|
 | Idea, work item, ticket, or description | **story-refiner**: refine it → write the story artifact |
 | Story artifact (file or pasted) | **story-refiner**: refine it against the codebase → slice-planner |
-| Plan file | **xp-pair-programmer** by default; **docs-maintainer** for documentation-only plans |
+| Plan file | **xp-pair-programmer**; documentation-only plans apply docs-maintainer's writing rules (`knowledge-base/doc-linting.md`) |
 | Existing code with no tests | **story-refiner** (test-story) → slice-planner → xp-pair-programmer (test-story cycle) |
 | Urgent small fix ("asap", `priority: high/critical`, ≤ 3 pts, not an incident) | **Fast lane**: same chain, prompts compressed, gates kept: `docs/how-to/choose-workflow-path.md` § Use the Fast Lane for Urgent Small Fixes |
 | Code to review | **diff-reviewer** |
@@ -108,20 +108,9 @@ Load whatever exists. Don't ask separately. Report: `Loaded: story (STORY-001), 
 
 quality-tier: production (full TDD, complete DoD, security checks mandatory)
 
-The tier above is the default switch. Prototype = learning spikes, throwaway experiments, early shaping. Production = durable code that will be deployed, maintained, or reviewed. To flip the repo default, replace the `quality-tier:` line above with `quality-tier: prototype` (the test suite enforces exactly one active tier line). Per-agent and per-workspace overrides come from the resolution order below.
+The tier above is the default switch. To flip the repo default, replace the `quality-tier:` line above with `quality-tier: prototype` (the test suite enforces exactly one active tier line). What each tier is for: `knowledge-base/quality-tier-resolution.md` § What Each Tier Is For.
 
-**Tier announcement (recommended, not required).** When clarity matters, such as long sessions, a tier change, or a user request, state the active tier in one line so behaviour is unambiguous, e.g.:
-
-- `Tier: production (preview-and-approve gates ON, full TDD, complete DoD).`
-- `Tier: prototype (gates skipped, save-and-summarize, lean artifacts).`
-
-Resolve the active tier in this order:
-
-1. Per-agent override in `.ai-playbook.toml` under `[quality_tiers.agents]`, keyed by the active agent id
-2. Workspace overlay `knowledge-base/workspaces/<workspace>/quality-tier.md`, when the loaded story declares `workspace: <path>`
-3. Root `quality-tier:` line above
-
-Then use the wording that matches the resolved tier. The tier table below binds behaviour; the announcement just helps avoid the prototype-mode surprise where users expect approval gates that don't fire.
+Resolution order (per-agent override → workspace overlay → root line above), the recommended tier announcement wording, the per-agent override TOML, and the monorepo workspace overlay (`knowledge-base/workspaces/<workspace>/quality-tier.md`) are detailed on-demand in `knowledge-base/quality-tier-resolution.md`. The table below binds behaviour.
 
 | Ceremony | prototype | production |
 |----------|-----------|------------|
@@ -138,19 +127,7 @@ Then use the wording that matches the resolved tier. The tier table below binds 
 | Review / audit depth | P0/P1/P2 only: security, domain correctness, test quality | Full review/audit scope |
 | Documentation | Inline notes or brief module README | Known limitations, runbooks, ADRs, user-facing docs |
 
-Agent files reference this master table and may include an **agent-specific override table** that names only the rows where their behaviour deviates (e.g. `Step | prototype | production` tuned to that agent's workflow). Do not restate the master ceremony rows verbatim.
-
-**Per-agent quality tier override.** Adopter projects may set one agent to a different ceremony level without changing the whole repo:
-
-```toml
-[quality_tiers.agents]
-xp-pair-programmer = "production"
-docs-maintainer = "prototype"
-```
-
-Use only `production` or `prototype`. `ai-playbook status` shows the effective tier for deployed agents (it resolves the config override and repo default; the workspace overlay is story-scoped and agent-honored at runtime); `ai-playbook doctor` warns if an override names an unknown agent.
-
-**Workspace overlay (monorepos).** When a story declares `workspace: <path>` in frontmatter, agents look for `knowledge-base/workspaces/<path>/quality-tier.md` and use its tier when no per-agent override exists. Same precedence applies to language conventions and other KB files in the overlay. Fall through to repo root if no overlay exists. Detail: `knowledge-base/workspaces/README.md`.
+Agent files reference this master table and may include an **agent-specific override table** that names only the rows where their behaviour deviates (e.g. `Step | prototype | production` tuned to that agent's workflow). Do not restate the master ceremony rows verbatim. Override mechanics (per-agent TOML, workspace overlay): `knowledge-base/quality-tier-resolution.md`.
 
 ---
 
@@ -229,7 +206,7 @@ If a gate fails, fix the issue: never skip with `--no-verify` or silence the too
 - [ ] Conventional Commit written (`skills/git/SKILL.md`)
 - [ ] No hardcoded secrets; input validated at boundaries; errors logged with context
 - [ ] Known limitations documented: not silently accepted
-- [ ] Commit body explains *why*, and non-trivial commit types end with a Teach-back trailer: `Teach-back: <one sentence: what the change does and where to debug it>`. The body carries the rationale; the trailer survives in `git log --oneline`. Canonical format + type lists: `skills/git/SKILL.md` § Teach-back Trailer. Enforced by `harness/check-teachback.sh` (`commit-msg` hook). Rationale: `knowledge-base/philosophy.md` § Teach-Back Gate.
+- [ ] Commit body explains *why*; non-trivial commit types end with a Teach-back trailer (canonical format + type lists: `skills/git/SKILL.md` § Teach-back Trailer; enforced by `harness/check-teachback.sh`, `commit-msg` hook)
 - [ ] Feature flag *(if any)*: default OFF, cleanup date set, registered in `knowledge-base/feature-flag-registry.md` (`knowledge-base/feature-flags.md` § Flag Registry)
 
 ---
@@ -266,4 +243,5 @@ First-use note: the system seeds project-specific registries from `templates/` w
 - `knowledge-base/feature-flag-registry.md` ← `templates/feature-flag-registry-template.md`
 - `knowledge-base/languages/<lang>.md` ← `templates/language-conventions-template.md`
 - `knowledge-base/languages/testing-<lang>.md` ← `templates/testing-language-template.md`
+- `docs/runbooks/post-deploy.md` ← `templates/runbook-template.md` (release-captain seeds on first smoke run)
 - `docs/adr/NNNN-*.md` ← `templates/adr-template.md` (see [docs/adr/README.md](docs/adr/README.md))

@@ -1,37 +1,21 @@
 ---
 id: index
 size: medium
-tldr: Topic-to-file routing table; load this first to decide which KB file to pull.
-load_when: always; first hop for any KB lookup
+tldr: Topic-to-file routing table; search it when the CHEATSHEET misses.
+load_when: on CHEATSHEET miss; authoritative routing for exact-topic lookup
 audience: all
 canonical_for: KB routing, topic-to-file map, load-order rule
 cross_refs: all KB files
-verified: 2026-06-10
+verified: 2026-07-17
 ---
 
 # Knowledge Base Index
 
 Topic → file routing table. Load on demand: do not inline.
 
-## 30-Second Load Path (Agent-Friendly)
-
-Use this when speed matters and the task is straightforward:
-
-1. Read `CHEATSHEET.md` only.
-2. If blocked, open exactly one cited canonical section.
-3. Stop when you can act safely.
-4. Keep quality gates, security checks, and verification unchanged.
-
 ## Loading Rule
 
-Use the smallest source that can change the outcome:
-
-1. **Start with `CLAUDE.md`**: always in context.
-2. **Load `CHEATSHEET.md`** for the one-line rule first: covers ~80% of cases.
-3. **On cheatsheet miss, search Exact Section Routing** below for the exact topic, then load the canonical file.
-4. **Load one file or section at a time**: prefer a cited section over a whole file when tools support ranges.
-5. **Stop reading once the rule is actionable.** Do not read conceptual background unless a decision, review finding, or test design needs it.
-6. **Never skip required quality gates.** Efficient loading reduces tokens, not standards.
+Canonical: the KB efficiency rule in `CLAUDE.md` § Knowledge Base (KB): smallest source first, stop when actionable, never weaken gates. What this file adds: on a CHEATSHEET miss, search § Exact Section Routing for the topic, then load the canonical file (or just the cited section when tools support ranges), one at a time.
 
 ---
 
@@ -58,11 +42,14 @@ The "Load when" column is each file's `load_when:` frontmatter, verbatim (contra
 | `quality-gates.md` | Triggered | quality gate, coverage threshold, critical path, mutation score, make quality, make test, CI gate |
 | `tool-policy.md` | Triggered | tool policy, permission, host adapter, issue fetch, notifier, vendor-neutral, operation ID, agent ↔ skill |
 | `working-agreement.md` | Triggered | collaboration, review size, ownership, disagreement, escalation, agent workflow, operating model |
+| `decision-mapping.md` | Triggered | decision mapping, too big for one session, foggy, unknown decisions, open decisions, decision spike, map the unknowns, multi-session planning, pre-planning decisions |
+| `quality-tier-resolution.md` | Triggered | quality tier resolution, tier override, per-agent tier, workspace overlay tier, tier announcement, ai-playbook status tier, monorepo tier |
+| `accessibility.md` | Triggered | accessibility, a11y, WCAG, screen reader, keyboard navigation, alt text, ARIA, color contrast, focus, form label, semantic HTML |
 | `philosophy.md` | Reference | design decision, principle, bounded context, cognitive health, context efficiency, teach-back, AI anti-pattern |
 | `design-fundamentals.md` | Reference | cohesion, coupling, abstraction, module property, review finding, design decision, "is this module pulling its weight", LCOM, afferent, efferent, complexity symptom, change amplification, cognitive load, unknown unknowns, software that lasts, strategic vs tactical, design checkpoint |
 | `model-tier.md` | Reference | model tier, advisor, executor, model config, escalation, single model setup |
 | `doc-linting.md` | Reference | docs, vale, markdownlint, lychee, doc lint fail, Diataxis |
-| `testing-techniques.md` | Triggered | property-based, mutation, hypothesis, fast-check, contract test, pact, async test, queue, stream, eventual consistency, frozen time, httpx, respx, testcontainers, pytest-xdist |
+| `testing-techniques.md` | Triggered | property-based, mutation, hypothesis, fast-check, contract test, pact, async test, queue, stream, eventual consistency |
 | `workspaces/README.md` | Triggered | Story declares `workspace:` frontmatter, monorepo per-package overlays, per-workspace quality tier or language conventions |
 
 The system seeds project-specific files from `templates/` on first use and announces the seed. Never skip a missing KB file silently. ADRs: [`docs/adr/`](../docs/adr/) ← [`templates/adr-template.md`](../templates/adr-template.md).
@@ -198,7 +185,7 @@ To add a new language: copy `templates/language-conventions-template.md` to `lan
 | Python conventions | `languages/python.md` |
 | Python Protocol ports / TypedDict / async patterns | `languages/python.md` § Reference Notes |
 | Python pytest conventions | `languages/testing-python.md` |
-| Python pytest techniques (async / time-dependent / HTTP mocking / testcontainers / parallel xdist) | `testing-techniques.md` § Python pytest Techniques |
+| Python pytest techniques (async / time-dependent / HTTP mocking / testcontainers / parallel xdist) | `languages/testing-python.md` § Python pytest Techniques |
 | Session-end learning | `skills/retrospective/SKILL.md` |
 | Release gates / merge strategies / post-deploy smoke / rollback / hotfix | `release.md` |
 | Validate existing behaviour / regression detection / code-generation completeness / contract preservation (UFX-2140 pattern) | `regression-and-contracts.md` |
@@ -211,4 +198,4 @@ To add a new language: copy `templates/language-conventions-template.md` to `lan
 | Bitbucket Cloud issue fetch | `skills/issue-fetch/SKILL.md` § Bitbucket Adapter |
 | Outbound notifications (Slack, email, webhook) | `skills/notifier/SKILL.md` |
 | Notifier event names (release_shipped, smoke_warn, smoke_fail, incident_sev1/2, incident_resolved, postmortem_ready) | `skills/notifier/SKILL.md` § Canonical event names |
-| Telemetry hook wire-up + jq queries | `knowledge-base/observability.md` § Agent Telemetry |
+| Telemetry hook wire-up + jq queries | `docs/how-to/agent-telemetry.md` (summary: `knowledge-base/observability.md` § Agent Telemetry) |

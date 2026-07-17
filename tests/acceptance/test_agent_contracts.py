@@ -330,14 +330,23 @@ def test_slice_planner_records_red_evidence_for_bug_stories():
     )
 
 
-def test_slice_planner_routes_documentation_only_plans_to_docs_maintainer():
-    """Slice-planner must not hardcode xp-pair for documentation-only plans."""
+def test_slice_planner_routes_documentation_only_plans_to_xp_pair_with_docs_rules():
+    """Documentation-only plans execute via xp-pair-programmer carrying
+    docs-maintainer's writing rules: docs-maintainer has no plan-execution
+    steps and is denied git commit (tool-policy.md § Per-Agent Matrix)."""
     content = read_agent("slice-planner")
-    assert "documentation-only plans" in content
-    assert "docs-maintainer" in content
+    # STRUCTURE-MARKER: concept tokens for the docs-only routing rule.
+    assert "documentation-only" in content
+    assert "xp-pair-programmer executes every plan" in content
+    assert "agents/docs-maintainer.agent.md" in content
+    assert "knowledge-base/doc-linting.md" in content
     assert "project-specific documentation content" in content
     assert "Use **xp-pair-programmer** for anything" in content
     assert "feature flag wiring" in content
+    # STRUCTURE-MARKER: xp-pair must know how to execute a docs-only plan.
+    xp_pair = read_agent("xp-pair-programmer")
+    assert "agents/docs-maintainer.agent.md" in xp_pair
+    assert "knowledge-base/doc-linting.md" in xp_pair
 
 
 def test_diff_reviewer_supports_direct_review_without_story():

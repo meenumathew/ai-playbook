@@ -6,7 +6,7 @@ load_when: cohesion, coupling, abstraction, module property, review finding, des
 audience: all
 canonical_for: cohesion, coupling, abstraction, information hiding, levels of abstraction, complexity symptoms, strategic vs tactical programming, design checkpoints
 cross_refs: design-patterns.md, philosophy.md, refactoring.md
-verified: 2026-06-12
+verified: 2026-07-17
 ---
 
 # Design Fundamentals
@@ -16,8 +16,7 @@ Cohesion, coupling, and abstraction are the **properties** behind module shape. 
 ## Agent Use
 
 - **Read first:** Cohesion, Coupling, Abstraction, How These Compose.
-- **Reviewing or designing:** Building Software That Lasts (complexity symptoms), Practical Application (design checkpoints).
-- **Load deeper only on trigger:** Source Notes (academic attributions). Skip for routine implementation.
+- **Reviewing or designing:** Building Software That Lasts (complexity symptoms), Practical Application (design checkpoints). Skip for routine implementation.
 
 This file defines vocabulary; it does not introduce new rules. Each section cross-links to the existing canonical home for the *move* the property suggests.
 
@@ -36,29 +35,7 @@ This file defines vocabulary; it does not introduce new rules. Each section cros
 | The word "and" appears in the module's name or docstring | Two responsibilities pretending to be one |
 | Multiple unrelated reasons-to-change | Single Responsibility violation: split by axis of change |
 
-### Worked example
-
-**Low cohesion**: `OrderManager` does pricing, persistence, and notification. Three unrelated reasons to change:
-
-```python
-class OrderManager:
-    def calculate_total(self, order): ...      # pricing rule changes
-    def save(self, order): ...                 # storage tech changes
-    def notify_customer(self, order): ...      # notification channel changes
-```
-
-**High cohesion**: split by reason-to-change. Each module has one axis:
-
-```python
-class OrderPricing:
-    def calculate_total(self, order): ...
-
-class OrderRepository:
-    def save(self, order): ...
-
-class OrderNotifier:
-    def notify_customer(self, order): ...
-```
+Canonical example shape: `OrderManager` doing pricing + persistence + notification has three unrelated reasons to change; split by reason-to-change (`OrderPricing`, `OrderRepository`, `OrderNotifier`).
 
 ### Where the moves live
 
@@ -87,34 +64,7 @@ Two directions worth naming:
 | Method on A uses more data from B than from A | Feature Envy: method belongs on B |
 | Domain object imports infrastructure | Dependency direction violation: Must Fix |
 
-### Worked example
-
-**Tight coupling**: `Invoice` reaches into `Customer.address.country` and decides tax itself:
-
-```python
-class Invoice:
-    def tax_amount(self):
-        if self.customer.address.country == "DE":
-            return self.subtotal * Decimal("0.19")
-        elif self.customer.address.country == "US":
-            return self.subtotal * self.customer.address.state.tax_rate
-        ...
-```
-
-`Invoice` now depends on `Customer`, `Address`, `State`, and the entire tax-rate table.
-
-**Loose coupling**: invert the dependency; `Invoice` asks a port for the rate:
-
-```python
-class TaxCalculator(Protocol):
-    def rate_for(self, customer: Customer) -> Decimal: ...
-
-class Invoice:
-    def tax_amount(self, calculator: TaxCalculator):
-        return self.subtotal * calculator.rate_for(self.customer)
-```
-
-`Invoice` now depends on one interface; the rate logic moves behind it.
+Canonical example shape: `Invoice` reading `customer.address.country` to compute tax couples it to `Customer`, `Address`, and the tax table; inverting to a `TaxCalculator` port leaves one named dependency at the seam.
 
 ### Where the moves live
 
@@ -141,31 +91,7 @@ A good abstraction is **deep**: small interface, large implementation. A bad abs
 | Caller has to know "if you're going to do X, also do Y" | Sequencing leaked through the interface: fold Y into X |
 | Implementation details visible in parameter names or docstrings | Abstraction not hiding what it should: narrow the interface |
 
-### Worked example
-
-**Shallow**: `save_user_v1` interface exposes every mechanical step:
-
-```python
-def save_user_v1(
-    db_connection,
-    user_id: str,
-    encoded_payload: bytes,
-    transaction_marker: str,
-    flush_after: bool,
-) -> None:
-    ...
-```
-
-Caller has to know about connections, encoding, transaction markers, flushing: five concepts to use one operation.
-
-**Deep**: same behaviour, hidden:
-
-```python
-class UserRepository:
-    def save(self, user: User) -> None: ...
-```
-
-Caller learns one method; everything else is the repository's problem.
+Canonical example shape: `save_user(db_connection, user_id, encoded_payload, transaction_marker, flush_after)` makes the caller learn five mechanical concepts for one operation; `UserRepository.save(user)` hides them all: same behaviour, one method to learn.
 
 ### Where the moves live
 
@@ -195,7 +121,7 @@ The composite rule, restated: **prefer designs that increase cohesion, reduce co
 
 ## Building Software That Lasts
 
-Software that lasts is software that stays **cheap to change**. Most of a system's cost arrives after the first release, in changes: and Constantine's Equivalence prices that cost as coupling. Complexity is the compounding force working against you: each shortcut makes the next change slightly harder, and the effect is cumulative and mostly one-way. The properties above are how you fight it; this section is the long-horizon framing that says *why* and *when*.
+Software that lasts stays **cheap to change**: most of a system's cost arrives after the first release, and complexity compounds against it one shortcut at a time. The properties above are how you fight it; this section is the long-horizon *why* and *when*.
 
 ### The three symptoms of complexity
 
@@ -261,31 +187,13 @@ When the full table is too heavy (prototype tier, tiny diffs), three questions c
 
 ## Named Principles
 
-Common shorthand names for the properties above. Each principle has one canonical operational home: these rows give the name and the citation, not new rules.
+Shorthand reviewers already use: each maps to one operational home, where the move lives. These are not independent rules, so no rule text here:
 
-| Principle | What it says | Operational home |
-|-----------|--------------|------------------|
-| **SRP** (Single Responsibility) | A module should have one reason to change | `design-fundamentals.md` § Cohesion + `design-patterns.md` § Anti-Patterns "Large Class" |
-| **DRY** (Don't Repeat Yourself) | Every piece of knowledge has one canonical representation. Apply on the *third* repetition, not the second | `refactoring.md` § When to Refactor: Rule of Three |
-| **KISS** (Keep It Simple) | Prefer the simpler implementation; flag clever code in review | `philosophy.md` § Principles "Readability over cleverness" |
-| **YAGNI** (You Aren't Gonna Need It) | Don't build for hypothetical future needs; wait for a real trigger | `refactoring.md` § When to Refactor "Do NOT refactor when… guessing at future needs" + `design-patterns.md` § Anti-Patterns "Premature Abstraction" |
-| **Law of Demeter** | A method should only call methods on: itself, its parameters, objects it created, or its direct components: *not* objects reached through other objects (`a.b.c.do_thing()` is the smell) | `design-patterns.md` § Anti-Patterns "Inquisitive Code" + `design-fundamentals.md` § Coupling |
-
-These names compress the property vocabulary into shorthand reviewers and authors already use. They are not independent rules: when an SRP violation surfaces, the move lives in the cited operational home.
-
-SRP is the first of the five SOLID principles. The other four (Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion) are coupling-and-abstraction restatements: their operational guidance lives in `design-patterns.md` § Hexagonal Architecture (DIP: depend on ports, not implementations), § Module Depth and Seams (ISP: small interfaces over wide ones), and § Anti-Patterns (OCP/LSP violations surface as smells there).
-
----
-
-## Source Notes
-
-Load only when an attribution is needed.
-
-- **Cohesion / coupling as named properties**: Larry Constantine, late 1960s; formalised in Constantine & Yourdon, *Structured Design* (1979).
-- **Cohesion taxonomy** (coincidental → logical → temporal → procedural → communicational → sequential → functional): Constantine & Yourdon. The taxonomy is descriptive; in practice "high vs low" plus the detection signals above is enough.
-- **Coupling taxonomy** (content → common → external → control → stamp → data): Constantine. Same caveat.
-- **Information hiding**: David Parnas, *On the Criteria to Be Used in Decomposing Systems Into Modules* (1972). Decompose by what changes, not by sequence of execution.
-- **Deep modules / abstraction leverage**: John Ousterhout, *A Philosophy of Software Design* (2018). The "interface complexity per unit of behaviour" framing. Also the source for the three symptoms of complexity (change amplification, cognitive load, unknown unknowns), strategic vs tactical programming, and "design it twice" (§ Building Software That Lasts).
-- **Function-level abstraction**: Robert Martin, *Clean Code* (2008). One level of abstraction per function.
-- **SOLID principles**: Robert Martin, *Agile Software Development* (2002), restated in *Clean Architecture* (2017). Named shorthand for the cohesion/coupling/abstraction properties above.
-- **Working with seams**: Michael Feathers, *Working Effectively with Legacy Code* (2004). Seam vocabulary used in `design-patterns.md` § Module Depth and Seams.
+| Principle | Operational home |
+|-----------|------------------|
+| **SRP** | § Cohesion + `design-patterns.md` § Anti-Patterns (Large Class) |
+| **DRY** (third repetition, not second) | `refactoring.md` § When to Refactor (Rule of Three) |
+| **KISS** | `philosophy.md` § Principles (Readability over cleverness) |
+| **YAGNI** | `refactoring.md` § When to Refactor + `design-patterns.md` § Anti-Patterns (Premature Abstraction) |
+| **Law of Demeter** | `design-patterns.md` § Anti-Patterns (Inquisitive Code) + § Coupling above |
+| **SOLID beyond SRP** | DIP → `design-patterns.md` § Hexagonal Architecture; ISP → `design-patterns.md` § Module Depth and Seams; OCP/LSP violations surface as smells in `design-patterns.md` § Anti-Patterns |

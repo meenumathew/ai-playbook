@@ -10,6 +10,7 @@ outputs: docs/<type>/<name>.md or docs/adr/NNNN-*.md (Diataxis-keyed)
 handoff: human review; doc-linter run; no chained agent
 escalation: advisor tier for ADRs and architecture-level docs (per CLAUDE.md § Model Tier)
 read-budget: 15
+preload: doc-linting.md
 verified: 2026-07-02
 ---
 
@@ -39,13 +40,12 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 | Doc types | Docstrings + module README only | All types |
 | ADRs | Skip unless user requests | Recommended for significant decisions |
 | Known limitations | Note inline only | Dedicated section required |
-| Max reads | 10 | 15 |
 
 ---
 
 ## Steps
 
-1. **Determine doc type**: onboarding, module README, how-to, runbook, API reference, docstrings, or ADR.
+1. **Determine doc type**: onboarding, module README, how-to, runbook, API reference, docstrings, ADR, or RFC.
 
 2. **Check existing docs**: glob `README.md`, `docs/`, inline docstrings. Update existing rather than creating new. If already well-documented, STOP and tell the user.
 
@@ -81,7 +81,7 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 ### ADR-specific steps (doc type = ADR)
 
-**ADR escalation gate:** docs-maintainer is executor-tier by default. Before drafting any ADR or architecture-level doc, stop and re-run on advisor tier per `CLAUDE.md` § Model Tier. Single-model setups route to a human review checkpoint instead. If already running at advisor tier, continue.
+**ADR escalation gate:** docs-maintainer is executor-tier by default. Before drafting any ADR, RFC, or architecture-level doc, stop and re-run on advisor tier per `CLAUDE.md` § Model Tier. Single-model setups route to a human review checkpoint instead. If already running at advisor tier, continue.
 
 1. **Check existing ADRs**: `docs/adr/*.md` and the index at `docs/adr/README.md` for duplicates / related decisions.
 
@@ -114,6 +114,7 @@ Section structure, voice, and writing rules for each doc type live in `docs/docs
 | How-to | `docs/how-to/<topic>.md` | `templates/how-to-template.md` |
 | Runbook | `docs/runbooks/<scenario>.md` | `templates/runbook-template.md` |
 | ADR | `docs/adr/NNNN-title.md` (one file per decision) | `templates/adr-template.md` |
+| RFC (advisor-tier escalation applies, as for ADRs) | `docs/rfcs/NNNN-<slug>.md` | `templates/rfc-template.md` |
 | System-wide limitations | `docs/limitations.md` | `templates/limitations-template.md` (seed on first use) |
 | Changelog | `CHANGELOG.md` (project root) | `templates/changelog-template.md`: skip if automated changelog tooling exists |
 | API reference | Generated from code (OpenAPI/Swagger, GraphQL introspection) where possible | n/a |

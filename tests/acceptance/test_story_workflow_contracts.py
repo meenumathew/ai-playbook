@@ -106,6 +106,34 @@ def test_xp_pair_short_circuits_on_spike_and_handles_bug_type():
 # ---------------------------------------------------------------------------
 
 
+def test_test_story_type_is_first_class_across_agents_and_skill():
+    """`type: test-story` (retrofitting coverage) must be producible by
+    story-refiner and consumable by slice-planner, xp-pair-programmer, and
+    diff-reviewer; the story-writing skill documents the enum value."""
+    root = get_source_root()
+    for rel in (
+        "agents/story-refiner.agent.md",
+        "agents/slice-planner.agent.md",
+        "agents/xp-pair-programmer.agent.md",
+        "agents/diff-reviewer.agent.md",
+    ):
+        text = _read(root / rel)
+        # STRUCTURE-MARKER: the canonical frontmatter token, not prose position.
+        assert re.search(r"`type:\s*test-story`", text), (
+            f"{rel} must key test-story handling on `type: test-story`"
+        )
+    skill = _read(root / "skills" / "story-writing" / "SKILL.md")
+    # STRUCTURE-MARKER: enum value plus its filename-prefix rule.
+    assert "`test-story`" in skill, "story-writing skill must list the test-story type"
+    assert "STORY-NNN-" in skill, "story-writing skill must document the test-story prefix"
+    # STRUCTURE-MARKER: legacy no-type stories still trigger the test-story
+    # cycle in xp-pair-programmer as a secondary fallback.
+    xp_pair = _read(root / "agents" / "xp-pair-programmer.agent.md")
+    assert re.search(r"[Ll]egacy fallback", xp_pair), (
+        "xp-pair-programmer must keep the no-type legacy test-story fallback"
+    )
+
+
 def test_story_refiner_classifies_work_shape_before_anchors():
     agent = _read(get_source_root() / "agents" / "story-refiner.agent.md")
 

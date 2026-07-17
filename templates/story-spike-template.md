@@ -45,7 +45,7 @@ What this spike will *not* answer. Write these down so the spike doesn't expand 
 
 ## Deliverable
 
-**Research file:** `research/RESEARCH-NNN-<slug>.md`: the spike's only output. Contents:
+**Research file:** `research/RESEARCH-NNN-<slug>.md`: the spike's only output. If story-refiner already saved this file while refining the spike, **extend it** with the findings below: append new sections, never overwrite the refinement research. Contents:
 
 - The question (verbatim from above)
 - The answer, with confidence level

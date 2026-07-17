@@ -47,10 +47,10 @@ AGENT_MAX_LINES: dict[str, int] = {
 DEFAULT_AGENT_MAX_LINES = 200
 # Other frequently-loaded surfaces (repo-root-relative).
 SURFACE_MAX_LINES: dict[str, int] = {
-    "knowledge-base/CHEATSHEET.md": 275,
-    "knowledge-base/INDEX.md": 225,
+    "knowledge-base/CHEATSHEET.md": 262,
+    "knowledge-base/INDEX.md": 211,
     "skills/retrospective/SKILL.md": 115,
-    "skills/intent-interview/SKILL.md": 135,
+    "skills/intent-interview/SKILL.md": 55,
     "skills/story-writing/SKILL.md": 150,
     "skills/host-adapter/SKILL.md": 165,
     "skills/issue-fetch/SKILL.md": 200,
@@ -70,13 +70,30 @@ def _over_budget(path: Path, cap: int, label: str) -> str | None:
 
 def _collect_failures(root: Path) -> list[str]:
     failures: list[str] = []
-    for agent_file in sorted((root / "agents").glob("*.agent.md")):
+    agent_files = sorted((root / "agents").glob("*.agent.md"))
+    if not agent_files:
+        # An empty/missing glob must fail loudly: silently passing would
+        # disable the whole agent size gate (e.g. run from the wrong root).
+        failures.append(
+            f"  agents/*.agent.md: no agent files found under {root / 'agents'} "
+            "(wrong repo root, or agents/ was emptied?)"
+        )
+    for agent_file in agent_files:
         cap = AGENT_MAX_LINES.get(agent_file.name, DEFAULT_AGENT_MAX_LINES)
         if failure := _over_budget(agent_file, cap, agent_file.name):
             failures.append(failure)
     for rel, cap in SURFACE_MAX_LINES.items():
         surface = root / rel
-        if surface.exists() and (failure := _over_budget(surface, cap, rel)):
+        if not surface.exists():
+            # A cap whose file no longer resolves means the budget silently
+            # stopped being enforced — fail so the entry gets updated.
+            failures.append(
+                f"  {rel}: budgeted file is missing — its cap no longer resolves; "
+                "restore the file or update SURFACE_MAX_LINES in "
+                "tools/check-agent-size.py"
+            )
+            continue
+        if failure := _over_budget(surface, cap, rel):
             failures.append(failure)
     for skill_file in sorted((root / "skills").glob("*/SKILL.md")):
         rel = str(skill_file.relative_to(root))

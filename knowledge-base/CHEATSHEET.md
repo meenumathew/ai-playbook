@@ -6,7 +6,7 @@ load_when: always; try here before loading any KB file
 audience: all
 canonical_for: When to Go Back routing, Decision Guide, Review Rules; every other entry is digest-only and links to its canonical home
 cross_refs: all KB files
-verified: 2026-07-02
+verified: 2026-07-17
 ---
 
 # Knowledge Base Cheatsheet
@@ -22,13 +22,7 @@ This file is mostly a digest: entries link to their canonical home, and if a can
 
 ## Lean / Compact Operating Mode
 
-For token efficiency without quality loss:
-
-1. Use this file as default; avoid opening full KB files unless triggered.
-2. Escalate to `INDEX.md`, then one canonical section only when a decision remains unclear.
-3. In compact mode, do not load non-triggered examples, background, or related sections.
-4. Capture assumptions explicitly and continue unless scope/safety changes.
-5. Never skip tests, security checks, or verification.
+Default to this file; escalate to `INDEX.md`, then one canonical section, only when a decision remains unclear (canonical discipline: the KB efficiency rule in `CLAUDE.md` § Knowledge Base (KB)). In compact mode, skip non-triggered examples and background; capture assumptions and continue unless scope or safety changes. Never skip tests, security checks, or verification.
 
 ---
 
@@ -60,10 +54,8 @@ Chain: story-refiner → slice-planner → xp-pair-programmer → diff-reviewer 
 |------|-----------|
 | TDD vertical: RED → GREEN → REFACTOR, one test at a time | `testing.md` § TDD Discipline |
 | No production code without a failing test | `testing.md` § TDD Discipline |
-| Name tests `test_<what>_<condition>` | `testing.md` § Test Quality Rules |
 | Each AC maps to one test | `skills/story-writing/SKILL.md` § Acceptance Criteria |
 | Mock at service boundary; never mock domain objects | `testing.md` § Test Doubles |
-| Feature flags: test both states | `feature-flags.md` § Test Isolation |
 | Retrofit untested code with characterization tests | `testing.md` § Retrofitting Tests |
 | Optional techniques (mutation, property-based, async) → `testing-techniques.md` |  |
 
@@ -76,7 +68,6 @@ Chain: story-refiner → slice-planner → xp-pair-programmer → diff-reviewer 
 | Security findings are always Must Fix | `CHEATSHEET.md` § Review Rules |
 | No hardcoded secrets; `.env` for local dev only, always gitignored | `security.md` § Secrets Management |
 | Validate at input boundaries: allowlist over blocklist; types, ranges, lengths, formats | `security.md` § Input Validation |
-| Never log `str(e)` at ERROR: use `exc_info=True` | `security.md` § Data Handling |
 | Don't leak internals in error responses to clients | `security.md` § Error Response Pattern |
 | Accidentally committed secret → rotate, assume compromised | `security.md` § Secrets Management |
 
@@ -84,10 +75,10 @@ Chain: story-refiner → slice-planner → xp-pair-programmer → diff-reviewer 
 
 ## Debugging
 
+Iron Law and the 3-fix stop rule are always in context (`CLAUDE.md` § Shared Rules).
+
 | Rule | Canonical |
 |------|-----------|
-| Iron Law: NO FIXES WITHOUT ROOT CAUSE | `debugging.md` § Iron Law |
-| After 3 failed fix attempts → STOP, question architecture, don't try #4 | `debugging.md` § 3-Fix Architectural Stop Rule |
 | Reproduce → understand → fix → verify | `debugging.md` § Phase 1 |
 
 ---
@@ -109,7 +100,7 @@ Chain: story-refiner → slice-planner → xp-pair-programmer → diff-reviewer 
 | Rule | Canonical |
 |------|-----------|
 | Refactor only when green | `refactoring.md` § When to Refactor |
-| Touching existing code (feature, change, or refactor): suite baseline first; untested touched code gets characterization tests; suite re-run + baseline compare after; never silently drop existing behaviour | `testing.md` § Retrofitting Tests |
+| Touching existing code (feature, change, or refactor): suite baseline first; untested touched code gets characterization tests; suite re-run + baseline compare after; never silently drop existing behaviour | `regression-and-contracts.md` § Regression Detection |
 | Rule of Three: extract on third repetition, not second | `refactoring.md` § When to Refactor |
 | Separate structural and behavioural commits | `style-guide.md` § Refactoring Commit Discipline |
 | Tidy first / after / later / never depends on whether mess blocks the change | `CHEATSHEET.md` § Decision Guide |
@@ -147,7 +138,6 @@ Chain: story-refiner → slice-planner → xp-pair-programmer → diff-reviewer 
 | Classify the flag at creation: release / experiment / ops / permission; longevity and cleanup follow the category | `feature-flags.md` § Flag Categories |
 | Evaluate flags in the service layer, not deep in the domain | `feature-flags.md` § Evaluation Layer |
 | Only for dark-launch, rollout, kill switch, A/B: not bug fixes or refactors | `feature-flags.md` § When to Use |
-| Test both flag states | `feature-flags.md` § Test Isolation |
 
 ---
 
@@ -235,6 +225,7 @@ Apply to both diff-reviewer and code-inspector:
 | Production incident? | `knowledge-base/incident-response.md`: classify severity, stabilise before resolving, blameless postmortem within 5 working days. **incident-responder** for triage and postmortem; humans + release-captain for mitigation. |
 | Ready to ship after review? | `knowledge-base/release.md`: open PR/MR via host-adapter, watch CI, merge on approval, tag, smoke. **release-captain**. |
 | Delegate tangential blocker? | Environment/tooling issue unrelated to current task: spawn a separate agent; continue main work. |
+| Story shipped, audit done, or repeated friction? | Run `skills/retrospective/SKILL.md`: capture reusable lessons as KB improvements before the session ends. |
 
 ---
 

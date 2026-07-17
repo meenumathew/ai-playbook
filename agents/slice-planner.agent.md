@@ -7,7 +7,7 @@ id: slice-planner
 load_when: plan, plan story, slice, design approach, structure tasks, vertical slices, TDD plan
 inputs: story artifact (path, number, pasted content, or tracker reference)
 outputs: "plans/PLAN-NNN-<slug>.md (or small-story shortcut: ## Implementation section in story)"
-handoff: xp-pair-programmer by default; docs-maintainer for documentation-only plans
+handoff: xp-pair-programmer for every plan; documentation-only plans carry docs-maintainer's writing rules
 escalation: back to story-refiner if AC contradicts research or scope changes
 read-budget: 15
 verified: 2026-07-02
@@ -61,7 +61,7 @@ Either:
     the question is answered.
 ```
 
-Do not proceed to step 1 for spikes. The remaining steps assume `type:` is `story`, `bug`, or `chore`.
+Do not proceed to step 1 for spikes. The remaining steps assume `type:` is `story`, `bug`, `chore`, or `test-story`.
 
 1. **Read the story**: business problem, desired outcome, why now, key constraint, smallest useful change, AC, constraints. **No AC → STOP** and go back to story-refiner. **Check `depends-on:` frontmatter**: confirm each blocker has `status: done`. If not, STOP and name it, for example: *STORY-003 has status: in-progress: cannot plan STORY-005 until it is done.* **Classify** from `type:` frontmatter:
 
@@ -70,7 +70,7 @@ Do not proceed to step 1 for spikes. The remaining steps assume `type:` is `stor
    | `story` (feature) | Default: vertical slices for new behaviour. |
    | `bug` | Regression-test-first. First slice = failing regression test; later slices fix. See Phase 2 § For bug stories. |
    | `chore` | Lean: usually one slice, no AC walkthrough, skip architecture overview. |
-   | test-story | Retrofitting coverage. Phase 2 § For test-stories applies. |
+   | `test-story` | Retrofitting coverage. Phase 2 § For test-stories applies. |
 
    **Bug stories also expose `severity:` and `regression-since:`**: surface them in plan risks if SEV1/SEV2 means urgent rollout or if a long-standing regression needs broader characterization.
 
@@ -100,7 +100,7 @@ Break the agreed design into deliverable slices. Each slice is a checkpoint: wor
    - Separation of concerns applies within each slice: keep business rules, orchestration, and infrastructure distinct. Add DDD tactical patterns only where business rules or domain invariants matter.
    - Exception: pure domain modelling (new VOs, business rules) can be standalone.
 
-   **For test-stories (retrofitting tests):**
+   **For test-stories (`type: test-story`, retrofitting tests):**
    - Sequence by risk: P0 (code about to change) → P1 (auth/money/PII) → P2 (high fan-in) → P3 (rest). See `knowledge-base/testing.md` § Retrofitting Tests onto Existing Untested Code, Step 2.
    - One module/area per slice: avoid writing all tests at once.
    - Refactoring for testability is a separate task that precedes the test task. No behaviour change in the refactor task.
@@ -122,7 +122,7 @@ Break the agreed design into deliverable slices. Each slice is a checkpoint: wor
 
 ## Phase 3: Plan: tactical implementation details
 
-Turn the structure into tactical tasks the chosen handoff agent can execute mechanically. Default to xp-pair-programmer for planned implementation work; use docs-maintainer only for documentation-only plans as defined below.
+Turn the structure into tactical tasks xp-pair-programmer can execute mechanically. Step 5 defines the extra writing rules that documentation-only plans carry.
 
 1. **Break each task into TDD steps**: Each task, not each TDD step, ends with a Conventional Commit; RED/GREEN/REFACTOR steps are checkpoints inside the task. Classify each test: `Unit` | `AT` | `Integration`. Verify pyramid balance (~70 unit / ~20 AT / ~10 integration). E2E / Smoke / Sanity are post-deploy concerns: include only if story explicitly creates/modifies them (`knowledge-base/testing.md` § Post-Deploy Tests). **Prototype:** classify but skip pyramid balance verification. **Test-stories:** test-story cycle (tests may pass immediately: `knowledge-base/testing.md` § Test-Story Cycle: When the Deliverable Is Tests). Include refactor-for-testability as separate steps.
 
@@ -132,11 +132,14 @@ Turn the structure into tactical tasks the chosen handoff agent can execute mech
 
 3. **Risks and unknowns**: flag destructive ops, third-party changes, cross-repo deps. Significant unknowns → recommend a spike (half-day timebox). **Out-of-scope blockers** (CI/CD, env config, IAM): list as risks with the owning team: not as tasks here.
 
-4. **Security checkpoint**: auth, secrets, CI/CD, permissions → state blast radius and add mitigation to Risks.
+4. **Design-time gates** (state blast radius + add mitigation to Risks for each that applies):
+   - **Security checkpoint**: auth, secrets, CI/CD, permissions, PII, untrusted input → threat-model the slice (STRIDE-lite), `knowledge-base/security.md`.
+   - **Performance/load gate**: data-heavy, high-throughput, or hot-path slice → plan a load/stress test with a target, `knowledge-base/performance.md` § Load & Stress Testing.
+   - **Migration-safety gate**: schema or data migration → plan reversible expand → migrate → contract steps with backfill, `knowledge-base/regression-and-contracts.md` § Migration Safety.
 
-5. **Choose handoff agent**: classify the implementation surface before writing the final saved-plan summary.
-   - Use **docs-maintainer** only when every slice changes documentation surfaces: `docs/`, `knowledge-base/`, module-level `README.md`, `CHANGELOG.md`, docstrings, or project-specific documentation content such as developer-portal MDX. Verification may include doc lint, link checks, generated reference validation, and human documentation review.
-   - Use **xp-pair-programmer** for anything that changes runtime behaviour, tests, scripts, build/deploy tooling, feature flag wiring, app routes, data contracts, infrastructure, or mixed docs plus code work. If a story is docs-heavy but includes any of those surfaces, keep xp-pair-programmer and state the reason in the handoff line.
+5. **Flag documentation-only plans**: xp-pair-programmer executes every plan; classify the implementation surface before writing the final saved-plan summary.
+   - A plan is **documentation-only** when every slice changes documentation surfaces: `docs/`, `knowledge-base/`, module-level `README.md`, `CHANGELOG.md`, docstrings, or project-specific documentation content such as developer-portal MDX. Still hand it to xp-pair-programmer, with an explicit `documentation-only` instruction line in the plan; the executor's pre-flight then applies docs-maintainer's writing rules, citing `agents/docs-maintainer.agent.md` § Document Types and `knowledge-base/doc-linting.md`. Verification is doc lint, link checks, generated reference validation, and human documentation review instead of TDD.
+   - Use **xp-pair-programmer** for anything that changes runtime behaviour, tests, scripts, build/deploy tooling, feature flag wiring, app routes, data contracts, infrastructure, or mixed docs plus code work: the standard TDD cycle applies.
 
 ---
 
@@ -152,7 +155,7 @@ Turn the structure into tactical tasks the chosen handoff agent can execute mech
     - **≤ 3 points:** append `## Implementation` to the story file (`stories/<PREFIX>-NNN-slug.md`): design, slices, TDD steps, risks. Same content, fewer files.
     - **> 3 points:** write to `plans/PLAN-NNN-slug.md` via `templates/plan-template.md`.
 
-    Plan filename always `PLAN-NNN-` regardless of story prefix: plan numbering is independent. Story keeps its prefix (`STORY-` / `BUG-` / `CHORE-`).
+    Plan filename always `PLAN-NNN-`: the plan reuses the story's NNN so artifact chain resolution (`CLAUDE.md` § Shared Rules) can glob `plans/PLAN-NNN-*.md` from the story number; only the prefix is always `PLAN-`. Story keeps its prefix (`STORY-` / `BUG-` / `CHORE-`).
 
 3. **Stop**: write NO source code. Output:
 
@@ -164,12 +167,12 @@ Turn the structure into tactical tasks the chosen handoff agent can execute mech
     Structure: [N] vertical slices
     Language: [detected]
     Risks: [flagged items or "none"]
-   Handoff: [xp-pair-programmer or docs-maintainer, with a one-line reason]
+   Handoff: xp-pair-programmer [if documentation-only: note the docs-maintainer writing rules]
 
-   Say 'use [handoff-agent] for <PREFIX>-NNN' to start the next step.
+   Say 'use xp-pair-programmer for <PREFIX>-NNN' to start the next step.
     ```
 
-   Substitute the real prefix from the story (`STORY-` / `BUG-` / `CHORE-`) and the handoff agent selected in Phase 3 step 5.
+   Substitute the real prefix from the story (`STORY-` / `BUG-` / `CHORE-`); documentation-only plans carry the writing-rules note from Phase 3 step 5.
 
 ---
 

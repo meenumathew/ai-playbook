@@ -66,3 +66,39 @@ jobs:
 
       - name: Project quality gates
         run: make quality
+
+  commit-hygiene:
+    # Teach-back / Conventional Commit trailer is enforced locally by the
+    # `commit-msg` hook (harness/check-teachback.sh). GitHub does not run
+    # commit-msg hooks, so this job backstops it: a contributor who skips hook
+    # install or commits with `--no-verify` cannot land non-trivial commits
+    # without the trailer. PR-only — pre-adoption history is exempt.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (full history for the PR range)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Teach-back trailer on PR commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Reuse the exact script the local commit-msg hook runs, so CI and
+          # local stay in lockstep. Validate every non-merge commit the PR adds;
+          # merge commits carry no Conventional Commit subject and are skipped.
+          fail=0
+          for sha in $(git rev-list --no-merges "${BASE_SHA}..${HEAD_SHA}"); do
+            msg="$(mktemp)"
+            git log -1 --format=%B "$sha" > "$msg"
+            if ! harness/check-teachback.sh "$msg"; then
+              echo "::error::commit ${sha} failed the Teach-back / Conventional Commit check"
+              fail=1
+            fi
+          done
+          exit "$fail"

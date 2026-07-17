@@ -38,6 +38,21 @@ Is the change trivial? (typo, rename, one-liner, config)
                     └─ NO  → Spike (timebox) → story-refiner → ...
 ```
 
+Same routing as a flowchart (the preceding `text` tree is the canonical, contract-synced copy; this diagram mirrors it for quick scanning):
+
+```mermaid
+flowchart TD
+    start([Change arrives]) --> trivial{Trivial?<br/>typo, rename, one-liner, config}
+    trivial -->|yes| minimal[Minimal: xp-pair-programmer → diff-reviewer]
+    trivial -->|no| clear{Requirement clear<br/>and design obvious?}
+    clear -->|yes, ≤5 ACs| a[xp-pair-programmer from story → diff-reviewer]
+    clear -->|yes, 6–7 ACs| b[slice-planner → xp-pair-programmer → diff-reviewer]
+    clear -->|yes, 8+ ACs| c[story-refiner to split/trim → slice-planner → xp → diff-reviewer]
+    clear -->|no| space{Understand the<br/>problem space?}
+    space -->|yes| full[story-refiner → slice-planner → xp-pair-programmer → diff-reviewer]
+    space -->|no| spike[Spike timebox → story-refiner → ...]
+```
+
 ### 3. Default to the Full Workflow Path When Unsure
 
 Use the full workflow path (story-refiner → slice-planner → xp-pair-programmer → diff-reviewer, then release-captain to ship) unless **all** of these are true:
