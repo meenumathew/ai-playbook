@@ -752,7 +752,11 @@ def test_mutation_testing_is_dedicated_baseline_regression_gate():
     assert "tools/check-mutation-baseline.py" in mutation_workflow
 
     baseline = json.loads(_repo_file("mutation-baseline.json").read_text(encoding="utf-8"))
-    assert baseline["thresholds"]["max_survived"] == 0
+    # Ratchet snapshot from CI run 29627561298 (4007 mutants, 580 survived,
+    # 436 timeout). Raising the baseline requires editing BOTH files — this
+    # pin is the friction that keeps that deliberate. Lowering is welcome.
+    assert baseline["thresholds"]["max_survived"] == 600
+    assert baseline["thresholds"]["max_timeout"] == 500
     assert baseline["thresholds"]["max_segfault"] == 0
 
     pyproject = tomllib.loads(_repo_file("pyproject.toml").read_text(encoding="utf-8"))

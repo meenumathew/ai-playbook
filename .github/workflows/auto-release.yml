@@ -17,9 +17,11 @@ jobs:
     timeout-minutes: 10
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          # Must be a deploy key with write access: tags pushed with the
+          # default GITHUB_TOKEN do not trigger the Release workflow.
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
       - name: Semantic release (compute version, commit, tag, push)
         run: uvx python-semantic-release@10 version --no-vcs-release
