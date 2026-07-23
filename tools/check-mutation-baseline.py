@@ -11,9 +11,11 @@ silently stops mutating most of src/ would look like a perfect run.
 Baseline value provenance (JSON carries no comments, so it lives here):
 `max_skipped` is pinned to the recorded skipped count of the current baseline
 run (0), and `min_total` to roughly 90% of that run's total mutant count
-(113 mutants -> floor 101). Regenerate with `uv run mutmut run` +
-`uv run mutmut export-cicd-stats` and update both when src/ legitimately
-grows or shrinks.
+(4007 mutants -> floor 3600, from CI run 29627561298). `max_survived` (600)
+and `max_timeout` (500) carry a small headroom over that run's observed
+580/436 because timeout counts vary with runner load. Regenerate with
+`uv run mutmut run` + `uv run mutmut export-cicd-stats` and update both when
+src/ legitimately grows or shrinks.
 
 Usage:
     python tools/check-mutation-baseline.py [STATS_JSON] [BASELINE_JSON]
