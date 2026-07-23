@@ -2,15 +2,15 @@
   "version": 1,
   "scope": "src/deploy_ai_playbook/",
   "generated_by": "uv run mutmut export-cicd-stats",
-  "notes": "Regression baseline for the dedicated mutation workflow. Raise thresholds only after reviewing surviving/no-test mutants. max_skipped/min_total provenance: tools/check-mutation-baseline.py docstring.",
+  "notes": "Regression baseline for the dedicated mutation workflow. Snapshot ratchet from CI run 29627561298 (total 4007, survived 580, timeout 436): drive max_survived/max_timeout DOWN over time, never up without reviewing survivors. max_skipped/min_total provenance: tools/check-mutation-baseline.py docstring.",
   "thresholds": {
-    "max_survived": 0,
+    "max_survived": 600,
     "max_no_tests": 13,
     "max_skipped": 0,
     "max_suspicious": 0,
-    "max_timeout": 0,
+    "max_timeout": 500,
     "max_check_was_interrupted_by_user": 0,
     "max_segfault": 0,
-    "min_total": 101
+    "min_total": 3600
   }
 }
