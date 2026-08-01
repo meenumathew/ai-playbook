@@ -38,7 +38,7 @@ repos:
   # repo root to customise rules; without it, markdownlint-cli2 uses its
   # defaults.
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: 996abf60411a8d954288ac9856aae7602b80cbda  # frozen: v0.22.1
+    rev: b82a6c8896e491b9cb377a99ff3412131920681b  # frozen: v0.23.2
     hooks:
       - id: markdownlint-cli2
         exclude: "^(node_modules|dist|build|vendor|\\.venv|\\.pytest_cache)/"
