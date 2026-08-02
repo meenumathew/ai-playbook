@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bumped `idna` to 3.18 to resolve a CVE follow-up (ReDoS) flagged by dependency scanning.
 
-## [1.0.0] - 2026-07-04
+## [1.0.0] - 2026-07-05
 
 Initial release. The repository ships as a single commit; everything below is the 1.0.0 feature set.
 
@@ -93,6 +93,6 @@ Initial release. The repository ships as a single commit; everything below is th
 
 - No active deprecations.
 
-[Unreleased]: https://github.com/meenumathew/ai-playbook/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/meenumathew/ai-playbook/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/meenumathew/ai-playbook/releases/tag/v1.0.0
+[Unreleased]: https://github.com/meenumathew/ai-playbook/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/meenumathew/ai-playbook/releases/tag/1.0.0
+[1.0.0]: https://github.com/meenumathew/ai-playbook/releases/tag/1.0.0
