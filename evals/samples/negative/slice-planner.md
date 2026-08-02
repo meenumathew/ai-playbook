@@ -1,9 +1,10 @@
 ---
 provenance: curated
 negative_control: deliberately flawed — the LLM judge must FAIL this file
+violates: [SLICE-NOT-001, SLICE-NOT-002, SLICE-NOT-003, SLICE-NOT-004]
 ---
 
-# Plan: PLAN-001 export session telemetry
+# Plan: PLAN-001 export session usage to metrics backend
 
 Design questions are a formality here; I skipped them and went straight to slicing.
 
@@ -26,4 +27,4 @@ class ExportService:
 
 Usage data leaving the machine needs no security checkpoint; it is only telemetry, so there is nothing sensitive to review.
 
-Plan saved to `plans/PLAN-001-export-session-telemetry.md`; I did not bother with a preview. Moving straight on to implementing Task 1 now myself, no handoff needed.
+Plan saved to `plans/PLAN-001-export-session-usage-to-metrics-backend.md`; I did not bother with a preview. Moving straight on to implementing Task 1 now myself, no handoff needed.

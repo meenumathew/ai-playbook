@@ -6,9 +6,14 @@
 # This workflow runs `pre-commit autoupdate --freeze` on both files and opens
 # a PR with the bumped pins.
 #
-# Note: PRs created with the workflow GITHUB_TOKEN do not trigger CI runs
-# (GitHub safety default). Close and reopen the PR, or push an empty commit,
-# to start the checks before merging.
+# PRs created with GITHUB_TOKEN enter an approval-required CI state. Configure
+# optional RELEASE_PR_TOKEN to let their checks start without manual approval.
+#
+# This workflow deliberately pushes with the job-scoped GITHUB_TOKEN, never
+# the release deploy key: tag pushes made with GITHUB_TOKEN cannot trigger
+# other workflows, so even a fully compromised run of this low-trust cron
+# job has no path to release.yml or PyPI. The deploy key stays confined to
+# the release workflows that need workflow-triggering pushes.
 
 name: pre-commit-autoupdate
 
@@ -24,44 +29,59 @@ jobs:
   autoupdate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # job-scoped: push the chore branch; cannot trigger release.yml
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       - name: Autoupdate pinned hook SHAs
-        run: |
-          uvx pre-commit==4.3.0 autoupdate --freeze --config .pre-commit-config.yaml
-          uvx pre-commit==4.3.0 autoupdate --freeze --config harness/pre-commit-config.yaml
-
-      - name: Open PR when pins changed
-        env:
-          GH_TOKEN: ${{ github.token }}
+        id: update
         run: |
           set -euo pipefail
+          uvx pre-commit==4.3.0 autoupdate --freeze --config .pre-commit-config.yaml
+          uvx pre-commit==4.3.0 autoupdate --freeze --config harness/pre-commit-config.yaml
           if git diff --quiet; then
-            echo "Hook pins already current — nothing to update."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Hook pins already current; nothing to update."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR when pins changed
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          branch="chore/pre-commit-autoupdate-$(date -u +%Y-%m)"
+          existing_pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing_pr" ]]; then
+            echo "PR #${existing_pr} already exists for ${branch}; nothing to update."
             exit 0
           fi
-          branch="chore/pre-commit-autoupdate-$(date -u +%Y-%m)"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
+          # Push with the job-scoped token (checkout ran with
+          # persist-credentials: false). GITHUB_TOKEN pushes cannot
+          # trigger other workflows, so this job never needs the
+          # release deploy key.
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+          git switch -c "$branch"
           git add .pre-commit-config.yaml harness/pre-commit-config.yaml
-          git commit -m "build: rotate pre-commit hook SHA pins (autoupdate --freeze)"
-          # Checkout runs with persist-credentials: false (repo contract);
-          # authenticate this one push explicitly instead.
-          git push --force \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "HEAD:refs/heads/$branch"
+          git commit \
+            -m "build: rotate pre-commit hook SHA pins (autoupdate --freeze)" \
+            -m "Teach-back: review each frozen hook revision against its upstream release notes before merging."
+          git push origin "HEAD:refs/heads/$branch"
           gh pr create \
             --title "build: rotate pre-commit hook SHA pins" \
-            --body "Monthly \`pre-commit autoupdate --freeze\` over \`.pre-commit-config.yaml\` and \`harness/pre-commit-config.yaml\`. Review the diff against each hook repo's release notes before merging. CI does not auto-run on bot-token PRs — close/reopen this PR to trigger checks." \
+            --body "Monthly \`pre-commit autoupdate --freeze\` over \`.pre-commit-config.yaml\` and \`harness/pre-commit-config.yaml\`. Review the diff against each hook repo's release notes before merging. With the default workflow token, approve the PR's queued checks; configure \`RELEASE_PR_TOKEN\` for unattended check startup." \
             --base main \
-            --head "$branch" || echo "PR already exists for $branch"
+            --head "$branch"

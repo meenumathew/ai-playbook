@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from deploy_ai_playbook.config import Source
-from deploy_ai_playbook.discovery import LayeredDiscovery, Override, discover_layered
+from deploy_ai_playbook.discovery import (
+    LayeredDiscovery,
+    Override,
+    _is_deployable_source_file,
+    discover_layered,
+)
 
 
 def _make_core(tmp_path: Path) -> Path:
@@ -66,7 +71,7 @@ def test_discover_layered_pack_overrides_core_with_same_relative_path(tmp_path: 
 
 
 def test_discover_layered_last_pack_wins_on_cross_pack_conflict(tmp_path: Path) -> None:
-    """Two packs both override the same core file — the last pack in the list wins."""
+    """Two packs both override the same core file: the last pack in the list wins."""
     core = _make_core(tmp_path)
 
     pack_a_root = tmp_path / "packs" / "django"
@@ -177,6 +182,84 @@ def test_discover_layered_skips_pack_symlink_files(tmp_path: Path) -> None:
     assert Path("agents/real.agent.md") in relatives
 
 
+def test_discover_layered_skips_symlinked_overlay_directory(tmp_path: Path) -> None:
+    """A pack overlay directory that is itself a symlink must not be walked.
+
+    Per-file symlinks are already refused, but rglob follows a symlinked
+    overlay directory (e.g. `mypack/knowledge-base -> ~/.ssh`), which would
+    deploy arbitrary outside files into the project. The whole overlay must
+    be skipped.
+    """
+    core = _make_core(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secrets.md").write_text("token = should-not-be-deployed\n")
+
+    pack_root = tmp_path / "packs" / "internal"
+    pack_root.mkdir(parents=True)
+    (pack_root / "knowledge-base").symlink_to(outside, target_is_directory=True)
+    pack = Source(origin="pack:internal", root=pack_root)
+
+    result = discover_layered(core, packs=[pack])
+    relatives = {entry.relative for entry in result.files}
+
+    assert Path("knowledge-base/secrets.md") not in relatives
+
+
+def test_discover_layered_skips_files_resolving_outside_the_overlay(tmp_path: Path) -> None:
+    """A symlinked subdirectory inside an overlay must not leak outside files.
+
+    The per-file symlink check inspects only the last path component, so a
+    real file reached through `agents/linked-subdir/` (a symlink to an
+    outside directory) passes it. Containment must be checked on the
+    resolved path.
+    """
+    core = _make_core(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "leaked.agent.md").write_text("# outside file\n")
+
+    pack_root = tmp_path / "packs" / "internal"
+    pack_agents = pack_root / "agents"
+    pack_agents.mkdir(parents=True)
+    (pack_agents / "sub").symlink_to(outside, target_is_directory=True)
+    (pack_agents / "real.agent.md").write_text("# real pack file\n")
+    pack = Source(origin="pack:internal", root=pack_root)
+
+    result = discover_layered(core, packs=[pack])
+    relatives = {entry.relative for entry in result.files}
+
+    assert Path("agents/sub/leaked.agent.md") not in relatives
+    assert Path("agents/real.agent.md") in relatives
+
+
+def test_deployable_source_file_refuses_a_path_resolving_outside_the_overlay(
+    tmp_path: Path,
+) -> None:
+    """The containment check is enforced by the predicate, not only by the walker.
+
+    `Path.rglob` does not descend symlinked directories, so `_walk_source`
+    never hands such a file to the predicate today. That makes the resolved
+    path check defence in depth: it must hold on its own, so a future walker
+    change (or any other caller) cannot reintroduce the escape.
+    """
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    leaked = outside / "leaked.agent.md"
+    leaked.write_text("token = should-not-be-deployed\n")
+
+    src_dir = tmp_path / "packs" / "internal" / "agents"
+    src_dir.mkdir(parents=True)
+    (src_dir / "sub").symlink_to(outside, target_is_directory=True)
+
+    assert not _is_deployable_source_file(
+        src_dir / "sub" / "leaked.agent.md",
+        src_dir,
+        ".agent.md",
+        src_dir.resolve(),
+    )
+
+
 def test_expected_deployed_files_includes_pack_relative_paths(tmp_path: Path) -> None:
     """expected_deployed_files() with discovered_files contains pack relatives.
 
@@ -204,7 +287,7 @@ def test_compute_source_fingerprint_includes_pack_files(tmp_path: Path) -> None:
     """Fingerprint changes when pack content changes.
 
     Adopters need this so `doctor` flags fingerprint mismatch when a pack
-    file is edited — i.e. version tracking covers pack content, not just
+    file is edited: i.e. version tracking covers pack content, not just
     core. Without this, pack drift would be invisible.
     """
     from deploy_ai_playbook.fs import compute_source_fingerprint

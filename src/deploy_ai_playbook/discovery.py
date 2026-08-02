@@ -13,12 +13,12 @@ from pathlib import Path
 
 from deploy_ai_playbook.config import Source
 from deploy_ai_playbook.errors import AIPlaybookError
-from deploy_ai_playbook.paths import DISABLED_SUFFIX, Tool
+from deploy_ai_playbook.paths import AGENT_FILE_SUFFIX, DISABLED_SUFFIX, Tool
 from deploy_ai_playbook.targets import get_target_adapter
 
 OVERLAY_DIRS: tuple[str, ...] = ("agents", "knowledge-base", "skills", "templates")
 
-# Display titles for the overlay directories — kept here next to OVERLAY_DIRS so
+# Display titles for the overlay directories: kept here next to OVERLAY_DIRS so
 # adding a new overlay updates one place, not two.
 OVERLAY_TITLES: dict[str, str] = {
     "agents": "Agents",
@@ -31,13 +31,13 @@ OVERLAY_TITLES: dict[str, str] = {
 # accept any non-hidden file. Centralised here so discover_layered and
 # discover_agents agree on what counts as a deployable file.
 _OVERLAY_FILE_SUFFIX: dict[str, str] = {
-    "agents": ".agent.md",
+    "agents": AGENT_FILE_SUFFIX,
 }
 
 
 @dataclass(frozen=True, slots=True)
 class DeployableFile:
-    """One file produced by discovery — origin tells us core vs which pack."""
+    """One file produced by discovery: origin tells us core vs which pack."""
 
     origin: str
     relative: Path
@@ -66,11 +66,15 @@ def _walk_source(root: Path, origin: str) -> list[DeployableFile]:
     files: list[DeployableFile] = []
     for overlay_dir in OVERLAY_DIRS:
         src_dir = root / overlay_dir
-        if not src_dir.exists():
+        # A symlinked overlay directory would let a pack deploy arbitrary
+        # files from outside its root (rglob walks the link target), so it
+        # is refused exactly like per-file symlinks below.
+        if src_dir.is_symlink() or not src_dir.is_dir():
             continue
+        resolved_dir = src_dir.resolve()
         required_suffix = _OVERLAY_FILE_SUFFIX.get(overlay_dir)
         for src_file in sorted(src_dir.rglob("*")):
-            if not _is_deployable_source_file(src_file, src_dir, required_suffix):
+            if not _is_deployable_source_file(src_file, src_dir, required_suffix, resolved_dir):
                 continue
             relative = Path(overlay_dir) / src_file.relative_to(src_dir)
             files.append(DeployableFile(origin=origin, relative=relative, src_path=src_file))
@@ -81,8 +85,14 @@ def _is_deployable_source_file(
     src_file: Path,
     src_dir: Path,
     required_suffix: str | None,
+    resolved_dir: Path,
 ) -> bool:
     if src_file.is_symlink() or not src_file.is_file():
+        return False
+    # The symlink check above sees only the last path component; a file
+    # reached through a symlinked intermediate directory passes it. Require
+    # the resolved path to stay inside the overlay directory.
+    if not src_file.resolve().is_relative_to(resolved_dir):
         return False
     relative = src_file.relative_to(src_dir)
     if any(part.startswith(".") for part in relative.parts):
@@ -125,7 +135,7 @@ def get_source_root() -> Path:
     bundled = Path(__file__).parent / "data"
     if bundled.exists():
         return bundled
-    # Local development — go up from src/deploy_ai_playbook/ to project root.
+    # Local development: go up from src/deploy_ai_playbook/ to project root.
     return Path(__file__).parent.parent.parent
 
 
@@ -138,7 +148,7 @@ def discover_agents(source_root: Path) -> dict[str, Path]:
     """
     discovered = discover_layered(source_root, packs=[])
     return {
-        entry.relative.name.removesuffix(".agent.md"): entry.src_path
+        entry.relative.name.removesuffix(AGENT_FILE_SUFFIX): entry.src_path
         for entry in discovered.files
         if entry.relative.parts[0] == "agents"
     }
@@ -155,13 +165,17 @@ def get_agents_dir(project_root: Path, tool: Tool) -> Path:
     return project_root / get_target_adapter(tool).destination("agents")
 
 
-def find_deployed_agent(agents_dir: Path, name: str) -> tuple[Path | None, bool]:
-    """Find a deployed agent file — active or disabled.
+def find_deployed_agent(
+    agents_dir: Path,
+    name: str,
+    agent_suffix: str = AGENT_FILE_SUFFIX,
+) -> tuple[Path | None, bool]:
+    """Find a deployed agent file: active or disabled.
 
     Returns (path, is_disabled). Path is None if not found.
     """
-    active = agents_dir / f"{name}.agent.md"
-    disabled = agents_dir / f"{name}.agent.md{DISABLED_SUFFIX}"
+    active = agents_dir / f"{name}{agent_suffix}"
+    disabled = agents_dir / f"{name}{agent_suffix}{DISABLED_SUFFIX}"
     if active.exists():
         return active, False
     if disabled.exists():

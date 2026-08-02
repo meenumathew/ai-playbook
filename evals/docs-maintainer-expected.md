@@ -5,13 +5,13 @@ The docs-maintainer should produce the following observable behaviors when given
 ## Must demonstrate
 
 1. **ADR format used:** Context, Decision, Business Reason, Alternatives Considered, Consequences, Status — per `templates/adr-template.md`
-2. **Key questions asked first:** Situation? Decision? Alternatives rejected and why? What's gained? What becomes harder? Business reason? — stops if can't answer the first 3
+2. **Key questions resolved first:** situation, decision, and alternatives-rejected are each answered before drafting — asked explicitly, or extracted from the request when it already supplies them — and the agent stops if the first 3 can't be answered
 3. **All three alternatives documented:** SendGrid (chosen), Mailgun (rejected), AWS SES (rejected) — each with clear rationale
 4. **Business reason explicit:** Not just "we liked it better" — captures deliverability, team familiarity, SDK fit, and timeline constraint
-5. **Consequences documented:** Both positive (better deliverability, faster onboarding) and negative (higher cost than Mailgun, vendor lock-in)
-6. **Status set:** "Accepted" with date
+5. **Consequences documented:** both what becomes easier (deliverability, onboarding) and what becomes harder (cost relative to Mailgun, dependence on a single vendor) — per the ADR template's easier/harder framing
+6. **Status set:** "Accepted" (or the template's equivalent Active status) with date
 7. **Preview before save:** Shows the ADR and waits for explicit approval
-8. **Saved to correct location:** New file under `docs/adr/NNNN-title-slug.md` (one file per decision); `docs/adr/README.md` index updated
+8. **Correct save target named:** the approval line targets a new file under `docs/adr/NNNN-title-slug.md` (one file per decision, next zero-padded number); on approval the save includes a `docs/adr/README.md` index row
 
 ## Must NOT do
 

@@ -15,7 +15,7 @@ This module enforces two things to keep the convention durable:
    from a labeled file will trip this guardrail.
 
 The guardrail does not attempt to enforce the convention on every
-existing assertion (414 today across the suite) — that scope was
+existing assertion (414 today across the suite): that scope was
 intentionally deferred. New markdown-content assertions added to the
 labeled files should carry a classification label; reviewers and the CONTRIBUTING
 note are the human enforcement layer.
@@ -25,7 +25,11 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from deploy_ai_playbook.cli import get_source_root
+
+pytestmark = pytest.mark.repo_contract
 
 # Match each classification label after a `#` comment marker, allowing optional
 # parenthetical qualifiers like `# CONTRACT-PHRASE (negative):`.
@@ -79,7 +83,7 @@ def test_labeled_files_keep_at_least_one_classification_label():
         path = source_root / rel
         if not path.exists():
             # A renamed-or-deleted labeled file should also surface for
-            # review — silently skipping it would let the convention
+            # review: silently skipping it would let the convention
             # erode through deletion rather than label-stripping.
             deleted.append(rel)
             continue

@@ -6,17 +6,17 @@ load_when: always; try here before loading any KB file
 audience: all
 canonical_for: When to Go Back routing, Decision Guide, Review Rules; every other entry is digest-only and links to its canonical home
 cross_refs: all KB files
-verified: 2026-07-17
+verified: 2026-07-30
 ---
 
 # Knowledge Base Cheatsheet
 
 ## Agent Use
 
-- **Read first:** Lean Operating Mode, then the topic section matching your current task
-- **On miss:** load the cited canonical file via `INDEX.md`
+- **Read first:** grep this file for `## <topic>`, then read that section plus § Lean / Compact Operating Mode: do not read the file whole
+- **On miss:** grep `INDEX.md` for the topic, then load just the section it cites
 
-One rule per line. Load this **before** any other KB file. If the rule here is insufficient, load the cited canonical file.
+One rule per line. Consult this **before** any other KB file. If the rule here is insufficient, load the cited canonical file's section.
 
 This file is mostly a digest: entries link to their canonical home, and if a canonical file conflicts with a digest entry, **the canonical file wins**; fix the cheatsheet afterwards. Exception: by design, three sections are canonical *here*: § When to Go Back, § Decision Guide, § Review Rules: there is no other home to defer to.
 
@@ -39,12 +39,13 @@ Chain: story-refiner → slice-planner → xp-pair-programmer → diff-reviewer 
 | Separation of concerns is the baseline; layer Domain → Service → Infrastructure (deps inward) when domain behaviour matters, never forced onto simple CRUD/glue | `design-patterns.md` § Architecture Layers |
 | Domain is pure: no framework imports, no I/O | `design-patterns.md` § Hexagonal Architecture |
 | Use a pattern only when it solves a real problem; simple CRUD doesn't need forced layers | `design-patterns.md` |
+| For architecture-impacting work, profile the data and workload first; choose the simplest deployable architecture that meets known needs and require evidence for operational complexity | `architecture-decisions.md` |
 | Each module owns one bounded context | `philosophy.md` § Bounded Contexts |
 | Property vocabulary: cohesion, coupling, abstraction | `design-fundamentals.md` |
 | High cohesion + low coupling + good abstraction = changeability | `design-fundamentals.md` § How These Compose |
 | Complexity symptoms: change amplification, cognitive load, unknown unknowns: name the symptom, trace to the property, cite the move | `design-fundamentals.md` § Building Software That Lasts |
 | Design checkpoint in the moment: new name without "and"? new param leaks a detail? new import points inward? change touches few files? | `design-fundamentals.md` § Practical Application |
-| Vendor-neutral by design: agents use `host.pr.create` / `notify(event, …)` / `issue.fetch` (not `gh` / `slack-cli` / `jira-cli`); stories/AC/domain-language.md use capabilities, not products | `design-patterns.md` § Vendor-Neutral by Design |
+| Vendor-neutral by design: agents use `host.pr.create` / `notify(event, …)` / `issue.fetch` (not `gh` / `slack-cli` / `jira-cli`); stories, AC, and domain-language.md use capabilities, not products | `design-patterns.md` § Vendor-Neutral by Design |
 
 ---
 

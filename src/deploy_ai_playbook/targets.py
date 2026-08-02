@@ -8,9 +8,10 @@ from pathlib import Path
 from types import MappingProxyType
 
 from deploy_ai_playbook.errors import AIPlaybookError
-from deploy_ai_playbook.paths import MCP_CONFIG, TOOL_DESTINATIONS, Tool
+from deploy_ai_playbook.paths import AGENT_FILE_SUFFIX, MCP_CONFIG, TOOL_DESTINATIONS, Tool
 
 COMMAND_ARGUMENTS_PLACEHOLDER = "$ARGUMENTS"
+SOURCE_AGENT_SUFFIX = AGENT_FILE_SUFFIX
 
 
 class UnsupportedTargetCapabilityError(ValueError, AIPlaybookError):
@@ -34,6 +35,7 @@ class TargetAdapter:
     mcp_config: McpConfig
     command_output_suffix: str | None
     command_argument_placeholder: str | None
+    agent_output_suffix: str = SOURCE_AGENT_SUFFIX
     natural_language_command_note: str | None = None
 
     @property
@@ -50,6 +52,15 @@ class TargetAdapter:
     def optional_destination(self, key: str) -> str | None:
         return self.destinations.get(key)
 
+    def agent_output_name(self, source_name: str) -> str:
+        agent_name = source_name.removesuffix(SOURCE_AGENT_SUFFIX)
+        return f"{agent_name}{self.agent_output_suffix}"
+
+    def deployed_overlay_relative(self, overlay_dir: str, relative: Path) -> Path:
+        if overlay_dir != "agents":
+            return relative
+        return relative.with_name(self.agent_output_name(relative.name))
+
     def transform_command(self, source_name: str, content: str) -> tuple[str, str]:
         if not self.supports_commands or self.command_output_suffix is None:
             raise UnsupportedTargetCapabilityError(
@@ -64,6 +75,7 @@ def _adapter(
     tool: Tool,
     command_output_suffix: str | None,
     command_argument_placeholder: str | None,
+    agent_output_suffix: str = SOURCE_AGENT_SUFFIX,
     natural_language_command_note: str | None = None,
 ) -> TargetAdapter:
     return TargetAdapter(
@@ -72,6 +84,7 @@ def _adapter(
         mcp_config=McpConfig(**MCP_CONFIG[tool]),
         command_output_suffix=command_output_suffix,
         command_argument_placeholder=command_argument_placeholder,
+        agent_output_suffix=agent_output_suffix,
         natural_language_command_note=natural_language_command_note,
     )
 
@@ -87,6 +100,15 @@ TARGET_ADAPTERS: Mapping[Tool, TargetAdapter] = MappingProxyType(
             Tool.copilot,
             command_output_suffix=".prompt.md",
             command_argument_placeholder="${input:arguments}",
+        ),
+        Tool.codex: _adapter(
+            Tool.codex,
+            command_output_suffix=None,
+            command_argument_placeholder=None,
+            agent_output_suffix=".toml",
+            natural_language_command_note=(
+                "Codex does not use deployed slash-command shims; invoke custom agents by name."
+            ),
         ),
         Tool.cursor: _adapter(
             Tool.cursor,

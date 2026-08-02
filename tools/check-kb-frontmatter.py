@@ -3,7 +3,7 @@
 
 Every `knowledge-base/*.md` file (and `skills/<name>/SKILL.md`) declares a
 machine-readable frontmatter block that agents use for load decisions. Without
-mechanical enforcement, drift accumulates silently — keys go missing, cross_refs
+mechanical enforcement, drift accumulates silently: keys go missing, cross_refs
 point at renamed files, the load_when keyword goes stale.
 
 This hook validates two things:
@@ -13,7 +13,7 @@ This hook validates two things:
 
 Usage (pre-commit passes paths as args; CLI accepts paths or scans defaults):
 
-    python tools/check-kb-frontmatter.py [path ...]
+    uv run python tools/check-kb-frontmatter.py [path ...]
 
 Exit codes:
 
@@ -31,11 +31,20 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError:
+    sys.exit(
+        "check-kb-frontmatter: PyYAML is not importable under this interpreter. "
+        "Run via the project environment: `uv run python tools/check-kb-frontmatter.py`."
+    )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 KB_DIR = REPO_ROOT / "knowledge-base"
 SKILLS_DIR = REPO_ROOT / "skills"
+# Agent files join the freshness pass only (warnings, non-blocking): their
+# structural frontmatter contract lives in tests/acceptance/test_agent_contracts.py.
+AGENTS_DIR = REPO_ROOT / "agents"
 
 # `verified` is a manual review date. Stale dates are surfaced as a non-blocking
 # WARNING, never a hard error: a hard gate would make CI go red purely because
@@ -86,7 +95,7 @@ def split_cross_refs(value: object) -> list[str]:
         return [str(item).strip() for item in value if str(item).strip()]
     if isinstance(value, str):
         if value.strip().lower().startswith("all"):
-            return []  # sentinel value used by INDEX/CHEATSHEET — skip resolution
+            return []  # sentinel value used by INDEX/CHEATSHEET: skip resolution
         return [item.strip() for item in value.split(",") if item.strip()]
     return []
 
@@ -136,7 +145,10 @@ def _resolve_cross_ref_target(path: Path, target: str) -> Path | None:
 
 
 def _extract_headings(path: Path) -> set[str]:
-    return {_normalize_heading(heading) for heading in HEADING_PATTERN.findall(path.read_text())}
+    return {
+        _normalize_heading(heading)
+        for heading in HEADING_PATTERN.findall(path.read_text(encoding="utf-8"))
+    }
 
 
 def _normalize_heading(raw: str) -> str:
@@ -168,7 +180,9 @@ def _parse_verified(value: object) -> datetime.date | None:
 
 def freshness_warnings(kb_files: list[Path], today: datetime.date | None = None) -> list[str]:
     """Non-blocking staleness warnings for KB files whose `verified` date is old."""
-    today = today or datetime.datetime.now(datetime.UTC).date()
+    # noqa'd: datetime.UTC is 3.11+, and this gate is also invoked with the
+    # system interpreter (shebang / bare python3), which may be older.
+    today = today or datetime.datetime.now(datetime.timezone.utc).date()  # noqa: UP017
     warnings: list[str] = []
     for path in kb_files:
         try:
@@ -261,15 +275,15 @@ def main(argv: list[str]) -> int:
         all_errors.extend(check_skill_file(path))
 
     # Non-blocking: surface stale `verified` dates without failing the run.
-    warnings = freshness_warnings(kb_files)
+    warnings = freshness_warnings(kb_files + sorted(AGENTS_DIR.glob("*.agent.md")))
     if warnings:
-        print("⚠ KB staleness warnings (non-blocking):\n", file=sys.stderr)
+        print("WARNING: KB staleness warnings (non-blocking):\n", file=sys.stderr)
         for warning in warnings:
             print(f"  - {warning}", file=sys.stderr)
         print("", file=sys.stderr)
 
     if all_errors:
-        print("✗ KB frontmatter contract violations:\n", file=sys.stderr)
+        print("ERROR: KB frontmatter contract violations:\n", file=sys.stderr)
         for err in all_errors:
             print(f"  - {err}", file=sys.stderr)
         print(

@@ -24,7 +24,7 @@ Used by: release-captain (smoke result, release shipped), incident-responder (se
 | Slack (incoming webhook) | `slack` | `curl` POST to webhook URL | Webhook URL in `SLACK_WEBHOOK_URL` env var |
 | Email (sendmail / msmtp / direct SMTP) | `email` | `curl` against an SMTP gateway, or local `sendmail` | `EMAIL_SMTP_URL` (e.g. `smtps://user:pass@host:465`) and `EMAIL_FROM`, `EMAIL_TO` |
 | Generic webhook (custom: e.g. Mattermost, Discord, internal bot) | `webhook` | `curl` POST to URL with JSON body | `WEBHOOK_URL` env var; optional `WEBHOOK_AUTH_HEADER` |
-| Off | `none` | (no-op) |: |
+| Off | `none` | (no-op) | N/A |
 
 PagerDuty, Opsgenie, platform-specific paging: out of scope. Integration surface (incident lifecycle, escalation policies) is far bigger than a webhook. Hand off to existing on-call systems at the human layer.
 
@@ -110,21 +110,29 @@ Pseudocode below shows the wire call. Each adapter receives `event`, `message`, 
 # Channel routing: look up [notifier.events].<event> to get a channel hint
 # (e.g. "#oncall"), then resolve it to a per-channel webhook env var by
 # upper-casing and prefixing: "#oncall" -> SLACK_WEBHOOK_URL_ONCALL.
-# If the per-channel var is unset, fall back to SLACK_WEBHOOK_URL.
+# One case arm per channel in [notifier.events]: add an arm when you add a
+# channel. If the per-channel var is unset, fall back to SLACK_WEBHOOK_URL.
 
 channel="$(toml_get notifier.events."$event")"      # e.g. "#oncall"
 case "$channel" in
   "#deploys") webhook="${SLACK_WEBHOOK_URL_DEPLOYS:-${SLACK_WEBHOOK_URL:-}}" ;;
   "#oncall") webhook="${SLACK_WEBHOOK_URL_ONCALL:-${SLACK_WEBHOOK_URL:-}}" ;;
+  "#engineering") webhook="${SLACK_WEBHOOK_URL_ENGINEERING:-${SLACK_WEBHOOK_URL:-}}" ;;
   *) webhook="${SLACK_WEBHOOK_URL:-}" ;;
 esac
 
+payload="$(jq -nc \
+  --arg severity "$severity" \
+  --arg message "$message" \
+  '{text: ("[" + $severity + "] " + $message)}')"
+
 curl -fsS -X POST -H 'Content-Type: application/json' \
-  --data "$(printf '{"text": "[%s] %s"}' "$severity" "$message")" \
+  --data "$payload" \
   "$webhook"
 ```
 
 - Single-channel: only `SLACK_WEBHOOK_URL`. Multi-channel: add `SLACK_WEBHOOK_URL_DEPLOYS`, `SLACK_WEBHOOK_URL_ONCALL`. Mapping is mechanical: channel hint in `[notifier.events]` becomes the suffix.
+- `jq --arg` JSON-encodes quotes, backslashes, newlines, and control characters in both fields.
 - Slack rate-limits webhooks at ~1/sec. Rarely an issue except bursty incidents.
 
 ### Email adapter

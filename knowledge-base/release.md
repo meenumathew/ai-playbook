@@ -18,7 +18,7 @@ Source of truth for the post-merge path. Cited from `agents/release-captain.agen
 - **Read first:** Release Gates, Merge Strategies, Post-Deploy Smoke.
 - **Load deeper only on trigger:** rollback, hotfix, version bump rules.
 
-The playbook does not ship code to production by itself. release-captain orchestrates the path; humans approve the irreversible steps. **Auto-merge and auto-deploy are off by default; teams must not turn them on without an ADR documenting the trade-off.**
+The playbook does not ship code to production by itself. release-captain orchestrates the path; humans approve the irreversible steps.
 
 ---
 
@@ -47,6 +47,8 @@ Before requesting merge:
 
 If any gate fails, fix the underlying issue. Never bypass with `--admin`, `--no-verify`, or branch-protection overrides without explicit user instruction.
 
+**Auto-merge and auto-deploy are off by default; teams must not turn them on without an ADR documenting the trade-off.** Merge requires an explicit user signal, per merge.
+
 ---
 
 ## Merge Strategies
@@ -57,7 +59,7 @@ If any gate fails, fix the underlying issue. Never bypass with `--admin`, `--no-
 | **Rebase + merge** | When commit history is already clean and each commit stands alone (refactors, multi-step migrations) |
 | **Merge commit** | Long-lived release branches merging into main; preserves shared history. Avoid for feature → main. |
 
-Set the default in `.ai-playbook.toml` under `[host].merge_strategy` if your team prefers a non-default. Override per-PR only with explicit user signal.
+Record the team's default strategy here (this section is the canonical home; there is no config key for it). Override per-PR only with explicit user signal.
 
 ---
 
@@ -87,11 +89,24 @@ Apply Semantic Versioning (`semver.org`):
 
 Steps:
 
-1. Update version in the project's manifest (`pyproject.toml`, `package.json`, `Cargo.toml`, `pom.xml`).
-2. Move `[Unreleased]` content in `CHANGELOG.md` to a new `[X.Y.Z] - YYYY-MM-DD` section, grouped under the six Keep-a-Changelog categories in canonical order: Added, Changed, Deprecated, Removed, Fixed, Security (omit empty ones). Add a fresh `[Unreleased]` heading.
-3. Commit: `chore: release vX.Y.Z`. Approval gate applies.
-4. Tag: `git tag vX.Y.Z`. Annotated tags preferred (`git tag -a vX.Y.Z -m "..."`).
-5. Push tag: `git push origin vX.Y.Z`. Approval gate applies: pushing a tag is an external side effect.
+1. Fetch the remote and create `release/vX.Y.Z` from the current remote
+   default branch.
+2. Update version in the project's manifest (`pyproject.toml`, `package.json`,
+   `Cargo.toml`, `pom.xml`).
+3. Move `[Unreleased]` content in `CHANGELOG.md` to a new
+   `[X.Y.Z] - YYYY-MM-DD` section, grouped under the six Keep-a-Changelog
+   categories in canonical order: Added, Changed, Deprecated, Removed, Fixed,
+   Security (omit empty ones). Add a fresh `[Unreleased]` heading.
+4. Commit `chore(release): X.Y.Z` (the exact subject the tag automation verifies: no `v` prefix on the version), push the release branch through its approval
+   gate, and open a release PR. Require normal CI, review, and merge approval;
+   never bypass branch protection with a direct default-branch push.
+5. After the release PR merges, fetch again and verify the remote
+   default-branch commit contains the expected manifest version and changelog
+   section.
+6. Create an annotated tag on that exact remote default-branch commit:
+   `git tag -a vX.Y.Z <commit> -m "Release vX.Y.Z"`.
+7. Push only the tag: `git push origin vX.Y.Z`. Approval gate applies because
+   pushing a tag is an external side effect.
 
 Adopters with a custom release process (`RELEASING.md` at repo root) follow that file's steps; this section is the default when none exists.
 

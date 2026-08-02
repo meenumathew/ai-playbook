@@ -1,4 +1,4 @@
-"""Knowledge-base integrity tests — guardrails for the playbook's own docs.
+"""Knowledge-base integrity tests: guardrails for the playbook's own docs.
 
 These tests catch the class of bug a 95%-coverage Python suite cannot:
 text-level rot in CLAUDE.md, agent files, skill files, and KB files. Examples
@@ -10,7 +10,7 @@ of bugs caught here:
   - Agent declared in `agents/` with no matching `commands/<id>.md` shim
   - KB file missing required frontmatter (`id`, `tldr`, `verified`, etc.)
 
-The tests run as part of the regular pytest job — no separate CI step needed.
+The tests run as part of the regular pytest job: no separate CI step needed.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _markdown_files_to_check() -> list[Path]:
     roots = [
         CLAUDE_MD,
         # README is the most-read file and was the last doc surface outside
-        # the contract — stale chains and dead operation IDs
+        # the contract: stale chains and dead operation IDs
         # survived there while every checked file stayed clean.
         REPO_ROOT / "README.md",
         *AGENTS_DIR.glob("*.md"),
@@ -110,12 +110,6 @@ STALE_PATTERNS: list[tuple[str, str, str]] = [
         "see CLAUDE.md § Definition of Done",
     ),
     (
-        r"ai-playbook telemetry (status|enable|disable) --tool\b",
-        "telemetry subcommand example with --tool",
-        "Telemetry subcommands are Claude-only and do not accept --tool; "
-        "use `ai-playbook telemetry status`.",
-    ),
-    (
         r"these four operations",
         "host-adapter 'four operations' phrasing",
         "host-adapter has five operations: diff, review, create, merge, checks",
@@ -133,10 +127,6 @@ def test_no_stale_patterns(pattern: str, name: str, guidance: str) -> None:
     regex = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
     hits: list[str] = []
     for path in _markdown_files_to_check():
-        # Skip this test file itself — STALE_PATTERNS is the authoritative list,
-        # and the regexes appear here as data.
-        if path == Path(__file__):
-            continue
         for lineno, line in enumerate(_read(path).splitlines(), start=1):
             if regex.search(line):
                 rel = path.relative_to(REPO_ROOT)
@@ -247,10 +237,10 @@ def _resolve_cited_file(citation: str) -> Path | None:
 def _section_matches(cited: str, headings: set[str]) -> bool:
     """True when `cited` matches one of `headings`.
 
-    Citations are lossy summaries — `§ Phase 1` may legitimately reference a
-    heading like `## Phase 1: Investigate — Build a Feedback Loop`. We accept
+    Citations are lossy summaries: `§ Phase 1` may legitimately reference a
+    heading like `## Phase 1: Investigate: Build a Feedback Loop`. We accept
     a match when the cited text is the exact heading OR a clean prefix of it
-    (followed by `:` or `—` or end-of-string). We also progressively trim
+    (followed by `:` or `-` or end-of-string). We also progressively trim
     trailing words to handle citations like `§ Iron Law and 3-Fix Stop Rule`.
     """
     return any(
@@ -310,13 +300,13 @@ def _section_headings(content: str) -> set[str]:
     return headings
 
 
-# Citation budget — known broken `file.md § Section` references at the time
+# Citation budget: known broken `file.md § Section` references at the time
 # this test was introduced. The point of the budget is to *prevent regressions*
 # (new broken citations) without blocking CI on the long tail of pre-existing
 # ones, which need targeted content fixes the test cannot make on its own.
 #
 # The number ratchets DOWN over time. Fix a citation, then update this number.
-# It must NEVER ratchet up — adding broken citations is a hard failure.
+# It must NEVER ratchet up: adding broken citations is a hard failure.
 CITATION_BUDGET = 0
 
 
@@ -381,7 +371,7 @@ def test_citation_count_does_not_regress() -> None:
 
 
 def test_citation_budget_is_tight() -> None:
-    """The budget is not larger than the actual count — keeps it ratcheting down.
+    """The budget is not larger than the actual count: keeps it ratcheting down.
 
     If the real count drops below the budget (someone fixed citations without
     updating the constant), the test fails with the new tighter number to set.
@@ -412,7 +402,7 @@ def test_every_root_kb_file_referenced_from_index() -> None:
     themselves, README.md, and language/workspace subdirs) must be cited from
     `knowledge-base/INDEX.md`.
 
-    INDEX.md is the routing table — agents discover KB files through it. A
+    INDEX.md is the routing table: agents discover KB files through it. A
     new file landing without an index entry is an orphan: agents will not
     load it from a `load_when:` keyword unless something points at it. The
     contract test catches that drift on push, not on first agent miss.
@@ -485,7 +475,7 @@ _NGRAM_ALLOWED_PAIRS: set[tuple[str, str]] = {
 # templates that agents must instantiate verbatim (pinned by
 # test_approval_gate_contracts), and every agent opens its Tool Policy and
 # Tier-aware ceremony sections with the same mandated leader sentence
-# (pinned by the agent anatomy contracts) — contractual echoes, not drift.
+# (pinned by the agent anatomy contracts): contractual echoes, not drift.
 _NGRAM_EXEMPT_LINE = re.compile(
     r"^\s*>"
     r"|Reply 'approved'"
@@ -523,7 +513,7 @@ def _kb_word_ngrams(path: Path) -> set[str]:
 def test_kb_files_do_not_duplicate_rule_text() -> None:
     """No two loaded surfaces share a 12-word text run (minus allowlisted parallels).
 
-    Corpus: knowledge-base/, agents/, skills/, and CLAUDE.md — everything an
+    Corpus: knowledge-base/, agents/, skills/, and CLAUDE.md: everything an
     agent session pays tokens for. If this fails, keep one canonical statement
     and replace the other side with a `file.md § Section` pointer (loading
     rule: CLAUDE.md § Knowledge Base). Only extend _NGRAM_ALLOWED_PAIRS for
@@ -568,27 +558,9 @@ def test_only_cheatsheet_declares_load_when_always() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Agent ↔ command shim consistency
-# ---------------------------------------------------------------------------
-
-
-def test_every_agent_has_a_command_shim() -> None:
-    """Each agents/<id>.agent.md has a matching commands/<id>.md slash-command shim."""
-    agent_ids: set[str] = set()
-    for agent_file in AGENTS_DIR.glob("*.agent.md"):
-        content = _read(agent_file)
-        m = re.search(r"^id:\s*(\S+)\s*$", content, re.MULTILINE)
-        assert m, f"{agent_file.relative_to(REPO_ROOT)}: missing 'id:' frontmatter"
-        agent_ids.add(m.group(1))
-
-    command_ids = {p.stem for p in COMMANDS_DIR.glob("*.md")}
-
-    missing_commands = agent_ids - command_ids
-    assert not missing_commands, (
-        f"Agents without a matching commands/<id>.md shim: {sorted(missing_commands)}.\n"
-        f"Each agent must have a slash-command — see CLAUDE.md § Workflow."
-    )
+# Agent ↔ command shim parity is asserted once, in
+# tests/acceptance/test_agent_contracts.py::test_every_agent_has_a_matching_command
+# (this file used to carry a duplicate).
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +577,7 @@ INTERNAL_PATH_RE = re.compile(
     r"agents/[A-Za-z0-9_./-]+\.md|"
     r"docs/[A-Za-z0-9_./-]+\.md|"
     r"knowledge-base/[A-Za-z0-9_./-]+\.md|"
-    r"harness/[A-Za-z0-9_./.-]+)`",
+    r"harness/[A-Za-z0-9_./-]+)`",
 )
 
 
@@ -613,14 +585,9 @@ INTERNAL_PATH_RE = re.compile(
 IGNORED_INTERNAL_PATHS: set[str] = {
     "knowledge-base/languages/<lang>.md",
     "knowledge-base/languages/testing-<lang>.md",
-    "knowledge-base/domain-language.md",  # seeded on first use, not in repo
     "knowledge-base/quality-gates.md",  # seeded on first use, not in repo
     "knowledge-base/feature-flag-registry.md",  # seeded on first use, not in repo
     "knowledge-base/INDEX.md",  # exists; tested separately above
-    # Forward-references in RFC-0001 — proposed targets that land in
-    # follow-up move stories. Removing each entry is part of the
-    # accepting move story's slice.
-    "knowledge-base/definition-of-done.md",
     # Proposed in RFC-0002 (docs/rfcs/0002-lessons-log.md); the seed file
     # lands with the implementation if accepted. Remove this entry then.
     "knowledge-base/lessons.md",
@@ -682,7 +649,7 @@ def test_index_by_file_column_matches_frontmatter_load_when() -> None:
 
     The By File table previously hand-duplicated each KB file's
     `load_when:` frontmatter and the copies drifted silently. The cell is now
-    the frontmatter value verbatim — edit the file's frontmatter, then copy
+    the frontmatter value verbatim: edit the file's frontmatter, then copy
     it into the row. Rows for files without KB frontmatter (CLAUDE.md,
     README.md) are exempt.
     """

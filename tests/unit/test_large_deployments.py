@@ -2,7 +2,7 @@
 
 These verify behavioral correctness on deployments far larger than the shipped
 playbook (80 agents, 160 KB files). They measure no timings and set no
-performance thresholds — they are not benchmarks.
+performance thresholds: they are not benchmarks.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Deploy ai-playbook agents to Claude, Copilot, Cursor, or Kiro."""
+"""Deploy ai-playbook agents to Claude, Copilot, Codex, Cursor, or Kiro."""
 
 from importlib.metadata import PackageNotFoundError, version
 

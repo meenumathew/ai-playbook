@@ -29,13 +29,13 @@
     {
       "id": "XP-MUST-005",
       "criterion": "Comprehension check: after GREEN, asks a specific question grounded in actual code, not a generic prompt.",
-      "keywords": ["Comprehension check", "debug", "flow"],
+      "keywords": ["Comprehension check", "grounded in the changed code", "walk me through"],
       "evidence": "Output includes one targeted code-understanding question tied to the changed behavior."
     },
     {
       "id": "XP-MUST-006",
       "criterion": "REFACTOR only when green: design improvements happen after tests pass, not during RED or GREEN.",
-      "keywords": ["Refactor while green", "tests pass", "renamed"],
+      "keywords": ["Refactor while green", "passed", "Rerun"],
       "evidence": "Output sequences refactoring after the passing test evidence."
     },
     {
@@ -88,9 +88,9 @@
     },
     {
       "id": "XP-MUST-015",
-      "criterion": "AT outer loop: before inner unit TDD, writes failing acceptance tests named test_ac_<what>_<condition>, one per AC, testing observable outcomes at the system boundary.",
-      "keywords": ["Outer loop", "test_ac_", "acceptance"],
-      "evidence": "Output shows acceptance tests named with the test_ac_ convention before unit work."
+      "criterion": "AT outer loop: before inner unit TDD, writes failing acceptance tests named test_<what>_<condition>, one per AC, testing observable outcomes at the system boundary.",
+      "keywords": ["Outer loop", "acceptance", "test_"],
+      "evidence": "Output shows acceptance tests named with the test_<what>_<condition> convention before unit work."
     },
     {
       "id": "XP-MUST-016",
@@ -103,49 +103,49 @@
     {
       "id": "XP-NOT-001",
       "criterion": "Write multiple tests at once before implementing any.",
-      "keywords": ["wrote multiple tests before implementation", "batch tests first"],
+      "keywords": ["up front in one file", "wrote all the tests first", "batch of tests before any implementation"],
       "evidence": "Output must not show multiple unit tests written before a GREEN step."
     },
     {
       "id": "XP-NOT-002",
       "criterion": "Write implementation code without a failing test.",
-      "keywords": ["implementation without a failing test", "skipped RED"],
+      "keywords": ["skipped RED", "implementation before the test", "wrote the code first"],
       "evidence": "Output must not skip the failing-test evidence."
     },
     {
       "id": "XP-NOT-003",
       "criterion": "Refactor while tests are red.",
-      "keywords": ["refactor while red", "tests were red"],
+      "keywords": ["refactored while red", "refactor while red", "tests were still red"],
       "evidence": "Output must not refactor before a passing test run."
     },
     {
       "id": "XP-NOT-004",
       "criterion": "Skip running tests or defer them until later.",
-      "keywords": ["I'll run them later", "skip running tests"],
+      "keywords": ["I'll run them later", "run them later", "skip running tests"],
       "evidence": "Output must not defer verification."
     },
     {
       "id": "XP-NOT-005",
       "criterion": "Commit inside the inner TDD loop before the current task's AC coverage is verified.",
-      "keywords": ["committed before AC verification", "inner TDD loop commit"],
-      "evidence": "Output must not commit before task-level AC checks."
+      "keywords": ["committed before AC verification", "committed mid-loop", "committed before checking coverage"],
+      "evidence": "Output must not commit before task-level AC checks. Structural keywords are best-effort here; the LLM judge is the enforcement layer."
     },
     {
       "id": "XP-NOT-006",
       "criterion": "Batch multiple plan tasks into one end-of-story commit.",
-      "keywords": ["single end-of-story commit", "batched tasks into one commit"],
+      "keywords": ["single end-of-story commit", "one commit covering all", "batched tasks into one commit"],
       "evidence": "Output must not combine multiple tasks into one commit."
     },
     {
       "id": "XP-NOT-007",
       "criterion": "Add features not in the plan.",
-      "keywords": ["extra feature", "not in the plan", "scope creep"],
+      "keywords": ["not in the plan", "added an extra feature", "free scope"],
       "evidence": "Output must not implement discovered or optional features."
     },
     {
       "id": "XP-NOT-008",
       "criterion": "Guess when an acceptance criterion is ambiguous.",
-      "keywords": ["guess", "ambiguous AC", "assume without asking"],
+      "keywords": ["so I guessed", "I assumed it means", "guessed the intended behavior"],
       "evidence": "Output should ask when AC ambiguity changes behavior."
     },
     {
@@ -157,25 +157,25 @@
     {
       "id": "XP-NOT-010",
       "criterion": "Skip the comprehension check.",
-      "keywords": ["skip comprehension check", "no comprehension check"],
-      "evidence": "Output must include the adaptive comprehension check when triggered."
+      "keywords": ["skipped the comprehension check", "no comprehension check needed"],
+      "evidence": "Output must include the adaptive comprehension check when triggered. Structural keywords are best-effort here (skipping is an absence); the LLM judge is the enforcement layer."
     },
     {
       "id": "XP-NOT-011",
       "criterion": "Commit without explicit user approval.",
-      "keywords": ["committed without approval", "auto-committed"],
+      "keywords": ["committed without approval", "auto-committed", "git add -A && git commit"],
       "evidence": "Output must include the approval gate before commit."
     },
     {
       "id": "XP-NOT-012",
       "criterion": "Skip format or lint after GREEN or REFACTOR.",
-      "keywords": ["skip ruff format", "skip ruff check --fix", "skipped lint"],
-      "evidence": "Output must not omit post-GREEN or post-REFACTOR cleanup."
+      "keywords": ["skipped lint", "skipped formatting", "no time to run ruff"],
+      "evidence": "Output must not omit post-GREEN or post-REFACTOR cleanup. Structural keywords are best-effort here (skipping is an absence); the LLM judge is the enforcement layer."
     },
     {
       "id": "XP-NOT-013",
       "criterion": "Claim tests pass, done, or all green based on the user's word, without running the test command in this session.",
-      "keywords": ["trust me", "tests pass on my machine", "claim done without running"],
+      "keywords": ["trust me", "tests pass on my machine", "green on their machine", "the user said the suite was green"],
       "evidence": "Output must not echo a user-supplied pass claim without producing test runner output."
     }
   ],
@@ -194,27 +194,27 @@
     },
     {
       "id": "XP-QUALITY-003",
-      "criterion": "Each test covers one behavior only.",
-      "keywords": ["one behaviour", "one behavior"],
-      "evidence": "Output avoids broad multi-assertion scenario tests."
+      "criterion": "Pre-existing failures are isolated from the change: unrelated red tests are verified against the untouched tree (e.g. stash-verify) instead of being absorbed or silently fixed.",
+      "keywords": ["stash-verified", "pre-existing"],
+      "evidence": "Output distinguishes failures caused by the change from failures that exist without it, with evidence."
     },
     {
       "id": "XP-QUALITY-004",
-      "criterion": "Unit tests have no I/O: no database, network, or filesystem.",
-      "keywords": ["no database", "no network", "no filesystem"],
-      "evidence": "Output keeps I/O behind integration tests or doubles."
+      "criterion": "Positive, negative, and edge coverage per AC, reported in the AC verification table.",
+      "keywords": ["Positive", "Negative", "Edge"],
+      "evidence": "Output maps each AC to positive, negative, and edge coverage before staging."
     },
     {
       "id": "XP-QUALITY-005",
-      "criterion": "Domain objects have no infrastructure dependencies.",
-      "keywords": ["port", "domain", "adapter"],
-      "evidence": "Output keeps infrastructure adapters outside domain objects."
+      "criterion": "New tests match the existing test file's conventions (markers, helpers, justification comment style) instead of inventing a parallel style.",
+      "keywords": ["existing", "conventions"],
+      "evidence": "Output notes the conventions followed from the file being extended."
     },
     {
       "id": "XP-QUALITY-006",
-      "criterion": "Integration tests use SendGrid test doubles, not real API calls.",
-      "keywords": ["SendGrid test double", "never a real API call"],
-      "evidence": "Output shows a fake or test double for SendGrid."
+      "criterion": "Tests run the system under test in a controlled sandbox (tmp_path, dry-run flags, controlled sentinels), never against the developer's live environment.",
+      "keywords": ["sandbox", "tmp_path", "dry-run"],
+      "evidence": "Output shows the tests isolating the system under test from the real environment."
     },
     {
       "id": "XP-QUALITY-007",
@@ -224,15 +224,15 @@
     },
     {
       "id": "XP-QUALITY-008",
-      "criterion": "No magic strings: error codes and event names are named constants.",
-      "keywords": ["named constants", "event name constant"],
-      "evidence": "Output names event or error strings as constants."
+      "criterion": "No workflow artifact IDs or em dashes leak into delivered code surfaces; the diff review confirms it.",
+      "keywords": ["No artifact IDs", "no em dashes"],
+      "evidence": "Output's diff review explicitly checks delivered surfaces for leaked workflow metadata."
     },
     {
       "id": "XP-QUALITY-009",
-      "criterion": "Domain vocabulary from domain-language.md is used consistently.",
-      "keywords": ["domain-language.md", "domain vocabulary"],
-      "evidence": "Output names code and tests with project vocabulary."
+      "criterion": "Review findings are addressed with the same TDD discipline: each accepted finding gets its own RED test before the fix.",
+      "keywords": ["RED confirmed for", "review"],
+      "evidence": "Output shows failing tests written for review findings before the corrective change."
     },
     {
       "id": "XP-QUALITY-010",

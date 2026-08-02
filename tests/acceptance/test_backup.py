@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from deploy_ai_playbook.cli import (
     BACKUP_DIR,
     VERSION_FILE,
@@ -12,9 +10,7 @@ from deploy_ai_playbook.cli import (
     backup_deployed_files,
     restore_backup,
 )
-
-runner = CliRunner()
-
+from tests.acceptance._dsl import deploy, runner
 
 # ---------------------------------------------------------------------------
 # backup_deployed_files
@@ -103,8 +99,8 @@ def test_restore_when_deploy_dir_missing(deployed_claude: Path):
 
 
 def test_restore_kiro_no_commands(tmp_path: Path):
-    """restore_backup with kiro tool — commands not in destinations."""
-    result = runner.invoke(app, ["deploy", "--agent", "all", "--tool", "kiro", "-t", str(tmp_path)])
+    """restore_backup with kiro tool: commands not in destinations."""
+    result = deploy(tmp_path, tool="kiro")
     assert result.exit_code == 0
 
     backup_path = backup_deployed_files(tmp_path, Tool.kiro)
@@ -113,6 +109,22 @@ def test_restore_kiro_no_commands(tmp_path: Path):
     restore_backup(tmp_path, Tool.kiro, backup_path)
 
     assert (tmp_path / ".kiro" / "agents").exists()
+
+
+def test_restore_codex_preserves_native_agent_toml_without_commands(tmp_path: Path):
+    result = deploy(tmp_path, tool="codex")
+    assert result.exit_code == 0, result.output
+
+    backup_path = backup_deployed_files(tmp_path, Tool.codex)
+    assert backup_path is not None
+    agent_file = tmp_path / ".codex" / "agents" / "story-refiner.toml"
+    original_content = agent_file.read_text(encoding="utf-8")
+
+    agent_file.write_text("# corrupted", encoding="utf-8")
+    restore_backup(tmp_path, Tool.codex, backup_path)
+
+    assert agent_file.read_text(encoding="utf-8") == original_content
+    assert not (tmp_path / ".codex" / "commands").exists()
 
 
 def test_restore_without_commands_in_backup(deployed_claude: Path):
@@ -180,7 +192,7 @@ def test_restore_without_version_in_backup(deployed_claude: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_ac_rollback_no_backup_exits_with_error(tmp_path: Path):
+def test_rollback_no_backup_exits_with_error(tmp_path: Path):
     result = runner.invoke(app, ["rollback", "--tool", "claude", "-t", str(tmp_path)])
 
     assert result.exit_code == 1
@@ -197,13 +209,9 @@ def test_rollback_empty_backup_dir_exits_with_error(tmp_path: Path):
 
 
 def test_rollback_no_backup_for_requested_tool_exits_with_error(tmp_path: Path):
-    first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    first = deploy(tmp_path)
     assert first.exit_code == 0, first.output
-    second = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    second = deploy(tmp_path)
     assert second.exit_code == 0, second.output
 
     result = runner.invoke(app, ["rollback", "--tool", "copilot", "-t", str(tmp_path)])
@@ -215,10 +223,8 @@ def test_rollback_no_backup_for_requested_tool_exits_with_error(tmp_path: Path):
 def test_rollback_decline_confirmation_restores_nothing(deployed_claude: Path):
     agent_file = deployed_claude / ".claude" / "agents" / "xp-pair-programmer.agent.md"
     original_content = agent_file.read_text()
-    deploy = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(deployed_claude)]
-    )
-    assert deploy.exit_code == 0, deploy.output
+    deploy_result = deploy(deployed_claude)
+    assert deploy_result.exit_code == 0, deploy_result.output
     agent_file.write_text("# corrupted")
 
     result = runner.invoke(
@@ -233,11 +239,11 @@ def test_rollback_decline_confirmation_restores_nothing(deployed_claude: Path):
     assert agent_file.read_text() != original_content
 
 
-def test_ac_rollback_restores_from_latest_backup(deployed_claude: Path):
+def test_rollback_restores_from_latest_backup(deployed_claude: Path):
     agent_file = deployed_claude / ".claude" / "agents" / "xp-pair-programmer.agent.md"
     original_content = agent_file.read_text()
 
-    runner.invoke(app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(deployed_claude)])
+    deploy(deployed_claude)
 
     agent_file.write_text("# corrupted")
     assert agent_file.read_text() == "# corrupted"
@@ -251,32 +257,41 @@ def test_ac_rollback_restores_from_latest_backup(deployed_claude: Path):
     assert agent_file.read_text() == original_content
 
 
+def test_rollback_codex_restores_latest_toml_backup(tmp_path: Path):
+    first = deploy(tmp_path, tool="codex")
+    assert first.exit_code == 0, first.output
+    agent_file = tmp_path / ".codex" / "agents" / "xp-pair-programmer.toml"
+    original_content = agent_file.read_text(encoding="utf-8")
+
+    second = deploy(tmp_path, tool="codex")
+    assert second.exit_code == 0, second.output
+    agent_file.write_text("# corrupted codex deployment", encoding="utf-8")
+
+    result = runner.invoke(app, ["rollback", "--tool", "codex", "-t", str(tmp_path), "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert "Rollback complete" in result.output
+    assert agent_file.read_text(encoding="utf-8") == original_content
+
+
 def test_rollback_restores_latest_backup_for_requested_tool_only(tmp_path: Path):
     """Rollback must not restore a newer backup created for another tool."""
-    claude_first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    claude_first = deploy(tmp_path)
     assert claude_first.exit_code == 0, claude_first.output
     claude_agent = tmp_path / ".claude" / "agents" / "xp-pair-programmer.agent.md"
     original_claude_content = claude_agent.read_text()
 
     # Creates the latest claude backup.
-    claude_second = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    claude_second = deploy(tmp_path)
     assert claude_second.exit_code == 0, claude_second.output
     claude_agent.write_text("# corrupted claude deployment")
 
     # Create a newer copilot backup with unmistakably different content.
-    copilot_first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "copilot", "-t", str(tmp_path)]
-    )
+    copilot_first = deploy(tmp_path, tool="copilot")
     assert copilot_first.exit_code == 0, copilot_first.output
     copilot_agent = tmp_path / ".github" / "agents" / "xp-pair-programmer.agent.md"
     copilot_agent.write_text("# copilot-only backup content")
-    copilot_second = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "copilot", "-t", str(tmp_path)]
-    )
+    copilot_second = deploy(tmp_path, tool="copilot")
     assert copilot_second.exit_code == 0, copilot_second.output
 
     result = runner.invoke(app, ["rollback", "--tool", "claude", "-t", str(tmp_path), "--force"])

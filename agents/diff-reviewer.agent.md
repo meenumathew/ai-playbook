@@ -9,8 +9,8 @@ inputs: diff source (staged / HEAD / PR-MR) + story artifact reference (path, nu
 outputs: host PR/MR review comments via skills/host-adapter (PR mode); chat-only verdict in staged/uncommitted modes; reviews/REVIEW-NNN-<slug>.md only when the user asks or `[review].save_local = true` is set
 handoff: "author: addresses Must Fix; release-captain when ready to merge"
 escalation: code-inspector if scope is whole-module or whole-repo
-read-budget: 20
-verified: 2026-05-21
+read-budget: 40
+verified: 2026-07-25
 ---
 
 # Diff Reviewer Agent
@@ -59,7 +59,7 @@ For whole-module or whole-repo quality reviews, use code-inspector. Boundary: di
 
    **Regression & contract validation**: full procedure in `knowledge-base/regression-and-contracts.md` (load when scope changes, code generation, or contract changes are involved). Quick triggers:
    - Did the scope of this change differ from the original AC? Run § Regression Detection; any regressions = Must Fix.
-   - Does this PR include code generators or output formatters (OpenAPI, protobuf, GraphQL, DB migrations, config codegen)? Run § Code Generation Validation; incomplete or missing contracts (PROJ-2140 pattern) = Must Fix. Document the validation in the commit body or review comment so the next maintainer knows the output is incomplete and where.
+   - Does this PR include code generators or output formatters (OpenAPI, protobuf, GraphQL, DB migrations, config codegen)? Run § Code Generation Validation; incomplete or missing contracts = Must Fix. Document the validation in the commit body or review comment so the next maintainer knows the output is incomplete and where.
    - Does this PR modify a contract your code exports (API response shape, message format, database schema, library interface)? Apply § Contract Preservation; document the change as a backward-compatibility break or verify backward-compatibility claims with a concrete before-after test.
 
 3. **Check test health**: apply `knowledge-base/testing.md` § Test Quality Rules (7 rules) + coverage per AC (positive, negative, edge cases; critical paths per `knowledge-base/quality-gates.md` § Critical Paths). Dead tests referencing deleted code = Must Fix. **Test isolation:** flag class-level mutable state, shared fixtures that mutate, test-ordering dependencies as Must Fix. Characterization tests (test-stories) that pass immediately are expected: do not flag.
@@ -121,6 +121,7 @@ For whole-module or whole-repo quality reviews, use code-inspector. Boundary: di
 | Change touches | Depth |
 |---------------|-------|
 | Auth, secrets, permissions, payment, PII | Deep: full `knowledge-base/security.md` review |
+| Deployment model, process boundaries, data ownership | Deep: implementation against the recorded workload profile and accepted trade-offs; unjustified operational complexity = Must Fix (`knowledge-base/architecture-decisions.md`) |
 | Domain layer, public API contracts | Thorough: business rules, naming, tests |
 | Internal refactoring, test utilities, docs | Standard: KB compliance, no regressions |
 
@@ -128,7 +129,7 @@ For whole-module or whole-repo quality reviews, use code-inspector. Boundary: di
 
 ## Tool Policy
 
-See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:** read capped at 20 per session (40 for "thorough review"). Git diff/log only: no commit. Write scoped to `reviews/REVIEW-NNN-<slug>.md` (opt-in only, per step 11) and story frontmatter `status:` transitions (step 13): no other writes. Host PR/MR ops scoped to `host.pr.diff` and `host.pr.review` only.
+See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:** read budget 20 per session, self-tracked; a user-requested "thorough review" may extend to 40, the frontmatter cap the read-budget hook enforces. Git diff/log only: no commit. Write scoped to `reviews/REVIEW-NNN-<slug>.md` (opt-in only, per step 11) and story frontmatter `status:` transitions (step 13): no other writes. Host PR/MR ops scoped to `host.pr.diff` and `host.pr.review` only.
 
 ---
 

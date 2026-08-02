@@ -4,9 +4,10 @@
   "must_demonstrate": [
     {
       "id": "STORY-MUST-001",
-      "criterion": "**Intent anchors captured:** Problem, desired outcome, why now, key constraint, and smallest useful change — all five present before any research",
+      "criterion": "**Intent anchors captured:** Problem, desired outcome, why now, key constraint, and smallest useful change — all five present before any research, with inferred anchors stated as assumptions",
       "keywords": [
-        "Intent anchors captured"
+        "Intent anchors",
+        "assumption"
       ]
     },
     {
@@ -18,66 +19,68 @@
     },
     {
       "id": "STORY-MUST-003",
-      "criterion": "**Codebase research with citations:** Every finding cites `file:line` — never claims something exists without proof",
+      "criterion": "**Codebase research with citations:** Every finding cites `file:line` — never claims something exists without proof (the recorded field set in harness/telemetry.sh, the no-network contract in docs/how-to/agent-telemetry.md, the privacy-minimal schema decision in CHANGELOG.md)",
       "keywords": [
-        "harness/telemetry.sh:28",
-        "knowledge-base/observability.md:190",
-        "harness/settings.example.json"
+        "harness/telemetry.sh:1",
+        "docs/how-to/agent-telemetry.md",
+        "CHANGELOG.md"
       ]
     },
     {
       "id": "STORY-MUST-004",
-      "criterion": "**Contradictions surfaced:** Flags that telemetry capture is Claude Code-only (a \"team dashboard\" would undercount other tools' sessions) and that the hook's never-block failure policy conflicts with synchronous pushes to a remote API — doesn't assume the local usage log already covers everyone",
+      "criterion": "**Contradictions surfaced:** Flags that \"token spend per agent\" contradicts the privacy-minimal telemetry schema (token/cache counts deliberately never persisted — a documented exclusion, not a gap) and that \"just push it there\" contradicts the session-end hook's no-network, never-block contract — absorbs neither silently",
       "keywords": [
-        "Contradictions surfaced"
+        "Contradictions surfaced",
+        "privacy-minimal",
+        "no network calls"
       ]
     },
     {
       "id": "STORY-MUST-005",
-      "criterion": "**Design questions with trade-offs:** Prioritizes unresolved questions, asks one question at a time, and grounds each trade-off in codebase findings rather than generic options",
+      "criterion": "**Descope proposed, not assumed:** Recommends descoping the token-spend ask to a follow-up decision (reversing a documented privacy contract needs its own story and ADR), asks the developer, and records the answer — neither quietly drops nor quietly includes it",
       "keywords": [
-        "Design questions with trade-offs"
+        "descope",
+        "follow-up"
       ]
     },
     {
       "id": "STORY-MUST-006",
-      "criterion": "**Story written using template:** Uses `templates/story-template.md` format with all sections populated",
+      "criterion": "**Design questions with trade-offs:** Prioritizes unresolved questions, asks one question at a time with a recommended answer, and grounds each trade-off in codebase findings rather than generic options",
       "keywords": [
-        "templates/story-template.md",
-        "Story written using template"
+        "design question",
+        "recommendation"
       ]
     },
     {
       "id": "STORY-MUST-007",
-      "criterion": "**Prefer 3–5 AC, never 8+:** Each AC should follow `Given [precondition], when [action], then [expected outcome]` per `skills/story-writing/SKILL.md` § Acceptance Criteria",
+      "criterion": "**Story written using template:** Uses `templates/story-template.md` format with all sections populated",
       "keywords": [
-        "Given [precondition], when [action], then [expected outcome]",
-        "skills/story-writing/SKILL.md",
-        "Prefer 3–5 AC, never 8+"
+        "templates/story-template.md"
       ]
     },
     {
       "id": "STORY-MUST-008",
-      "criterion": "**TDD test names:** Each AC has a matching `test_<what>_<condition>` name",
+      "criterion": "**Prefer 3–5 AC with TDD names:** Each AC follows `Given [precondition], when [action], then [expected outcome]`, never 8+, and each AC has a matching `test_<what>_<condition>` name",
       "keywords": [
-        "test_<what>_<condition>",
-        "TDD test names"
+        "Given",
+        "test_export_delivers_only_recorded_fields"
       ]
     },
     {
       "id": "STORY-MUST-009",
-      "criterion": "**Domain language used:** Uses the repo's existing telemetry terms (`usage log`, `Stop hook`, `session telemetry`) and names the export target by capability (`metrics backend`), not vendor, in AC per `design-patterns.md` § Vendor-Neutral by Design",
+      "criterion": "**Domain language used:** Uses the repo's telemetry terms (`usage log`, `session-end hook`, `usage event`) and names the export target by capability (`metrics backend`), not vendor, in AC per `design-patterns.md` § Vendor-Neutral by Design; the vendor appears only in Constraints",
       "keywords": [
         "usage log",
-        "Stop hook",
+        "session-end hook",
         "metrics backend"
       ]
     },
     {
       "id": "STORY-MUST-010",
-      "criterion": "**Preview before save:** Shows the story and waits for explicit approval before writing files",
+      "criterion": "**Preview before save:** Shows the story and research and waits for explicit approval before writing files; research file written first",
       "keywords": [
-        "Preview before save"
+        "Story preview above",
+        "approved"
       ]
     }
   ],
@@ -86,63 +89,85 @@
       "id": "STORY-NOT-001",
       "criterion": "Skip research and jump to writing the story",
       "keywords": [
-        "Skip research and"
+        "skipped straight to writing the story",
+        "no need to dig through the repo",
+        "skipping research",
+        "went straight to the story"
       ]
     },
     {
       "id": "STORY-NOT-002",
       "criterion": "Assume the usage log already contains every field the dashboard needs without checking",
       "keywords": [
-        "Assume the usage"
+        "already contains every field",
+        "log already has everything",
+        "no need to verify the fields"
       ]
     },
     {
       "id": "STORY-NOT-003",
       "criterion": "Write implementation details (which exporter library, which API endpoint, which cron syntax)",
       "keywords": [
-        "Write implementation details"
+        "datadog-api-client",
+        "DD_API_KEY",
+        "api.datadoghq.com",
+        "*/5 * * * *"
       ]
     },
     {
       "id": "STORY-NOT-004",
       "criterion": "Write AC that can't be tested (vague outcomes like \"usage is visible promptly\")",
       "keywords": [
-        "Write AC that"
+        "visible promptly",
+        "works correctly",
+        "behaves as expected",
+        "feels responsive"
       ]
     },
     {
       "id": "STORY-NOT-005",
       "criterion": "Produce 8+ acceptance criteria instead of splitting/trimming",
       "keywords": [
-        "Produce 8+ acceptance"
-      ]
+        "8. Given",
+        "9. Given",
+        "10. Given"
+      ],
+      "evidence": "Judge must count the acceptance criteria and cite the overflow if 8 or more appear, or state that the count is within bounds. Structural keywords are best-effort here (a count is not a phrase); the LLM judge is the enforcement layer."
     },
     {
       "id": "STORY-NOT-006",
-      "criterion": "Pick a design approach — present options, let the human decide",
+      "criterion": "Pick the final design approach — present options, slice-planner owns the decision",
       "keywords": [
-        "Pick a design"
+        "decision made; no options",
+        "no options worth presenting",
+        "I went with the",
+        "picked the approach myself"
       ]
     },
     {
       "id": "STORY-NOT-007",
       "criterion": "Dump multiple unrelated design questions at once",
       "keywords": [
-        "Dump multiple unrelated"
-      ]
+        "answer all of the following questions",
+        "here is my full list of questions"
+      ],
+      "evidence": "Judge must cite the block of unrelated questions asked at once, or state that questions were sequenced one at a time. Structural keywords are best-effort here; the LLM judge is the enforcement layer."
     },
     {
       "id": "STORY-NOT-008",
       "criterion": "Save files without showing a preview and getting approval",
       "keywords": [
-        "Save files without"
-      ]
+        "saved the story without",
+        "wrote the files directly",
+        "saved without waiting for approval"
+      ],
+      "evidence": "Judge must cite the output phrase showing a file saved with no preceding preview-and-approval gate, or state that the gate appears. Structural keywords are best-effort here; the LLM judge is the enforcement layer."
     }
   ],
   "quality_signals": [
     {
       "id": "STORY-QUALITY-001",
-      "criterion": "Research file saved to `research/` with findings, design options, and scope exclusions",
+      "criterion": "Research file saved to `research/` with findings, design options, ADR candidates, and scope exclusions",
       "keywords": [
         "research/"
       ]
@@ -158,26 +183,27 @@
       "id": "STORY-QUALITY-003",
       "criterion": "Handoff message mentions slice-planner as next step",
       "keywords": [
-        "Handoff message mentions"
+        "slice-planner"
       ]
     },
     {
       "id": "STORY-QUALITY-004",
-      "criterion": "Security considerations raised — usage data leaving the machine to a third party reviewed against `security.md` § Data Handling (confirm no transcript content is exported)",
+      "criterion": "ADR candidate recorded for the network-free-recording boundary and handed to docs-maintainer (story-refiner never writes ADR files), noting the advisor-tier re-escalation",
       "keywords": [
-        "Security considerations raised"
+        "ADR candidate",
+        "docs-maintainer"
       ]
     },
     {
       "id": "STORY-QUALITY-005",
-      "criterion": "Scope exclusions explicit (\"What We're NOT Doing\" — e.g., not building the dashboards, not capturing non-Claude tools)",
+      "criterion": "Scope exclusions explicit (\"What We're NOT Doing\" — no token or cost capture, no schema expansion, no per-developer attribution, no dashboard-as-code)",
       "keywords": [
-        "Scope exclusions explicit"
+        "NOT Doing"
       ]
     },
     {
       "id": "STORY-QUALITY-006",
-      "criterion": "Read budget reported at end of research phase (e.g. `Reads used: 6 / 20`)",
+      "criterion": "Read budget reported at end of research phase (e.g. `Reads used: 15 / 20`)",
       "keywords": [
         "Reads used:"
       ]

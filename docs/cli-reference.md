@@ -4,6 +4,10 @@ Full reference for the `ai-playbook` command.
 
 The CLI deploys packaged playbook assets (agents, skills, KB, templates, rules, and harness files). Vendor-neutral skills such as `host-adapter`, `issue-fetch`, and `notifier` are markdown operation contracts for agents/adopters; they are not Python runtime services inside the CLI.
 
+**Audience:** adopters looking up exact command behavior and maintainers checking the public CLI contract.
+
+**Jump to:** [installation](#installation), [global options](#global-options), [commands](#commands), [agents](#agents), [skills](#skills), [knowledge-base files](#knowledge-base-files), [templates](#templates), [packs](#packs), [CLI development](#developing-the-cli), [CI examples](#ci-setup-examples), or [environment variables](#environment).
+
 ---
 
 ## Installation
@@ -26,6 +30,18 @@ ai-playbook list
 
 ---
 
+## Global Options
+
+```bash
+ai-playbook --version   # or: ai-playbook -V
+```
+
+| Flag | Description |
+|------|-------------|
+| `--version`, `-V` | Print the installed `ai-playbook` package version and exit 0 |
+
+---
+
 ## Commands
 
 ### Deploy agents
@@ -39,14 +55,14 @@ ai-playbook deploy [--agent <names>] [--tool <tool>] [--target-dir <path>] [--la
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--agent`, `-a` | `all` | `all` or comma-separated names, for example `story-refiner,xp-pair-programmer` |
-| `--tool`, `-T` | `claude` | `claude`, `copilot`, `cursor`, or `kiro` |
+| `--tool`, `-T` | `claude` | `claude`, `copilot`, `codex`, `cursor`, or `kiro` |
 | `--target-dir`, `-t` | current directory | Override the target project directory |
 | `--language`, `-l` | all | Deploy only active KB files for a maintained language. Currently: `python`. For other languages, the adopting team seeds files from the blank templates. |
 | `--dry-run` | off | Preview what the command would deploy without writing anything |
-| `--no-rules` | off | Skip deploying the rules file (CLAUDE.md / copilot-instructions.md / ai-playbook.mdc / rules.md) |
+| `--no-rules` | off | Skip deploying the rules file (CLAUDE.md / copilot-instructions.md / AGENTS.md / ai-playbook.mdc / rules.md) |
 | `--no-mcp` | off | Skip deploying MCP server configuration entirely. Without this flag, the Atlassian MCP is deployed only when `.ai-playbook.toml` sets `[issue-tracker] provider = "jira"`; other providers (or none) already skip MCP setup |
-| `--no-harness` | off | Skip deploying starter harness files (`Makefile`, `.pre-commit-config.yaml`, CI workflow, teach-back hook, telemetry hook example) and the Claude telemetry Stop-hook merge. Existing files are kept: this flag suppresses the initial copy only. |
-| `--harness-force` | off | Overwrite existing harness files with the upstream copy. Default keeps adopter edits in place; opt in when an upstream fix needs to land. |
+| `--no-harness` | off | Skip deploying starter harness files (`Makefile`, `.pre-commit-config.yaml`, CI workflow, teach-back hook, telemetry hook example) and the Claude/Codex telemetry-hook merge. Existing files are kept: this flag suppresses the initial copy only. |
+| `--harness-force` | off | Overwrite existing harness files with the upstream copy. Default keeps adopter edits in place, but repairs a missing owner-execute bit on existing `.sh` hooks; opt in when upstream content needs to land. |
 | `--prune` | off | After deploy, remove orphaned files in deployed dirs that have no source counterpart, for example files left over from a renamed or removed agent. **Preserves `*.disabled` files** (user-managed state). **Confirms before deleting** unless `--yes` or `--dry-run` is also passed. |
 | `--yes`, `-y` | off | Skip the prune confirmation prompt. No effect without `--prune`. |
 
@@ -65,8 +81,9 @@ ai-playbook deploy --agent story-refiner,xp-pair-programmer --tool claude
 # Deploy to a different project directory
 ai-playbook deploy --agent all --tool claude --target-dir /path/to/project
 
-# Deploy to Copilot, Cursor, or Kiro
+# Deploy to Copilot, Codex, Cursor, or Kiro
 ai-playbook deploy --agent all --tool copilot
+ai-playbook deploy --agent all --tool codex
 ai-playbook deploy --agent all --tool cursor
 ai-playbook deploy --agent all --tool kiro
 
@@ -87,24 +104,33 @@ ai-playbook deploy --agent all --tool claude --harness-force
 
 `--prune` removes deployed files that no longer have a source counterpart. It preserves `*.disabled` files. To remove `*.disabled` files, delete them by hand before running `--prune`. Interactive runs prompt before deleting; pass `--yes` in CI. When pruning would delete files originating from a pack you have just removed from `.ai-playbook.toml`, the prompt surfaces the pack name so an accidental config edit doesn't quietly purge agents.
 
+Deploy is non-destructive for source-known files. A fresh named-agent deploy
+records a partial scope. A later named-agent deploy updates that agent but
+does not remove agents, rules, harness files, or language KB files installed
+by an earlier deploy; `.playbook-version` merges the update into that existing
+same-tool scope. Use a clean target when you want a deliberately smaller
+loaded surface. `diff`, `doctor`, and `upgrade-check` consume the recorded
+scope, so partial deployments are labeled honestly instead of being reported
+as complete full deployments.
+
 **What gets deployed:**
 
-| | Claude | Copilot | Cursor | Kiro |
-|--|--------|---------|--------|------|
-| Agents | `.claude/agents/` | `.github/agents/` | `.cursor/agents/` | `.kiro/agents/` |
-| Knowledge Base | `.claude/knowledge-base/` | `.github/knowledge-base/` | `.cursor/knowledge-base/` | `.kiro/knowledge-base/` |
-| Skills | `.claude/skills/` | `.github/skills/` | `.cursor/skills/` | `.kiro/skills/` |
-| Templates | `.claude/templates/` | `.github/templates/` | `.cursor/templates/` | `.kiro/templates/` |
-| Commands | `.claude/commands/` | `.github/prompts/` | `.cursor/commands/` |: |
-| Rules | `CLAUDE.md` | `.github/copilot-instructions.md` | `.cursor/rules/ai-playbook.mdc` | `.kiro/steering/rules.md` |
-| MCP (work item / tracker fetch) | `.claude/settings.json` | `.vscode/mcp.json` | `.cursor/mcp.json` | `.kiro/settings/mcp.json` |
-| Harness | `Makefile` + `.pre-commit-config.yaml` + `.github/workflows/ci.yml` + `.github/workflows/security.yml` + `harness/check-teachback.sh` + `harness/telemetry.sh` + `harness/settings.example.json` | ← same | ← same | ← same |
+| | Claude | Copilot | Codex | Cursor | Kiro |
+|--|--------|---------|-------|--------|------|
+| Agents | `.claude/agents/` | `.github/agents/` | `.codex/agents/*.toml` | `.cursor/agents/` | `.kiro/agents/` |
+| Knowledge Base | `.claude/knowledge-base/` | `.github/knowledge-base/` | `.codex/knowledge-base/` | `.cursor/knowledge-base/` | `.kiro/knowledge-base/` |
+| Skills | `.claude/skills/` | `.github/skills/` | `.agents/skills/` | `.cursor/skills/` | `.kiro/skills/` |
+| Templates | `.claude/templates/` | `.github/templates/` | `.codex/templates/` | `.cursor/templates/` | `.kiro/templates/` |
+| Commands | `.claude/commands/` | `.github/prompts/` | Not supported | `.cursor/commands/` | Not supported |
+| Rules | `CLAUDE.md` | `.github/copilot-instructions.md` | `AGENTS.md` | `.cursor/rules/ai-playbook.mdc` | `.kiro/steering/rules.md` |
+| MCP (work item / tracker fetch) | `.claude/settings.json` | `.vscode/mcp.json` | `.codex/config.toml` | `.cursor/mcp.json` | `.kiro/settings/mcp.json` |
+| Harness | `Makefile` + `.pre-commit-config.yaml` + `.github/workflows/ci.yml` + `.github/workflows/security.yml` + `.github/dependabot.yml` + `harness/check-teachback.sh` + `harness/telemetry.sh` + `harness/read-budget.sh` + `harness/settings.example.json` | ← same | ← same | ← same | ← same |
 
-For Claude deploys, the harness step also merges a `hooks.Stop` command into `.claude/settings.json` so completed sessions append telemetry to `.claude/usage.jsonl`. The deploy command preserves existing settings and copies malformed JSON aside instead of overwriting it.
+For Claude deploys, the harness step merges a `hooks.Stop` command into `.claude/settings.json`; Codex deploys add a `SessionEnd` entry to `.codex/hooks.json`. Each completed session appends a privacy-minimal local event to the selected tool's `usage.jsonl`. The deploy command preserves existing settings and copies malformed JSON aside instead of overwriting it. Codex users review and trust project hooks through `/hooks`.
 
-Deployed content is rewritten per tool: `knowledge-base/`, `skills/`, and `templates/` references take the tool's path prefix, and `CLAUDE.md` citations become the tool's rules file (`.github/copilot-instructions.md` for Copilot, `.cursor/rules/ai-playbook.mdc` for Cursor, `.kiro/steering/rules.md` for Kiro). `diff` and `doctor` apply the same rewrite, so rewritten references never report as drift.
+Deployed content is rewritten per tool: `knowledge-base/`, `skills/`, and `templates/` references take the tool's path prefix, and `CLAUDE.md` citations become the tool's rules file (`.github/copilot-instructions.md` for Copilot, `AGENTS.md` for Codex, `.cursor/rules/ai-playbook.mdc` for Cursor, `.kiro/steering/rules.md` for Kiro). `diff` and `doctor` apply the same rewrite, so rewritten references never report as drift.
 
-For Claude deploys, agent frontmatter is also materialized from `[model_tiers]`: `model: advisor`/`model: executor` becomes the configured model (`model: opus`/`model: sonnet`/`model: haiku`) so Claude Code routes each agent to the right model natively. Only values Claude Code recognizes (`opus`/`sonnet`/`haiku`/`inherit` or a `claude-*` model ID) are rewritten; other values (e.g. `ollama:qwen3:32b`) keep the tier name and deploy prints a note. Source `agents/` files always keep tier names, and `diff`/`doctor` apply the same rewrite so a clean deploy never reports drift. Copilot, Cursor, and Kiro have no per-agent model field and are never rewritten. Tier contract: [Model Tier](../knowledge-base/model-tier.md).
+For Claude deploys, agent frontmatter is also materialized from `[model_tiers]`: `model: advisor`/`model: executor` becomes the configured model (`model: opus`/`model: sonnet`/`model: haiku`) so Claude Code routes each agent to the right model natively. Only values Claude Code recognizes (`opus`/`sonnet`/`haiku`/`inherit` or a `claude-*` model ID) are rewritten; other values (e.g. `ollama:qwen3:32b`) keep the tier name and deploy prints a note. Codex deploys convert source Markdown agents into `.codex/agents/*.toml`; `[model_tiers]` values become per-agent `model` fields, and optional `[model_reasoning_efforts]` values become `model_reasoning_effort`. Source `agents/` files always keep tier names, and `diff`/`doctor` apply the same rewrite so a clean deploy never reports drift. Copilot, Cursor, and Kiro have no per-agent model field and are never rewritten. Tier contract: [Model Tier](../knowledge-base/model-tier.md).
 
 Deploy is **idempotent**: running it again on an unchanged playbook shows `unchanged` for every file.
 
@@ -126,7 +152,7 @@ Creates the six artifact directories (`stories/`, `research/`, `plans/`, `audits
 ai-playbook list [--target-dir <path>] [--json]
 ```
 
-Lists all agents available from the playbook core and any packs configured in `.ai-playbook.toml`. The Origin column shows the winning source (`core` or `pack:<name>`), so pack overrides of bundled agents are visible. If you omit `--target-dir` or no `.ai-playbook.toml` exists, the list shows only core agents. `--json` emits the same inventory as `{"agents": [{"name", "file", "origin"}]}` for CI scripts and editor integrations (STORY-001).
+Lists all agents available from the playbook core and any packs configured in `.ai-playbook.toml`. The Origin column shows the winning source (`core` or `pack:<name>`), so pack overrides of bundled agents are visible. If you omit `--target-dir` or no `.ai-playbook.toml` exists, the list shows only core agents. `--json` emits the same inventory as `{"agents": [{"name", "file", "origin"}]}` for CI scripts and editor integrations.
 
 ---
 
@@ -136,9 +162,33 @@ Lists all agents available from the playbook core and any packs configured in `.
 ai-playbook status [--tool <tool>] [--target-dir <path>] [--json]
 ```
 
-Lists agents currently deployed in the target directory, marks each as active or off, and shows the resolved quality tier. The status output labels per-agent overrides as `override`.
+Lists agents currently deployed in the target directory, marks each as `active` or `disabled`, and shows the resolved quality tier. The status output labels per-agent overrides as `override`.
 
 Use `--json` in scripts to read `deployed`, `tool`, and the agent list without parsing Rich tables.
+
+---
+
+### Estimate static context
+
+```bash
+ai-playbook context-report [--agent <names>] [--target-dir <path>] [--json]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--agent`, `-a` | `all` | Report all agents or a comma-separated selection |
+| `--target-dir`, `-t` | current directory | Load adopter pack configuration from this project |
+| `--json` | off | Emit stable machine-readable output for comparison or CI storage |
+
+The report measures the canonical rules file, `knowledge-base/CHEATSHEET.md`,
+the selected source agent, and every KB file named in that agent's `preload:`
+metadata. Configured pack overrides participate in the same last-wins order as
+deployment.
+
+`estimated_tokens` is `ceil(characters / 4)`: a portable approximation for
+relative comparisons, not billable provider usage. Provider system prompts,
+conversation history, tool schemas, prompt-cache effects, and files read later
+are excluded. Use provider-native usage exports when actual cost is required.
 
 ---
 
@@ -169,12 +219,12 @@ Manages a marked `.gitignore` block for generated playbook artifacts. Use `local
 ### Show what changed
 
 ```bash
-ai-playbook diff [--tool <tool>] [--target-dir <path>] [--exit-code]
+ai-playbook diff [--tool <tool>] [--target-dir <path>] [--json] [--exit-code]
 ```
 
 Compares the playbook source against the deployed copy in the target project. Lists files that changed or are not yet deployed; if it finds no differences, prints a single up-to-date message.
 
-By default, `diff` always exits 0 and is informational. Pass `--exit-code` in CI to fail with exit 1 when drift is detected: useful for gating merges on the deployment staying in sync with `.playbook-version`.
+By default, `diff` always exits 0 and is informational. Pass `--exit-code` in CI to fail with exit 1 when drift is detected: useful for gating merges on the deployment staying in sync with `.playbook-version`. Pass `--json` for machine-readable output with stable keys (`drift`, `tool`, and per-section file changes).
 
 ```bash
 ai-playbook diff --tool claude
@@ -190,7 +240,7 @@ ai-playbook deploy --agent all --tool claude
 ai-playbook disable <agent> [--tool <tool>] [--target-dir <path>] [--dry-run]
 ```
 
-Renames the agent file to `agent-name.agent.md.disabled`. The AI tool ignores files with that suffix; the command deletes nothing. `--dry-run` previews the rename without touching files.
+Renames the agent file to `agent-name.agent.md.disabled`. For Codex, deployed agents are TOML files, so the suffix lands on `.toml`: `agent-name.toml.disabled`. The AI tool ignores files with that suffix; the command deletes nothing. `--dry-run` previews the rename without touching files.
 
 ```bash
 ai-playbook disable xp-pair-programmer --tool claude
@@ -221,7 +271,7 @@ Output categories:
 
 Use `--json` in CI or scheduled health checks. The JSON payload contains `healthy`, `status`, `issues`, and `warnings`.
 
-**Exit codes** (default: preserves the legacy contract):
+**Exit codes** (default: preserves the original contract):
 
 - `0`: healthy, or deployed-with-warnings, or deployed-with-issues.
 - `1`: nothing deployed for this tool.
@@ -237,12 +287,12 @@ Use `--json` in CI or scheduled health checks. The JSON payload contains `health
 ### Rollback deployment
 
 ```bash
-ai-playbook rollback [--tool <tool>] [--target-dir <path>] [--force] [--dry-run]
+ai-playbook rollback [--tool <tool>] [--target-dir <path>] [--yes] [--dry-run]
 ```
 
 Restores the previous backed-up overlay deployment for the selected tool. Backups are tool-scoped: a Copilot backup is never used for `--tool claude`, and vice versa.
 
-Use `--force`, `-f` to skip the interactive confirmation prompt. Use `--dry-run` to see which backup would be restored without restoring anything.
+Use `--yes`, `-y` to skip the interactive confirmation prompt (matches the `deploy` command's flag); `--force`, `-f` is kept as a backward-compatible alias. Use `--dry-run` to see which backup would be restored without restoring anything.
 
 Rollback covers the managed overlay files that deploy backs up before each write: agents, knowledge base, skills, templates, commands, rules, and `.playbook-version`. It does not restore MCP settings or starter harness files; rerun `ai-playbook deploy` or the relevant `telemetry` command to repair those files.
 
@@ -280,7 +330,7 @@ Compares the deployed playbook fingerprint (recorded in `.playbook-version`) aga
 
 | Exit | Meaning |
 |---|---|
-| `0` | Up to date: deployed fingerprint matches source |
+| `0` | Up to date: full or intentional partial scope matches source |
 | `1` | Drift or tool mismatch detected: redeploy, or run with the tool recorded in `.playbook-version` |
 | `2` | Never deployed in this project (no `.playbook-version`) |
 
@@ -288,10 +338,12 @@ Output also surfaces:
 
 - The current `ai-playbook` package version.
 - The last deploy timestamp, tool, and language filter (when recorded).
+- The merged deployment scope and its selected agents/surfaces.
 - Deployed and source fingerprints side-by-side.
 - A tool-mismatch failure when `--tool` differs from the tool recorded in `.playbook-version`.
 
-Use `--json` when wiring this into CI. The exit-code contract is unchanged; the payload includes `status`, fingerprints, deploy metadata, selected tool, and notes.
+Use `--json` when wiring this into CI. The payload includes `status`,
+`deployment_scope`, fingerprints, deploy metadata, selected tool, and notes.
 
 CI usage:
 
@@ -314,23 +366,23 @@ Validates `.ai-playbook.toml`, configured pack paths, optional `pack.toml` metad
 
 ---
 
-### Manage telemetry Stop hook
+### Manage local telemetry hooks
 
 ```bash
-ai-playbook telemetry status  [--target-dir <path>]
-ai-playbook telemetry enable  [--target-dir <path>]
-ai-playbook telemetry disable [--target-dir <path>]
+ai-playbook telemetry status  [--tool <claude|codex>] [--target-dir <path>]
+ai-playbook telemetry enable  [--tool <claude|codex>] [--target-dir <path>]
+ai-playbook telemetry disable [--tool <claude|codex>] [--target-dir <path>]
 ```
 
-Manages the Claude `hooks.Stop` entry that appends per-session telemetry to `.claude/usage.jsonl`. `ai-playbook deploy --tool claude` configures the hook automatically; these subcommands are for adopters who deployed with `--no-harness`, removed the hook by hand, or want to verify the wiring.
+Manages the Claude `Stop` or Codex `SessionEnd` hook. The default tool is Claude for backward compatibility. The selected hook appends only `timestamp`, `source`, approximate `turns`, and best-effort `active_agent` to `.claude/usage.jsonl` or `.codex/usage.jsonl`. It never stores or transmits session IDs, transcript content or paths, prompts, outputs, models, token/cache counts, repository content, or credentials.
 
 | Subcommand | Effect |
 |---|---|
-| `status` | Prints the Stop hook status, where `settings.json` lives, whether `harness/telemetry.sh` is present, and the size of the usage log |
-| `enable` | Idempotent: adds the AI Playbook entry to `hooks.Stop` if missing. Preserves other hooks and unrelated settings. Warns if `harness/telemetry.sh` is not deployed yet. |
-| `disable` | Removes only the AI Playbook entry from `hooks.Stop`. Preserves other hooks and unrelated settings, then removes the empty `Stop` block. |
+| `status` | Prints the selected lifecycle-hook status, config location, harness presence, local-log location, and size |
+| `enable` | Idempotently adds only the AI Playbook hook. Preserves other hooks and unrelated settings. Warns if `harness/telemetry.sh` is absent. |
+| `disable` | Removes only the AI Playbook hook and preserves other hooks and unrelated settings. Existing logs remain local until deleted separately. |
 
-If `.claude/settings.json` contains malformed JSON, both `enable` and `disable` refuse to overwrite it and copy the broken file aside as `settings.json.broken-<timestamp>` for the adopter to repair.
+If the selected JSON config is malformed, `enable` and `disable` refuse to overwrite it, copy the broken file aside with a `.broken-<timestamp>` suffix, and exit `1` so automation cannot mistake the refusal for success. Codex project hooks must also be reviewed and trusted through `/hooks`.
 
 ---
 
@@ -378,6 +430,7 @@ Agents load knowledge-base files on demand based on their task and loading rules
 | `testing.md` | Short mandatory testing rules: TDD, AT standards, test quality, doubles, coverage, testability |
 | `testing-techniques.md` | Optional triggered testing techniques: mutation, property-based, contract, async/event-driven, Python pytest edge cases |
 | `design-patterns.md` | Hexagonal architecture, module depth + seams, DDD tactical + strategic, preferred patterns, anti-patterns, dual-message exceptions (CWE-209) |
+| `architecture-decisions.md` | Data-first workload profiles, quality-attribute trade-offs, simplest sufficient architecture, evidence for operational complexity |
 | `security.md` | Secrets, input validation (OWASP Top 10), JWT + timing attacks, STRIDE design-phase threat modeling, PII, dependencies, API security, CWE-209 error response pattern, AI safety (prompt injection, drift, accountability), review checklist |
 | `debugging.md` | Iron Law (root cause first), 4-phase loop, 9 ranked feedback-loop types, 3-Fix architectural stop rule, backward tracing, ranked falsifiable hypotheses, verification protocol, red flags |
 | `observability.md` | Log levels, structured logging, correlation IDs, sensitive data masking, health checks (live / ready) |
@@ -432,7 +485,7 @@ Adopter-local packs let you layer project-specific agents, skills, KB pages, or 
 
 For a step-by-step authoring walkthrough, see [How to write a pack](how-to/write-a-pack.md). The rest of this section is the reference.
 
-In v1, packs cover `agents`, `knowledge-base`, `skills`, and `templates`. The `commands/` directory is core-only: packs cannot ship custom shim content: but deploy auto-generates a standard slash-command shim for every pack agent, so pack agents are slash-invocable like core agents (shown as `(generated)` in deploy output).
+In v1, packs cover `agents`, `knowledge-base`, `skills`, and `templates`. The `commands/` directory is core-only: packs cannot ship custom shim content. Deploy still auto-generates a standard slash-command shim for every pack agent, so pack agents are slash-invocable like core agents (shown as `(generated)` in deploy output).
 
 ### Configuration: `.ai-playbook.toml`
 
@@ -519,7 +572,7 @@ Examples:
 
 ### Override warnings
 
-`ai-playbook deploy` prints a "Pack overrides" block whenever a pack replaces a previously seen file. Each line names the new origin, previous origin, and the relative path: so silent overrides are not possible:
+`ai-playbook deploy` prints a "Pack overrides" block whenever a pack replaces a previously seen file. Each line names the new origin, previous origin, and relative path, so overrides are visible:
 
 ```text
 Pack overrides:
@@ -529,7 +582,7 @@ Pack overrides:
 
 `ai-playbook doctor` surfaces the same overrides as warnings in its health report.
 
-To make overrides **reviewable rather than merely visible**, run `ai-playbook doctor --strict --tool <tool>` in CI: overrides are warnings, and `--strict` exits 1 on warnings: so a new pack override fails the pipeline until someone acknowledges it. This matters most for overrides of gate-bearing agents (release-captain, incident-responder), where a pack can otherwise weaken approval gates with only a deploy-time warning.
+To make overrides **reviewable rather than merely visible**, run `ai-playbook doctor --strict --tool <tool>` in CI. Overrides are warnings, and `--strict` exits 1 on warnings, so a new pack override fails the pipeline until someone acknowledges it. This matters most for overrides of gate-bearing agents (release-captain, incident-responder), where a pack can otherwise weaken approval gates with only a deploy-time warning.
 
 ### Operational guarantees
 
@@ -568,7 +621,7 @@ See [`docs/how-to/setup-multi-repo.md`](how-to/setup-multi-repo.md) for the mult
 
 ## Developing the CLI
 
-The CLI source lives in `src/deploy_ai_playbook/`, split across `cli.py`, `paths.py`, `config.py`, `fs.py`, `discovery.py`, `mcp.py`, and `backup.py`. The eval harness lives in `evals/run_eval.py`.
+The CLI source lives in `src/deploy_ai_playbook/`, split into layered modules: `paths`, `config`, `safety`, `console`, and `errors` (foundation); `targets`, `discovery`, `fs`, `mcp`, and `telemetry` (middle); `backup`, `upgrade`, `doctor`, and `services/*` (service); with `cli.py` and `deploy_render.py` on top (see [Architecture § CLI Architecture](architecture.md#cli-architecture)). The eval harness lives in `evals/run_eval.py`.
 
 ```bash
 # Install with dev dependencies
@@ -660,9 +713,9 @@ Add these steps between the pinned checkout step and the `make quality` step.
 |---|---|
 | `NO_COLOR=1` | Disables ANSI color in all CLI output: honored automatically by the Rich console used internally. Standard convention from [no-color.org](https://no-color.org/); set in CI logs or accessibility-sensitive terminals. |
 | `TERM=dumb` | Same effect as `NO_COLOR=1`; honored by Rich. |
-| `CLAUDE_PROJECT_DIR` | Read by `harness/telemetry.sh` to locate `.claude/usage.jsonl` when the Stop hook fires from a project root that differs from the working directory. |
-| `CLAUDE_USAGE_MAX_BYTES` | Override the telemetry log rotation threshold (default `1048576` = 1 MiB). Set to `0` to disable rotation entirely. |
-| `CLAUDE_USAGE_KEEP_ARCHIVES` | Number of rotated archives to keep (default `12`). Older archives are pruned. |
+| `AI_PLAYBOOK_PROJECT_DIR` | Optional project-root override for `harness/telemetry.sh`. Otherwise the Claude hook uses `CLAUDE_PROJECT_DIR`; Codex falls back to the Git root. |
+| `AI_PLAYBOOK_USAGE_MAX_BYTES` | Override the local telemetry-log rotation threshold (default `1048576` = 1 MiB). Set to `0` to disable rotation. `CLAUDE_USAGE_MAX_BYTES` remains a compatibility alias. |
+| `AI_PLAYBOOK_USAGE_KEEP_ARCHIVES` | Number of rotated local telemetry archives to keep (default `12`). `CLAUDE_USAGE_KEEP_ARCHIVES` remains a compatibility alias. |
 | `EVAL_JUDGE_MODEL` | Override the LLM judge model used by `evals/run_eval.py judge` and `eval-drift.yml`. Defaults to the most specific stable id for the pinned judge (`claude-sonnet-4-6`, which ships as an alias with no dated form); rotation cadence in [`evals/rubrics/README.md`](../evals/rubrics/README.md). |
 | `ANTHROPIC_API_KEY` | Required only when running `evals/run_eval.py judge`. The structural eval path does not need it. |
 | `CLAUDE_SKIP_TEACHBACK` | Bypass the Teach-back commit-msg gate for emergency commits. Use sparingly; documented in `harness/check-teachback.sh`. |

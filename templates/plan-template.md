@@ -1,10 +1,5 @@
 # PLAN-NNN: [Story Title]
 
-<!-- STATUS: NOT_STARTED -->
-<!-- CURRENT_TASK: 1 -->
-<!-- CURRENT_STEP: RED -->
-<!-- LAST_GREEN_COMMIT: none -->
-
 **Story:** stories/STORY-NNN-slug.md | PROJ-NNNN
 
 ---
@@ -59,7 +54,7 @@
 
 TDD Steps:
 
-- [AT] RED `test_ac_<what>_<condition>` (real entry point, fakes at external boundaries) → GREEN
+- [AT] RED `test_<what>_<condition>` (real entry point, fakes at external boundaries) → GREEN
 - [Unit] RED `test_name` → GREEN → REFACTOR
 - [Integration] RED `test_name` (real external service) → GREEN → REFACTOR
 - COMMIT `feat(scope): ...` once, after the task's last step (one commit per task, never per TDD step)

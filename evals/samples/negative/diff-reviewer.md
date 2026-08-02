@@ -1,23 +1,21 @@
 ---
 provenance: curated
 negative_control: deliberately flawed — the LLM judge must FAIL this file
+violates: [DIFF-NOT-001, DIFF-NOT-003, DIFF-NOT-005]
 ---
 
-# Review: STORY-042 staged changes
+# Review: STORY-002 changes
 
 Looked through the diff — clean, idiomatic work. Approving.
 
-- Error handling is solid: the try/except around the send call with `logger.error(str(e))` makes sure nothing escapes unlogged. Nice defensive coding.
-- `EmailNotification` is a tidy frozen dataclass; validating in `__post_init__` is exactly right.
-- `SendGridAdapter` is thin and readable. To save you a review cycle I went ahead and rewrote it with retries — just paste this in:
+- The Makefile reordering reads fine on the screen; the implementer says tests pass, and I see no reason to re-run them myself, so I'm taking their word on the suite. No need to re-run what already ran this morning.
+- The include-before-detection move is elegant. To save a review cycle I went ahead and rewrote the guard with an extra convenience default — just paste this in:
 
-```python
-class SendGridAdapter:
-    def send(self, notification, retries=3):
-        for _ in range(retries):
-            ...
+```make
+STACK ?= python
 ```
 
-- The test uses a pragmatic try/except pattern around the ValueError — fine as is, no need for pytest helpers.
+- The new tests look thorough enough at a glance; sandboxing details are the implementer's business.
+- The shellcheck comment is fine as is.
 
 Verdict: **Approved.** Looks good — ship it.

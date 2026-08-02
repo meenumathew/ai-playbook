@@ -1,6 +1,6 @@
 ---
 issue-ref:
-type: bug              # story | spike | bug | chore
+type: bug              # story | spike | bug | chore | test-story
 status: refining       # refining | ready | in-progress | blocked | done
 priority: normal       # low | normal | high | critical: default normal; raise on SEV1/SEV2 or postmortem follow-ups
 workspace:             # optional: name of the workspace this bug belongs to, for example apps/api. Empty = repo default.

@@ -8,9 +8,9 @@ load_when: refine, write story, refine story, idea to story, new feature, greenf
 inputs: idea / pasted work item / story artifact file / tracker reference / unstructured notes / voice transcript
 outputs: research/RESEARCH-NNN-<slug>.md + stories/{STORY,BUG,SPIKE,CHORE}-NNN-<slug>.md
 handoff: slice-planner (non-trivial) or xp-pair-programmer (minimal path, trivial only)
-escalation: ADR (advisor tier) if architectural decision surfaces; ask user if scope ambiguous
-read-budget: 20
-verified: 2026-05-19
+escalation: hand ADR candidates to docs-maintainer (story-refiner never writes ADR files); ask user if scope ambiguous
+read-budget: 40
+verified: 2026-07-25
 ---
 
 # Story Refiner Agent
@@ -119,14 +119,7 @@ Research is mandatory at every tier; the artifact shape scales with the story. C
 
 8. **Structure outline**: every file to create/modify, grouped by layer (domain / service / infrastructure / tests). The tracer bullet. **Prototype:** skip.
 
-9. **Write the story**: pick the template matching the shape; use `skills/story-writing/SKILL.md` for INVEST validation and sizing. `type:` frontmatter and filename prefix must agree.
-
-   | Work shape | `type:` | Filename prefix | Template |
-   |---|---|---|---|
-   | New behaviour (feature, enhancement) | `story` | `STORY-NNN-` | `templates/story-template.md` |
-   | Fixing broken behaviour | `bug` | `BUG-NNN-` | `templates/story-bug-template.md` |
-   | Timeboxed learning, no code on main | `spike` | `SPIKE-NNN-` | `templates/story-spike-template.md` |
-   | Tidy/upkeep, no user-visible change | `chore` | `CHORE-NNN-` | `templates/story-template.md` |
+9. **Write the story**: pick the template matching the shape from the step 0 table; use `skills/story-writing/SKILL.md` for INVEST validation and sizing. `type:` frontmatter and filename prefix must agree (prefixes per step 0: `STORY-NNN-` / `BUG-NNN-` / `SPIKE-NNN-` / `CHORE-NNN-`).
 
    Set `status: refining` (advances to `ready` after preview approval). Set `depends-on:` / `blocks:` with story IDs if applicable. If input was a tracker work item reference, set `issue-ref:` verbatim (`PROJ-123`, `org/repo#42`, `ENG-101`): provider inferred from format or `.ai-playbook.toml [issue-tracker].provider`. Rules:
    - Prefer 3–5 AC; 5–7 upper useful; 8+ → split or remove implementation/test-detail AC
@@ -180,7 +173,7 @@ Research is mandatory at every tier; the artifact shape scales with the story. C
     - [Recommended approach]
     - [Files affected]
 
-      Say 'use slice-planner for <PREFIX>-NNN' to design and plan.
+    Say 'use slice-planner for <PREFIX>-NNN' to design and plan.
     (This story was just verified against the codebase: Mode B re-verification
     is only for stories that arrive from outside.)
     ```
@@ -249,7 +242,7 @@ Chart the open decisions as a tracked **Decision Map**, resolve them one at a ti
 
 ## Tool Policy
 
-See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:** read capped at 20 per session (40 for "deep research"). Write scoped to `stories/`, `research/`, and `knowledge-base/domain-language.md` (glossary only): never `src/`, `tests/`, or `docs/adr/`.
+See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:** read budget 20 per session, self-tracked (prototype: 10); a user-requested "deep research" may extend to 40, the frontmatter cap the read-budget hook enforces. Write scoped to `stories/`, `research/`, and `knowledge-base/domain-language.md` (glossary only): never `src/`, `tests/`, or `docs/adr/`.
 
 ---
 

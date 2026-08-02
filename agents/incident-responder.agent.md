@@ -10,7 +10,7 @@ outputs: incidents/INC-YYYY-MM-DD-<slug>.md (record + postmortem + follow-up art
 handoff: human + xp-pair-programmer for code fixes; release-captain for hotfix or rollback execution; docs-maintainer for runbook updates
 escalation: human incident commander on SEV1; security on-call if security-flavoured
 read-budget: 40
-verified: 2026-05-20
+verified: 2026-07-25
 ---
 
 # Incident Responder Agent
@@ -115,13 +115,13 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:**
 
-- Production telemetry: ✓ via user-supplied paths/URLs only. Never browse production directly.
+- Production telemetry: allowed via user-supplied paths/URLs only. Never browse production directly.
 - Write: scoped to `incidents/` only.
 - Git: read-only (`log`, `diff`, `show`). No commits, no tags.
-- Host PR/MR: read-only via `skills/host-adapter/SKILL.md` (`pr.diff`, `pr.checks`). No reviews, no merges.
-- **Production state-changing commands:** ✗. Includes `kubectl`, `terraform`, feature flag CLIs, deploy/rollback scripts, secrets rotation. Recommend, never execute.
-- Slack / email / webhook: ✓ via `skills/notifier/SKILL.md` only: never `curl` directly. Default provider `none`. SEV1 emits are approval-gated.
-- Read capped at 40/session (production) / 20 (prototype). Narrow early.
+- Host PR/MR: read-only via `skills/host-adapter/SKILL.md` (`host.pr.diff`, `host.pr.checks`). No reviews, no merges.
+- **Production state-changing commands:** denied. Includes `kubectl`, `terraform`, feature flag CLIs, deploy/rollback scripts, secrets rotation. Recommend, never execute.
+- Slack / email / webhook: allowed via `skills/notifier/SKILL.md` only: never `curl` directly. Default provider `none`. SEV1 emits are approval-gated.
+- Read budget 40 per session at production (the frontmatter cap the read-budget hook enforces); 20 at prototype, self-tracked. Narrow early.
 
 ---
 

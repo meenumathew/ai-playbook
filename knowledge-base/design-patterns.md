@@ -4,19 +4,19 @@ size: medium
 tldr: Domain inward; pure domain, no framework imports; ports/adapters; pick patterns only when they solve a real problem.
 load_when: architecture, domain, service boundary, ports, adapters, hexagonal, DDD, dependency direction, anti-pattern
 audience: all
-canonical_for: architecture layers, hexagonal architecture, DDD tactical patterns, dependency inversion, module depth and seams, vendor-neutral operation IDs, design anti-patterns, dual-message error handling
-cross_refs: philosophy.md, refactoring.md, security.md
+canonical_for: architecture layers, hexagonal architecture, DDD tactical patterns, dependency inversion, module depth and seams, vendor-neutral operation IDs, design anti-patterns
+cross_refs: philosophy.md, refactoring.md, security.md, architecture-decisions.md
 verified: 2026-07-17
 ---
 
 # Design Patterns
 
-Use patterns when they solve a real problem; prefer the simplest solution otherwise. For simple CRUD or glue code: clear boundaries and testability without forcing layers.
+Use patterns when they solve a real problem; prefer the simplest solution otherwise. For simple CRUD or glue code: clear boundaries and testability without forcing layers. System-level choices (deployment model, process boundaries, data ownership) need a workload profile and decision evidence before pattern selection: `architecture-decisions.md`.
 
 ## Agent Use
 
 - **Read first:** Architecture Layers, Module Depth and Seams, Preferred Patterns, Anti-Patterns.
-- **Load deeper only on trigger:** DDD tactical/strategic patterns, event-driven guidance, or framework-specific convention conflicts.
+- **Load deeper only on trigger:** DDD tactical/strategic patterns, event-driven guidance, or framework-specific convention conflicts; architecture-impacting decisions: `architecture-decisions.md`.
 
 ---
 
@@ -186,7 +186,7 @@ Adopter-facing artifacts name **capabilities**, not products, by default: same r
 | Pattern | Tier | What it is | Agent action |
 |---------|------|-----------|-------------|
 | **Bounded Context** | core | Explicit boundary where a domain model is valid | Same word, different meaning → flag it, define the boundary. See `philosophy.md` § Bounded Contexts. |
-| **Anti-Corruption Layer (ACL)** | core | Translation layer between your domain and an external/legacy model | Integrating with any external system → require ACL to prevent foreign concepts leaking in |
+| **Anti-Corruption Layer (ACL)** | core | Translation layer between your domain and an external or inherited model | Integrating with any external system → require ACL to prevent foreign concepts leaking in |
 | **Context Map** | advanced | Diagram documenting how bounded contexts relate | Before building integrations across multiple bounded contexts |
 | **Shared Kernel** | advanced | A subset of the model shared between two teams | Changed only by explicit agreement: minimise its size |
 
@@ -216,9 +216,7 @@ See `knowledge-base/testing-techniques.md` § Async and Event-Driven Test Patter
 
 ## Error Handling: Dual-Message Exceptions
 
-Custom base exception carries two fields: `message` (client-safe, generic: "Database service temporarily unavailable") and `internal_message` (full diagnostics: "DynamoDB get_item failed for user_id=X, tenant=Y: ConditionalCheckFailedException"). Constructor enforces both. Each subclass sets its default client message. Handlers log `internal_message` with `exc_info=True`, return only `message`.
-
-Makes info-leak prevention structural instead of per-handler sanitization. Aligns with CWE-209.
+Canonical: `security.md` § Error Response Pattern: the client-safe `message` vs `internal_message` field split, handler rules, and the review checklist live there. The design hook kept here: the project base exception enforces both fields in its constructor and each subclass sets its default client message, so info-leak prevention is structural instead of per-handler sanitization.
 
 **Enforcement:** flag exception classes exposing diagnostic details in the client-facing message, or handlers returning `internal_message` / `str(e)`.
 

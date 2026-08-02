@@ -1,40 +1,26 @@
 # Eval Input: XP Pair Programmer
 
-## Plan
+## Grounding
 
-**File:** `plans/PLAN-042-order-email-notifications.md`
+This scenario targets the ai-playbook repository itself: the bug is real (found by the repo's own code-inspector audit and reproduced live), the files are shipped harness sources, and the tests land in the repo's own acceptance suite — the precondition for a `provenance: captured` baseline (see `evals/samples/README.md` § Refreshing a sample, capture prerequisite).
 
-**Related story:** `stories/STORY-042-order-email-notifications.md`
+## Story
+
+**Type:** bug (regression-test-first: slice 1 is the failing regression test encoding the reproduction; the fix turns it green)
+
+**The bug (verified live):** `harness/Makefile` tells adopters on unrecognised stacks to "set STACK and *_CMD vars in Makefile.local", but the unknown-stack `$(error)` fires at parse time before `-include Makefile.local` is reached, so the documented rescue path can never work. Reproduced: a `Makefile.local` defining `STACK` and all five `*_CMD` vars still exits 2. A related audit finding: the `# shellcheck disable=SC2086` in `harness/telemetry.sh` carries no inline justification, violating the no-suppression-without-justification rule.
 
 ### Acceptance Criteria
 
-1. When an order is marked shipped with a customer email address, the customer receives one shipment notification.
-2. When an order is marked shipped without a customer email address, no notification is sent and the order workflow still completes.
-3. When the email provider returns a transient failure, the failure is logged with order context and the shipment workflow does not crash.
+1. Given an unrecognised stack and a `Makefile.local` defining `STACK` and command vars, when a quality target runs, then the overrides are used and no unknown-stack error fires
+   - Test: `test_makefile_local_rescues_unknown_stack`
+2. Given a recognised stack sentinel (for example `pyproject.toml`), when a quality target runs, then stack detection still selects it and behaves as before
+   - Test: `test_stack_detection_still_selects_known_stack`
+3. Given the harness shell scripts, when suppression pragmas are scanned, then every `shellcheck disable` carries an inline justification comment
+   - Test: `test_shellcheck_disables_carry_justification`
 
-### Task 1: Domain — EmailNotification value object + OrderShipped event handler
+### Constraints
 
-- **Depends on:** none
-- **TDD steps:**
-  - `test_email_notification_requires_valid_recipient` (Unit)
-  - `test_order_shipped_handler_creates_email_notification` (Unit)
-
-### Task 2: Infrastructure — SendGrid email adapter
-
-- **Depends on:** Task 1
-- **TDD steps:**
-  - `test_sendgrid_adapter_sends_email` (Integration)
-  - `test_sendgrid_adapter_logs_failure_without_raising` (Integration)
-
-### Task 3: Service — Wire handler to notification service
-
-- **Depends on:** Task 1, Task 2
-- **TDD steps:**
-  - `test_notification_service_skips_when_no_email` (Unit)
-  - `test_order_shipped_triggers_email_notification_end_to_end` (Integration)
-
-### Progress
-
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
+- No behaviour change for recognised stacks; unknown stack with no override must still fail with the guidance message
+- Tests follow the repo's acceptance-suite conventions (`tests/acceptance/`, `repo_contract` marker, sandboxed `make` runs)
+- One commit per task, approval-gated; no pushes

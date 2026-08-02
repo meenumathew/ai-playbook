@@ -1,12 +1,12 @@
 """Tests for tools/check-claude-md-size.py.
 
 The check enforces a line-count budget on CLAUDE.md so always-loaded
-context cannot grow without deliberate review against RFC-0001's
-classification criteria. These tests cover:
+context cannot grow without deliberate review against the stay-or-move
+rule in the script's module docstring. These tests cover:
 
 - A clean repo passes (regression test for the live state).
 - An over-threshold file fails with a clear message.
-- The failure message cites RFC-0001 so contributors know why.
+- The failure message cites the rationale so contributors know why.
 - The CLAUDE_SKIP_CLAUDE_MD_SIZE escape hatch works.
 - The tool resolves the default CLAUDE.md path from its own location,
   so it works no matter where the user runs it from.
@@ -35,7 +35,7 @@ def _load_script_module():
 
 _SCRIPT = _load_script_module()
 MAX_LINES = int(_SCRIPT.MAX_LINES)
-RFC_REF = str(_SCRIPT.RFC_REF)
+RATIONALE_REF = str(_SCRIPT.RATIONALE_REF)
 
 
 def run_check(
@@ -47,7 +47,7 @@ def run_check(
     if env_overrides:
         env.update(env_overrides)
     args = [sys.executable, str(SCRIPT), *(str(p) for p in paths)]
-    return subprocess.run(  # noqa: S603 — args are constructed from trusted constants
+    return subprocess.run(  # noqa: S603 - args are constructed from trusted constants
         args,
         capture_output=True,
         text=True,
@@ -65,7 +65,7 @@ def write_oversized_file(tmp_path: Path, lines: int) -> Path:
 
 
 def test_claude_md_size_clean_repo_passes() -> None:
-    """Live CLAUDE.md must be within budget — regression guard."""
+    """Live CLAUDE.md must be within budget: regression guard."""
     result = run_check()
     assert result.returncode == 0, result.stderr
 
@@ -81,16 +81,16 @@ def test_claude_md_size_over_threshold_fails(tmp_path: Path) -> None:
     assert str(path) in result.stderr
 
 
-def test_claude_md_size_failure_message_cites_rfc(tmp_path: Path) -> None:
-    """Failure message points contributors at the canonical RFC reference.
+def test_claude_md_size_failure_message_cites_rationale(tmp_path: Path) -> None:
+    """Failure message points contributors at the canonical rationale.
 
-    The script owns the citation string in `RFC_REF`; the test reuses it so
-    rewording the citation in the script doesn't require a parallel test edit.
+    The script owns the citation string in `RATIONALE_REF`; the test reuses it
+    so rewording the citation in the script doesn't require a parallel test edit.
     """
     path = write_oversized_file(tmp_path, MAX_LINES + 1)
     result = run_check(path)
     assert result.returncode == 1
-    assert RFC_REF in result.stderr
+    assert RATIONALE_REF in result.stderr
 
 
 def test_claude_md_size_skip_flag_bypasses_check(tmp_path: Path) -> None:

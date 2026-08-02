@@ -1,9 +1,9 @@
-"""CLI for deploying ai-playbook agents to Claude, Copilot, Cursor, or Kiro.
+"""CLI for deploying ai-playbook agents to Claude, Copilot, Codex, Cursor, or Kiro.
 
-Implementation is split across small modules — `paths`/`config`/`safety`/
+Implementation is split across small modules: `paths`/`config`/`safety`/
 `console` (foundation), `targets`/`discovery`/`fs`/`mcp`/`telemetry`
 (middle), `backup`/`upgrade`/`doctor`/`services/*` (service), and
-`deploy_render` (deploy presentation) — see tests/unit/test_architecture.py
+`deploy_render` (deploy presentation): see tests/unit/test_architecture.py
 for the layer map. This module wires up the Typer commands and re-exports
 the public symbols so existing callers that import from
 `deploy_ai_playbook.cli` keep working.
@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated, NoReturn, assert_never
 
 import typer
 from rich.table import Table
@@ -27,7 +27,7 @@ from rich.text import Text
 # casing here is deliberate.
 from deploy_ai_playbook import __version__ as PACKAGE_VERSION  # noqa: N812
 
-# Re-exports — keep public API stable for tests and external callers.
+# Re-exports: keep public API stable for tests and external callers.
 # `__all__` documents the public surface and lets ruff understand that
 # imports below which look unused at this module level are intentional
 # re-exports for tests/external callers.
@@ -81,6 +81,7 @@ from deploy_ai_playbook.deploy_render import (
 from deploy_ai_playbook.deploy_render import (
     write_deploy_version as _write_deploy_version,
 )
+from deploy_ai_playbook.deployment_record import DeploymentRecord, DeploymentScope, ScopeKind
 from deploy_ai_playbook.discovery import (
     OVERLAY_DIRS,
     OVERLAY_TITLES,
@@ -122,6 +123,7 @@ from deploy_ai_playbook.paths import (
 from deploy_ai_playbook.safety import (
     UnsafeDestinationError,
     WriteAccessError,
+    rename_safely,
     write_text_safely,
 )
 from deploy_ai_playbook.services.artifacts import (
@@ -131,6 +133,11 @@ from deploy_ai_playbook.services.artifacts import (
     artifact_gitignore_content,
     artifact_policy_status,
     collect_artifact_rows,
+)
+from deploy_ai_playbook.services.context_report import (
+    ContextEstimateReport,
+    ContextReportError,
+    build_context_report,
 )
 from deploy_ai_playbook.services.deploy import (
     AGENT_FILE_SUFFIX,
@@ -151,6 +158,7 @@ from deploy_ai_playbook.upgrade import (
     UpgradeStatus,
     check_upgrade,
     read_version_file,
+    stale_carryover_fingerprint,
 )
 
 __all__ = [
@@ -210,7 +218,7 @@ DONE_MESSAGE = "\n[bold green]Done.[/bold green]"
 
 app = typer.Typer(
     name="ai-playbook",
-    help="Deploy ai-playbook agents and knowledge base to Claude, Copilot, Cursor, or Kiro",
+    help="Deploy ai-playbook agents and knowledge base to Claude, Copilot, Codex, Cursor, or Kiro",
     epilog=(
         "Quick start: ai-playbook deploy --tool claude --dry-run  "
         "(then drop --dry-run when the preview looks right). "
@@ -246,10 +254,10 @@ def _root(
         ),
     ] = False,
 ) -> None:
-    """ai-playbook — deploy AI workflow agents to Claude, Copilot, Cursor, or Kiro."""
+    """ai-playbook: deploy AI workflow agents to Claude, Copilot, Codex, Cursor, or Kiro."""
 
 
-# Back-compat alias — the canonical implementation lives in paths.resolve_project_root.
+# Back-compat alias: the canonical implementation lives in paths.resolve_project_root.
 _resolve_project_root = resolve_project_root
 
 
@@ -283,6 +291,11 @@ def _exit_config_error(exc: ConfigError) -> NoReturn:
     raise typer.Exit(1) from None
 
 
+def _exit_filesystem_error(exc: UnsafeDestinationError | WriteAccessError) -> NoReturn:
+    error_console.print(f"[red]Error:[/red] {exc}")
+    raise typer.Exit(1) from None
+
+
 def _load_pack_config_or_exit(project_root: Path) -> list[Source]:
     try:
         return load_pack_config(project_root)
@@ -295,17 +308,6 @@ def _load_quality_tier_config_or_exit(project_root: Path) -> QualityTierConfig:
         return load_quality_tier_config(project_root)
     except ConfigError as exc:
         _exit_config_error(exc)
-
-
-def _deployed_language_filter(project_root: Path) -> str | None:
-    """Read the language filter recorded by the last deploy, if any."""
-    parsed = read_version_file(project_root / VERSION_FILE)
-    if parsed is None or parsed.language is None:
-        return None
-    value = parsed.language.lower()
-    if value in ("", "all"):
-        return None
-    return value if value in LANGUAGE_FILES else None
 
 
 def _print_change_section(title: str, location: Path, changes: list[tuple[str, str]]) -> bool:
@@ -322,10 +324,10 @@ def _print_doctor_report(
 ) -> None:
     console.print(f"\n[bold]Playbook Doctor[/bold] — {project_root} ({tool.value})\n")
     if not issues and not warnings:
-        console.print("[bold green]✓ All healthy[/bold green]: deployment is up to date\n")
+        console.print("[bold green]All healthy[/bold green]: deployment is up to date\n")
         return
-    _print_problem_list("Issues", "red", "✗", issues)
-    _print_problem_list("Warnings", "yellow", "⚠", warnings)
+    _print_problem_list("Issues", "red", "ISSUE:", issues)
+    _print_problem_list("Warnings", "yellow", "WARNING:", warnings)
     console.print(f"\n[dim]Fix with: ai-playbook deploy --agent all --tool {tool.value}[/dim]")
 
 
@@ -339,12 +341,12 @@ def _print_problem_list(title: str, color: str, marker: str, items: list[str]) -
 
 
 # ---------------------------------------------------------------------------
-# CLI commands — each does one thing
+# CLI commands: each does one thing
 # ---------------------------------------------------------------------------
 
 # Shared options reused across commands
 _tool_option = typer.Option(
-    Tool.claude, "--tool", "-T", help="Target tool: claude, copilot, cursor, kiro"
+    Tool.claude, "--tool", "-T", help="Target tool: claude, copilot, codex, cursor, kiro"
 )
 _target_dir_option = typer.Option(
     None, "--target-dir", "-t", help="Target project directory (defaults to current directory)"
@@ -384,20 +386,22 @@ def init(
     """
     project_root = _resolve_project_root(target_dir)
     console.print(f"\n[bold]Init →[/bold] {project_root}\n")
-    for directory in ARTIFACT_DIRECTORIES:
-        keep_file = project_root / directory / ".gitkeep"
-        if keep_file.exists():
-            console.print(f"  [dim]exists, kept[/dim] {directory}/")
-            continue
-        keep_file.parent.mkdir(parents=True, exist_ok=True)
-        keep_file.write_text("", encoding="utf-8")
-        console.print(f"  [green]created[/green] {directory}/")
-    config_path = project_root / PACK_CONFIG_FILE
-    if config_path.exists():
-        console.print(f"  [dim]exists, kept[/dim] {PACK_CONFIG_FILE}")
-    else:
-        config_path.write_text(INIT_CONFIG_STUB, encoding="utf-8")
-        console.print(f"  [green]created[/green] {PACK_CONFIG_FILE}")
+    try:
+        for directory in ARTIFACT_DIRECTORIES:
+            keep_file = project_root / directory / ".gitkeep"
+            if keep_file.exists():
+                console.print(f"  [dim]exists, kept[/dim] {directory}/")
+                continue
+            write_text_safely(keep_file, "", project_root)
+            console.print(f"  [green]created[/green] {directory}/")
+        config_path = project_root / PACK_CONFIG_FILE
+        if config_path.exists():
+            console.print(f"  [dim]exists, kept[/dim] {PACK_CONFIG_FILE}")
+        else:
+            write_text_safely(config_path, INIT_CONFIG_STUB, project_root)
+            console.print(f"  [green]created[/green] {PACK_CONFIG_FILE}")
+    except (UnsafeDestinationError, WriteAccessError) as exc:
+        _exit_filesystem_error(exc)
     console.print(
         "\nNext: [bold]ai-playbook deploy --agent all --tool <tool>[/bold] to deploy the playbook."
     )
@@ -431,6 +435,72 @@ def list_agents(
     console.print(table)
 
 
+@app.command(name="context-report")
+def context_report(
+    agent: Annotated[
+        str,
+        typer.Option(
+            "--agent",
+            "-a",
+            help="Agent name, comma-separated names, or 'all'",
+        ),
+    ] = "all",
+    target_dir: str | None = _target_dir_option,
+    as_json: bool = _json_option,
+) -> None:
+    """Estimate static playbook context without claiming provider token usage."""
+    source_root = get_source_root()
+    project_root = _resolve_project_root(target_dir)
+    packs = _load_pack_config_or_exit(project_root)
+    discovered = discover_layered(source_root, packs)
+    agent_entries = {
+        entry.relative.name.removesuffix(AGENT_FILE_SUFFIX): entry.src_path
+        for entry in discovered.files
+        if entry.relative.parts[0] == "agents"
+    }
+    selected = _resolve_agent_names_or_exit(agent, agent_entries)
+    try:
+        report = build_context_report(source_root, discovered.files, selected)
+    except ContextReportError as exc:
+        error_console.print(f"[red]Context report failed:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    if as_json:
+        _print_json(report.as_dict())
+        return
+    _print_context_report(report)
+
+
+def _print_context_report(report: ContextEstimateReport) -> None:
+    fixed_characters = sum(surface.characters for surface in report.fixed)
+    fixed_tokens = (fixed_characters + 3) // 4
+    fixed_paths = ", ".join(surface.path for surface in report.fixed)
+    console.print(
+        "\n[bold]Static context estimate[/bold]\n"
+        f"  Fixed surface: {fixed_characters:,} characters / ~{fixed_tokens:,} tokens "
+        f"({fixed_paths})\n"
+    )
+    table = Table(title="Agent invocation surface")
+    table.add_column("Agent", style="cyan")
+    table.add_column("Origin", style="dim")
+    table.add_column("Characters", justify="right")
+    table.add_column("Est. tokens", justify="right")
+    table.add_column("Preloads")
+    for agent in report.agents:
+        table.add_row(
+            agent.agent,
+            agent.origin,
+            f"{agent.total_characters:,}",
+            f"~{agent.estimated_tokens:,}",
+            ", ".join(surface.path for surface in agent.preloads) or "none",
+        )
+    console.print(table)
+    console.print(
+        "\n[dim]Estimate only, not billable usage: ceil(characters / 4). "
+        "Provider system prompts, conversation, tool schemas, and files read later "
+        "are excluded.[/dim]"
+    )
+
+
 @app.command()
 def status(
     tool: Tool = _tool_option,
@@ -439,6 +509,7 @@ def status(
 ) -> None:
     """Show what is currently deployed in the target directory."""
     project_root = _resolve_project_root(target_dir)
+    target = get_target_adapter(tool)
     agents_dir = get_agents_dir(project_root, tool)
     if not agents_dir.exists():
         if as_json:
@@ -457,14 +528,14 @@ def status(
     default_quality_tier = _deployed_quality_tier(project_root, tool)
     all_files = sorted(
         [
-            *agents_dir.glob(f"*{AGENT_FILE_SUFFIX}"),
-            *agents_dir.glob(f"*{AGENT_FILE_SUFFIX}{DISABLED_SUFFIX}"),
+            *agents_dir.glob(f"*{target.agent_output_suffix}"),
+            *agents_dir.glob(f"*{target.agent_output_suffix}{DISABLED_SUFFIX}"),
         ]
     )
     rows: list[dict[str, str]] = []
     for f in all_files:
-        name = f.name.replace(f"{AGENT_FILE_SUFFIX}{DISABLED_SUFFIX}", "").replace(
-            AGENT_FILE_SUFFIX, ""
+        name = f.name.replace(f"{target.agent_output_suffix}{DISABLED_SUFFIX}", "").replace(
+            target.agent_output_suffix, ""
         )
         quality_tier, quality_tier_source, quality_tier_label = _agent_quality_tier_details(
             name,
@@ -705,6 +776,7 @@ def disable(
     """Disable deployed agent(s) without removing them."""
     source_root = get_source_root()
     project_root = _resolve_project_root(target_dir)
+    target = get_target_adapter(tool)
     agents_dir = get_agents_dir(project_root, tool)
     all_agents = _discover_configured_agents(source_root, project_root)
     names = _resolve_agent_names_or_exit(agent, all_agents, label="agent")
@@ -712,18 +784,21 @@ def disable(
     console.print(f"\n[bold]Disabling agents[/bold] ({tool.value})\n")
     if dry_run:
         console.print("[yellow]Dry run — no files will be renamed[/yellow]\n")
-    for name in names:
-        path, is_disabled = find_deployed_agent(agents_dir, name)
-        if path is None:
-            console.print(f"  [yellow]not deployed[/yellow] {name}")
-        elif is_disabled:
-            console.print(f"  [dim]already disabled[/dim] {name}")
-        elif dry_run:
-            console.print(f"  [yellow]would disable[/yellow] {name}")
-        else:
-            disabled_path = path.parent / (path.name + DISABLED_SUFFIX)
-            path.rename(disabled_path)
-            console.print(f"  [yellow]disabled[/yellow] {name}")
+    try:
+        for name in names:
+            path, is_disabled = find_deployed_agent(agents_dir, name, target.agent_output_suffix)
+            if path is None:
+                console.print(f"  [yellow]not deployed[/yellow] {name}")
+            elif is_disabled:
+                console.print(f"  [dim]already disabled[/dim] {name}")
+            elif dry_run:
+                console.print(f"  [yellow]would disable[/yellow] {name}")
+            else:
+                disabled_path = path.parent / (path.name + DISABLED_SUFFIX)
+                rename_safely(path, disabled_path, project_root)
+                console.print(f"  [yellow]disabled[/yellow] {name}")
+    except (UnsafeDestinationError, WriteAccessError) as exc:
+        _exit_filesystem_error(exc)
     console.print(DONE_MESSAGE)
     console.print(f"[dim]Re-enable with: ai-playbook enable {agent} --tool {tool.value}[/dim]")
 
@@ -744,6 +819,7 @@ def enable(
     """Re-enable previously disabled agent(s)."""
     source_root = get_source_root()
     project_root = _resolve_project_root(target_dir)
+    target = get_target_adapter(tool)
     agents_dir = get_agents_dir(project_root, tool)
     all_agents = _discover_configured_agents(source_root, project_root)
     names = _resolve_agent_names_or_exit(agent, all_agents, label="agent")
@@ -751,19 +827,22 @@ def enable(
     console.print(f"\n[bold]Enabling agents[/bold] ({tool.value})\n")
     if dry_run:
         console.print("[yellow]Dry run — no files will be renamed[/yellow]\n")
-    for name in names:
-        path, is_disabled = find_deployed_agent(agents_dir, name)
-        if path is None:
-            hint = f"ai-playbook deploy --agent {name} --tool {tool.value}"
-            console.print(f"  [yellow]not deployed[/yellow] {name} — run: {hint}")
-        elif not is_disabled:
-            console.print(f"  [dim]already active[/dim] {name}")
-        elif dry_run:
-            console.print(f"  [green]would enable[/green] {name}")
-        else:
-            active_path = agents_dir / f"{name}{AGENT_FILE_SUFFIX}"
-            path.rename(active_path)
-            console.print(f"  [green]enabled[/green] {name}")
+    try:
+        for name in names:
+            path, is_disabled = find_deployed_agent(agents_dir, name, target.agent_output_suffix)
+            if path is None:
+                hint = f"ai-playbook deploy --agent {name} --tool {tool.value}"
+                console.print(f"  [yellow]not deployed[/yellow] {name} — run: {hint}")
+            elif not is_disabled:
+                console.print(f"  [dim]already active[/dim] {name}")
+            elif dry_run:
+                console.print(f"  [green]would enable[/green] {name}")
+            else:
+                active_path = agents_dir / f"{name}{target.agent_output_suffix}"
+                rename_safely(path, active_path, project_root)
+                console.print(f"  [green]enabled[/green] {name}")
+    except (UnsafeDestinationError, WriteAccessError) as exc:
+        _exit_filesystem_error(exc)
     console.print("\n[bold green]Done.[/bold green]")
 
 
@@ -836,9 +915,11 @@ def config_validate(
     console.print(table)
     warnings = report["warnings"]
     if isinstance(warnings, list) and warnings:
-        _print_problem_list("Warnings", "yellow", "⚠", [str(warning) for warning in warnings])
+        _print_problem_list(
+            "Warnings", "yellow", "WARNING:", [str(warning) for warning in warnings]
+        )
     if has_errors:
-        _print_problem_list("Errors", "red", "✗", [str(error) for error in errors])
+        _print_problem_list("Errors", "red", "ERROR:", [str(error) for error in errors])
         raise typer.Exit(1)
 
 
@@ -924,50 +1005,71 @@ def _config_validation_report(project_root: Path) -> dict[str, object]:
 
 telemetry_app = typer.Typer(
     name="telemetry",
-    help="Manage the Claude Stop-hook that appends session telemetry to .claude/usage.jsonl",
+    help="Manage privacy-minimal local session telemetry for Claude or Codex",
     add_completion=False,
     no_args_is_help=True,
 )
 app.add_typer(telemetry_app)
 
 
+def _require_telemetry_tool(tool: Tool) -> None:
+    if tool not in {Tool.claude, Tool.codex}:
+        raise typer.BadParameter(
+            "telemetry hooks are supported only for claude and codex",
+            param_hint="--tool",
+        )
+
+
+def _exit_if_error_status(status: str) -> None:
+    """Make status-returning mutation helpers honest for shell automation."""
+    if "[red]" in status:
+        raise typer.Exit(1)
+
+
 @telemetry_app.command("enable")
 def telemetry_enable(
+    tool: Tool = _tool_option,
     target_dir: str | None = _target_dir_option,
 ) -> None:
-    """Configure the Claude Stop hook in .claude/settings.json (idempotent)."""
+    """Configure a supported tool's telemetry hook (idempotent)."""
+    _require_telemetry_tool(tool)
     project_root = _resolve_project_root(target_dir)
-    console.print(
-        f"\n[bold]Telemetry → enable[/bold] ({project_root})\n"
-        f"  {deploy_telemetry_hook_config(project_root, Tool.claude, dry_run=False)}"
-    )
-    if not (project_root / "harness" / "telemetry.sh").exists():
+    status = deploy_telemetry_hook_config(project_root, tool, dry_run=False)
+    console.print(f"\n[bold]Telemetry → enable[/bold] ({project_root}, {tool.value})\n  {status}")
+    _exit_if_error_status(status)
+    if (
+        tool in {Tool.claude, Tool.codex}
+        and not (project_root / "harness" / "telemetry.sh").exists()
+    ):
         console.print(
             "  [yellow]warning[/yellow] harness/telemetry.sh not deployed — "
-            "run [bold]ai-playbook deploy --tool claude[/bold] to ship the hook script."
+            f"run [bold]ai-playbook deploy --tool {tool.value}[/bold] to ship the hook script."
         )
 
 
 @telemetry_app.command("disable")
 def telemetry_disable(
+    tool: Tool = _tool_option,
     target_dir: str | None = _target_dir_option,
 ) -> None:
-    """Remove the AI Playbook Stop hook from .claude/settings.json."""
+    """Remove only the AI Playbook telemetry hook for the selected tool."""
+    _require_telemetry_tool(tool)
     project_root = _resolve_project_root(target_dir)
-    console.print(
-        f"\n[bold]Telemetry → disable[/bold] ({project_root})\n"
-        f"  {disable_telemetry_hook(project_root)}"
-    )
+    status = disable_telemetry_hook(project_root, tool)
+    console.print(f"\n[bold]Telemetry → disable[/bold] ({project_root}, {tool.value})\n  {status}")
+    _exit_if_error_status(status)
 
 
 @telemetry_app.command("status")
 def telemetry_status_cmd(
+    tool: Tool = _tool_option,
     target_dir: str | None = _target_dir_option,
 ) -> None:
-    """Show whether the telemetry Stop hook is configured and where logs are written."""
+    """Show whether telemetry is configured and where its local log lives."""
+    _require_telemetry_tool(tool)
     project_root = _resolve_project_root(target_dir)
-    info = telemetry_status(project_root)
-    table = Table(title=f"Telemetry — {project_root}")
+    info = telemetry_status(project_root, tool)
+    table = Table(title=f"Telemetry — {project_root} ({tool.value})")
     table.add_column("Field", style="cyan")
     table.add_column("Value", style="white")
     hook_label = (
@@ -981,7 +1083,7 @@ def telemetry_status_cmd(
     harness_label = (
         "[green]present[/green]"
         if info.harness_script_present
-        else "[yellow]missing[/yellow] — run [bold]ai-playbook deploy --tool claude[/bold]"
+        else (f"[yellow]missing[/yellow] — run [bold]ai-playbook deploy --tool {tool.value}[/bold]")
     )
     if info.usage_log_exists:
         usage_label = (
@@ -989,8 +1091,9 @@ def telemetry_status_cmd(
         )
     else:
         usage_label = f"{info.usage_log_path.relative_to(project_root)} (no sessions logged yet)"
-    table.add_row("Stop hook", hook_label)
-    table.add_row("settings.json", settings_label)
+    event = "SessionEnd" if tool is Tool.codex else "Stop"
+    table.add_row(f"{event} hook", hook_label)
+    table.add_row("hook config", settings_label)
     table.add_row("harness/telemetry.sh", harness_label)
     table.add_row("usage log", usage_label)
     console.print(table)
@@ -1005,9 +1108,9 @@ def upgrade_check(
     """Report whether the deployed playbook is up to date with the source.
 
     Exit codes:
-      0 — up to date
-            1 — drift or tool mismatch detected; redeploy or use the recorded tool
-      2 — never deployed in this project (no .playbook-version)
+      0: up to date (including an intentional partial deploy)
+      1: drift or tool mismatch detected; redeploy or use the recorded tool
+      2: never deployed in this project (no .playbook-version)
     """
     project_root = _resolve_project_root(target_dir)
     try:
@@ -1018,7 +1121,7 @@ def upgrade_check(
         _render_upgrade_json(report)
     else:
         _render_upgrade_report(report)
-    if report.status is UpgradeStatus.up_to_date:
+    if report.status in (UpgradeStatus.up_to_date, UpgradeStatus.partial):
         raise typer.Exit(0)
     if report.status in (UpgradeStatus.drift, UpgradeStatus.tool_mismatch):
         raise typer.Exit(1)
@@ -1039,6 +1142,10 @@ def _render_upgrade_report(report: UpgradeReport) -> None:
         table.add_row("Last deployed --tool", report.deployed_tool)
     if report.deployed_language and report.deployed_language != "all":
         table.add_row("Last deployed --language", report.deployed_language)
+    if report.status is not UpgradeStatus.not_deployed:
+        table.add_row("Deployment scope", report.deployment_scope.kind.value)
+        if report.deployment_scope.agents:
+            table.add_row("Agents in scope", ", ".join(report.deployment_scope.agents))
     if report.status is not UpgradeStatus.not_deployed:
         table.add_row(
             "Fingerprint (deployed)",
@@ -1063,6 +1170,7 @@ def _render_upgrade_json(report: UpgradeReport) -> None:
             "deployed_language": report.deployed_language,
             "deployed_packs": report.deployed_packs,
             "deployed_tool": report.deployed_tool,
+            "deployment_scope": report.deployment_scope.as_dict(),
             "notes": report.notes,
             "project_root": str(report.project_root),
             "source_fingerprint": report.source_fingerprint,
@@ -1073,19 +1181,28 @@ def _render_upgrade_json(report: UpgradeReport) -> None:
 
 
 def _upgrade_status_label(status: UpgradeStatus) -> str:
+    # Single exit: every arm binds `label` and `case _` is terminal, so the
+    # function has no fall-through path that could return None by accident.
     match status:
         case UpgradeStatus.up_to_date:
-            return "[green]up to date[/green]"
+            label = "[green]up to date[/green]"
+        case UpgradeStatus.partial:
+            label = "[green]partial deployment is up to date[/green]"
         case UpgradeStatus.drift:
-            return "[yellow]drift[/yellow] — source has changed since last deploy"
+            label = "[yellow]drift[/yellow] — source has changed since last deploy"
         case UpgradeStatus.tool_mismatch:
-            return "[yellow]tool mismatch[/yellow] — requested tool differs from last deploy"
+            label = "[yellow]tool mismatch[/yellow] — requested tool differs from last deploy"
         case UpgradeStatus.not_deployed:
-            return "[yellow]not deployed[/yellow]"
+            label = "[yellow]not deployed[/yellow]"
+        case _:
+            # Unreachable while the arms above are exhaustive; the type checker
+            # fails here the moment a new UpgradeStatus member is added.
+            assert_never(status)
+    return label
 
 
 def _print_upgrade_next_step(report: UpgradeReport) -> None:
-    if report.status is UpgradeStatus.up_to_date:
+    if report.status in (UpgradeStatus.up_to_date, UpgradeStatus.partial):
         return
     if report.status is UpgradeStatus.tool_mismatch and report.deployed_tool:
         console.print(
@@ -1096,6 +1213,66 @@ def _print_upgrade_next_step(report: UpgradeReport) -> None:
         return
     cmd = f"ai-playbook deploy --tool {report.tool.value}"
     console.print(f"\n[bold]Next:[/bold] [cyan]{cmd}[/cyan]")
+
+
+def _deployment_scope_after_update(
+    previous: DeploymentRecord | None,
+    *,
+    tool: Tool,
+    selected_agents: set[str],
+    all_agents: set[str],
+    rules: bool,
+    commands: bool,
+    harness: bool,
+    mcp: bool,
+) -> DeploymentScope:
+    """Merge a non-destructive deploy into the same tool's installed surface."""
+    previous_scope = (
+        previous.scope if previous is not None and previous.tool == tool.value else None
+    )
+    installed_agents = set(selected_agents)
+    if previous_scope is not None:
+        installed_agents.update(previous_scope.agents if previous_scope.is_partial else all_agents)
+        rules = rules or previous_scope.rules
+        harness = harness or previous_scope.harness
+        mcp = mcp or previous_scope.mcp
+        commands = commands or previous_scope.commands
+
+    installed_agents.intersection_update(all_agents)
+    commands = commands and get_target_adapter(tool).supports_commands
+    is_full = (
+        installed_agents == all_agents
+        and rules
+        and harness
+        and mcp
+        and (commands or not get_target_adapter(tool).supports_commands)
+    )
+    return DeploymentScope(
+        kind=ScopeKind.full if is_full else ScopeKind.partial,
+        agents=tuple(sorted(installed_agents)),
+        rules=rules,
+        commands=commands,
+        harness=harness,
+        mcp=mcp,
+    )
+
+
+def _deployed_language_after_update(
+    previous: DeploymentRecord | None,
+    *,
+    tool: Tool,
+    selected_language: str | None,
+) -> str | None:
+    """Preserve a broader existing language surface on non-destructive updates."""
+    if previous is None or previous.tool != tool.value:
+        return selected_language
+    previous_language = previous.language or "all"
+    requested_language = selected_language or "all"
+    if previous_language == "all" or requested_language == "all":
+        return None
+    if previous_language == requested_language:
+        return selected_language
+    return None
 
 
 @app.command()
@@ -1167,13 +1344,14 @@ def deploy(
     source_root = get_source_root()
     project_root = _resolve_project_root(target_dir)
     target = get_target_adapter(tool)
+    previous_record = read_version_file(project_root / VERSION_FILE)
     language_filter = _validate_language_filter(language)
     skip_files = language_skip_files(language_filter)
     rewrite = path_rewrite(target.destinations)
     packs = _load_pack_config_or_exit(project_root)
     discovered = discover_layered(source_root, packs)
 
-    # All discoverable agents — core + packs — keyed by agent name for --agent filter.
+    # All discoverable agents: core + packs: keyed by agent name for --agent filter.
     all_agents: dict[str, Path] = {
         f.relative.name.removesuffix(AGENT_FILE_SUFFIX): f.src_path
         for f in discovered.files
@@ -1186,6 +1364,34 @@ def deploy(
         )
         raise typer.Exit(1)
     agents_to_deploy = _resolve_agent_names_or_exit(agent, all_agents)
+    deployment_scope = _deployment_scope_after_update(
+        previous_record,
+        tool=tool,
+        selected_agents=set(agents_to_deploy),
+        all_agents=set(all_agents),
+        rules=not no_rules,
+        commands=target.supports_commands,
+        harness=not no_harness,
+        mcp=not no_mcp,
+    )
+    deployed_language = _deployed_language_after_update(
+        previous_record,
+        tool=tool,
+        selected_language=language_filter,
+    )
+    recorded_skip_files = language_skip_files(deployed_language)
+    carried_stale_fingerprint = stale_carryover_fingerprint(
+        previous_record,
+        tool=tool,
+        source_root=source_root,
+        discovered_files=discovered.files,
+        selected_agents=set(agents_to_deploy),
+        all_agents=set(all_agents),
+        rules=not no_rules,
+        commands=target.supports_commands,
+        harness=not no_harness,
+        selected_language=language_filter,
+    )
 
     if dry_run:
         console.print("[yellow]Dry run — no files will be written[/yellow]\n")
@@ -1234,7 +1440,7 @@ def deploy(
             tool,
             dry_run,
             prune,
-            skip_files,
+            recorded_skip_files,
             discovered_files=discovered.files,
             yes=yes,
             current_pack_names={p.metadata.name for p in packs if p.metadata is not None},
@@ -1244,10 +1450,12 @@ def deploy(
             source_root,
             tool,
             dry_run,
-            language_filter,
-            skip_files,
+            deployed_language,
+            recorded_skip_files,
             discovered_files=discovered.files,
             packs=packs,
+            scope=deployment_scope,
+            stale_fingerprint=carried_stale_fingerprint,
         )
     except typer.Exit:
         raise
@@ -1257,7 +1465,7 @@ def deploy(
         raise typer.Exit(1) from None
     except Exception:
         # Unexpected mid-deploy failure: the backup still fixes it, so print
-        # the hint before the traceback surfaces. Re-raise rather than exit —
+        # the hint before the traceback surfaces. Re-raise rather than exit:
         # an unknown error must stay loud, not become a tidy exit code.
         _print_rollback_hint(backup_path, tool, project_root)
         raise
@@ -1274,11 +1482,11 @@ def doctor(
         False,
         "--strict",
         help="Use a 3-state exit code suitable for CI: 0=healthy, 1=issues, 2=not deployed. "
-        "Default keeps the legacy contract (0 except when not deployed) so existing pipelines "
+        "Default keeps the original contract (0 except when not deployed) so existing pipelines "
         "are unaffected.",
     ),
 ) -> None:
-    """Check deployment health — staleness, missing files, disabled agents.
+    """Check deployment health: staleness, missing files, disabled agents.
 
     Default exit codes preserve existing CI behaviour: 0 unless nothing is
     deployed (then 1). Pass `--strict` to opt into the 0/1/2 contract that

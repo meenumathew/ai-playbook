@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 import tempfile
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -20,7 +22,7 @@ class WriteAccessError(OSError, AIPlaybookError):
     Wraps the raw OSError (PermissionError, ReadOnlyError, "device full",
     "name too long", etc.) with a human-readable message that names the
     destination path and the underlying errno reason. The CLI surface
-    translates this into a single-line Rich error and exits non-zero —
+    translates this into a single-line Rich error and exits non-zero:
     much better first-time-user experience than a raw traceback.
     """
 
@@ -61,7 +63,9 @@ def preserve_broken_config(config_path: Path, safe_root: Path | None) -> Path:
     """
     timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
     backup_path = config_path.with_suffix(config_path.suffix + f".broken-{timestamp}")
-    write_text_safely(backup_path, config_path.read_text(encoding="utf-8"), safe_root)
+    # Bytes, not text: a config can be unusable precisely because it is not
+    # valid UTF-8, and the backup must still capture it verbatim.
+    write_bytes_safely(backup_path, config_path.read_bytes(), safe_root)
     return backup_path
 
 
@@ -83,6 +87,7 @@ def write_text_safely(dst: Path, content: str, safe_root: Path | None) -> str:
         temp_path = _temporary_sibling(dst)
         assert_safe_destination(temp_path, safe_root)
         temp_path.write_text(content, encoding="utf-8")
+        _apply_destination_mode(temp_path, dst)
         temp_path.replace(dst)
     except OSError as exc:
         _remove_temp_file(temp_path)
@@ -103,6 +108,7 @@ def write_bytes_safely(dst: Path, content: bytes, safe_root: Path | None) -> str
         temp_path = _temporary_sibling(dst)
         assert_safe_destination(temp_path, safe_root)
         temp_path.write_bytes(content)
+        _apply_destination_mode(temp_path, dst)
         temp_path.replace(dst)
     except OSError as exc:
         _remove_temp_file(temp_path)
@@ -112,11 +118,44 @@ def write_bytes_safely(dst: Path, content: bytes, safe_root: Path | None) -> str
     return "[green]copied[/green]"
 
 
+def rename_safely(src: Path, dst: Path, safe_root: Path | None) -> None:
+    """Atomically rename an in-root path without traversing symlinks."""
+    assert_safe_destination(src, safe_root)
+    assert_safe_destination(dst, safe_root)
+    if dst.exists():
+        raise WriteAccessError(f"Cannot rename {src} to {dst}: destination already exists")
+    try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        src.replace(dst)
+    except OSError as exc:
+        raise WriteAccessError(
+            f"Cannot rename {src} to {dst}: {exc.strerror or exc.__class__.__name__}"
+        ) from exc
+
+
 def _text_matches(path: Path, content: str) -> bool:
     try:
         return path.read_text(encoding="utf-8") == content
     except UnicodeDecodeError:
         return False
+
+
+def _apply_destination_mode(temp_path: Path, dst: Path) -> None:
+    """Give the temp sibling the mode the destination should end up with.
+
+    `NamedTemporaryFile` creates the sibling at 0600 and `replace()` keeps
+    that mode, which would clobber a pre-existing 0644 (deployed files become
+    unreadable to other users, group checkouts, and containers running as a
+    different uid). Preserve an existing destination's mode; new files get
+    the umask-standard mode instead of the tempfile default.
+    """
+    try:
+        mode = stat.S_IMODE(dst.stat().st_mode)
+    except OSError:
+        umask = os.umask(0)
+        os.umask(umask)
+        mode = 0o666 & ~umask
+    temp_path.chmod(mode)
 
 
 def _temporary_sibling(dst: Path) -> Path:

@@ -111,9 +111,27 @@ The critical-path registry, run triggers, and the CI gate are policy: `quality-g
 ```bash
 # mutmut 3.x reads paths_to_mutate from pyproject.toml § [tool.mutmut]
 # (the 2.x --paths-to-mutate CLI flag was removed)
-uv run mutmut run
+# This repository's CI and baseline check use four workers; keep the local
+# command aligned when reproducing a baseline or debugging a survivor.
+uv run mutmut run --max-children 4
 uv run mutmut results
 uv run mutmut show <id>     # inspect a surviving mutant
+```
+
+This repository's `make mutation` target is the canonical checked run. It
+fails early on macOS because mutmut's fork workers are not reliable there:
+use the Linux CI workflow or a Linux container/VM instead of accepting
+segfaults into the baseline.
+
+For a local Linux container, run from the repository root:
+
+```bash
+docker run --rm -it -v "$PWD:/workspace" -w /workspace python:3.12-slim bash
+apt-get update && apt-get install -y --no-install-recommends curl git
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+uv sync --dev
+make mutation
 ```
 
 ### Interpreting surviving mutants

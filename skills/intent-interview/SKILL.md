@@ -12,8 +12,8 @@ Capture what the user actually wants before doing the work. This skill **owns no
 ## When to Use
 
 - Any time an agent receives an idea, ticket, or vague request before refining or planning
-- `agents/story-refiner.agent.md` step 1 + step 5: capturing intent on a new story
-- `agents/slice-planner.agent.md` Phase 1 step 4: confirming material design questions
+- `agents/story-refiner.agent.md` § Mode A, steps **Capture intent anchors** and **Present findings + next design question**: capturing intent on a new story
+- `agents/slice-planner.agent.md` § Phase 1, step **Ask design questions**: confirming material design questions
 - `agents/xp-pair-programmer.agent.md`: minimal-path requests that skipped story-refiner
 - Any session where the request is ambiguous and the agent is about to make a scope-changing decision
 
@@ -29,7 +29,7 @@ Each step applies one canonical rule from `CLAUDE.md` § Shared Rules:
 4. **Stay terse** ("Concise communication", "Be terse during implementation"): full clarity is preserved for risks, irreversible decisions, commands, failures, security, and gates.
 5. **Push back when something is wrong** ("Push back when something is wrong"): record overrides under `## Discovered` in the plan, never silently accepted (`knowledge-base/working-agreement.md` § Disagreement Protocol).
 
-**Shape substitution (owned by this skill):** the bug shape replaces the five anchors with Symptom / Reproduction / Severity; the spike shape replaces them with Question / Timebox / Decision-this-enables. See `agents/story-refiner.agent.md` step 0.
+**Shape substitution (owned by this skill):** the bug shape replaces the five anchors with Symptom / Reproduction / Severity; the spike shape replaces them with Question / Timebox / Decision-this-enables. See `agents/story-refiner.agent.md` § Mode A, step **Classify the work shape**.
 
 ## What This Skill Does NOT Do
 

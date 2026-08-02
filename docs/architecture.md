@@ -2,6 +2,10 @@
 
 How AI Playbook works, how its agents interact, and the reasoning behind the design decisions.
 
+**Audience:** adopters and maintainers who need the system's boundaries, dependency direction, workflow, and trade-offs. For commands and flags, use the [CLI Reference](cli-reference.md).
+
+**Read by need:** [repository shape](#repo-structure), [design principles](#design-principles), [agent handoffs](#agent-handoff-workflow), [context loading](#knowledge-base-loading), [CLI layers](#cli-architecture), [quality enforcement](#harness-engineering), [tests](#testing-strategy-this-repos-own-tests), [deployment targets](#deployment-targets), or [trade-offs](#key-trade-offs).
+
 ---
 
 ## Repo Structure
@@ -109,6 +113,8 @@ The root tier cascades through all eight agents unless an agent-specific overrid
 
 Resolution order (first match wins):
 
+**Text equivalent:** use a per-agent override when present; otherwise use a declared workspace overlay; otherwise use the root `quality-tier` from `CLAUDE.md`.
+
 ```mermaid
 flowchart TD
     start([Resolve active tier]) --> agent{Per-agent override<br/>in .ai-playbook.toml?}
@@ -120,7 +126,7 @@ flowchart TD
 
 ### 6. Model tiers as an adapter contract
 
-Each agent declares a `model: advisor` or `model: executor` field in its frontmatter. These are abstract tier names: not model IDs. The intended tier mapping is declared in `.ai-playbook.toml`. For Claude deploys, `ai-playbook deploy` materializes that mapping into the deployed agent frontmatter (tier name to the configured model) when the value is one Claude Code recognizes, so Claude Code routes each agent natively; for other tools, or for model identifiers Claude Code does not recognize, the actual model selection lives in the AI tool config. Detail: `knowledge-base/model-tier.md` § Deploying to Claude Code.
+Each agent declares a `model: advisor` or `model: executor` field in its frontmatter. These are abstract tier names: not model IDs. The intended tier mapping is declared in `.ai-playbook.toml`. For Claude deploys, `ai-playbook deploy` materializes that mapping into the deployed agent frontmatter (tier name to the configured model) when the value is one Claude Code recognizes, so Claude Code routes each agent natively. For Codex deploys, Markdown agents become custom-agent TOML and configured model tiers plus optional reasoning efforts become native `model` and `model_reasoning_effort` fields. For other tools, or for model identifiers Claude Code does not recognize, the actual model selection lives in the AI tool config. Detail: `knowledge-base/model-tier.md` § Deploying to Claude Code and Codex.
 
 | Tier       | Role                                  | Common pairings                                           |
 |------------|---------------------------------------|-----------------------------------------------------------|
@@ -136,6 +142,8 @@ This means:
 The tier split is a **cost / latency optimisation**, not a quality safety net. TDD red-green, quality gates, the Definition of Done, and the Cognitive Health Gates enforce quality: none of which depend on which model maps to which tier.
 
 When an executor-tier agent hits an escalation trigger (e.g. 3 failed fixes), it escalates: to a stronger model in a multi-model setup, or to a human checkpoint in a single-model one:
+
+**Text equivalent:** without a trigger, the executor continues. With a trigger, a multi-model setup re-runs the work on the advisor tier, while a single-model setup stops for human review.
 
 ```mermaid
 flowchart TD
@@ -179,6 +187,8 @@ Detail: `knowledge-base/model-tier.md`.
   Standalone:  code-inspector (health check)  |  docs-maintainer (documentation, ADRs)
 ```
 
+**Text equivalent:** the preceding text diagram is the canonical handoff sequence. The Mermaid diagram below presents the same default path, incident return path, and standalone agents visually.
+
 ```mermaid
 flowchart TD
     idea([Idea / ticket]) --> refiner[story-refiner]
@@ -201,12 +211,12 @@ Each agent reads artifacts from the previous stage. This is a human- or tool-inv
 
 **Two-layer testing: acceptance tests + unit TDD:** xp-pair-programmer enforces both acceptance tests and unit TDD on the adopter's code. This follows [Acceptance Test-Driven Development (ATDD)](https://www.agilealliance.org/glossary/atdd/): also known as double-loop TDD: from Freeman & Pryce's *Growing Object-Oriented Software, Guided by Tests*.
 
-1. **Outer loop (acceptance tests)**: for each acceptance criterion (AC) in the story, xp-pair-programmer writes a failing acceptance test (`test_ac_<what>_<condition>`) at the system boundary before any production code. The boundary is architecture-aware: HTTP response for APIs, handler return for Lambda, DOM render for React, CloudFormation assertions for AWS CDK.
+1. **Outer loop (acceptance tests)**: for each acceptance criterion (AC) in the story, xp-pair-programmer writes a failing acceptance test (`test_<what>_<condition>`) at the system boundary before any production code. The boundary is architecture-aware: HTTP response for APIs, handler return for Lambda, DOM render for React, CloudFormation assertions for AWS CDK.
 2. **Inner loop (unit TDD)**: unit tests drive the implementation one at a time (RED → GREEN → REFACTOR). The feature completes when all acceptance tests pass.
 
 This gives the adopter two independent verification layers: acceptance tests verify the team built the right thing (from the story's AC), unit tests verify the team built it right (from the implementation).
 
-> **Note on terminology.** The "two-layer testing" framing here describes the **double-loop methodology** (outer AT + inner unit TDD). It is distinct from: and complementary to: the **3-layer dev pyramid** prescribed in `knowledge-base/testing.md` § Test Types Quick Guide (Unit / Acceptance / Integration-with-external-services), where E2E moves out into post-deploy. The double-loop is *how you write tests*; the pyramid is *what proportion of each kind*.
+> **Note on terminology.** The "two-layer testing" framing here describes the **double-loop methodology** (outer AT + inner unit TDD). It is distinct from, and complementary to, the **3-layer dev pyramid** prescribed in `knowledge-base/testing.md` § Test Types Quick Guide (Unit / Acceptance / Integration-with-external-services), where E2E moves out into post-deploy. The double-loop is *how you write tests*; the pyramid is *what proportion of each kind*.
 
 ---
 
@@ -218,6 +228,8 @@ Agents don't load the entire knowledge base upfront. Each agent loads the smalle
 2. Search `knowledge-base/INDEX.md` for the exact topic.
 3. Load one KB file or section at a time.
 4. Stop once the rule is actionable.
+
+**Text equivalent:** check the already-loaded `CLAUDE.md`, then the cheatsheet, then route through `INDEX.md` to one canonical file or section, and stop as soon as the rule is actionable.
 
 ```mermaid
 flowchart TD
@@ -244,14 +256,15 @@ This is a context-efficiency rule, not a lower-quality mode. TDD, security check
 
 ## CLI Architecture
 
-The CLI lives in `src/deploy_ai_playbook/`, split across `cli.py`, `paths.py`, `config.py`, `fs.py`, `discovery.py`, `mcp.py`, and `backup.py`. It is a [Typer](https://typer.tiangolo.com/) app with the following commands:
+The CLI lives in `src/deploy_ai_playbook/`, split into small layered modules: `paths`, `config`, `safety`, `console`, and `errors` (foundation); `targets`, `discovery`, `fs`, `mcp`, and `telemetry` (middle); `backup`, `upgrade`, `doctor`, and `services/*` (service); with `cli.py` (Typer wiring) and `deploy_render.py` (deploy presentation) on top. See [ADR-0002](adr/0002-cli-module-layering.md) for the layering decision. It is a [Typer](https://typer.tiangolo.com/) app with the following commands:
 
 | Command | What it does |
 |---------|-------------|
 | `init` | Scaffolds the artifact directories and a starter `.ai-playbook.toml`; idempotent |
 | `deploy` | Copies agents, KB, skills, templates, and rules into a target project |
 | `list` | Shows available agents in the playbook source |
-| `status` | Shows deployed agents and their state (active/off) |
+| `status` | Shows deployed agents and their state (active/disabled) |
+| `context-report` | Estimates the static fixed + per-agent + preload context surface; never claims provider billing usage |
 | `diff` | Compares source against deployed copy |
 | `doctor` | Health check: stale files, missing agents, missing dirs, fingerprint drift |
 | `upgrade-check` | CI-friendly drift check (exit 0 = up to date, 1 = drift, 2 = never deployed) |
@@ -259,7 +272,7 @@ The CLI lives in `src/deploy_ai_playbook/`, split across `cli.py`, `paths.py`, `
 | `rollback` | Restores previous deployment from backup |
 | `config validate` | Validates `.ai-playbook.toml`, pack paths, pack metadata, and tier overrides |
 | `artifacts` / `artifact-policy` | Lists story/plan/research/audit/review/incident files; toggles per-project tracking policy |
-| `telemetry` | Manages the Claude Stop hook that appends per-session telemetry to `.claude/usage.jsonl` |
+| `telemetry` | Manages privacy-minimal local Claude `Stop` and Codex `SessionEnd` telemetry hooks |
 
 The CLI packages the playbook markdown assets inside the wheel via `hatch.build.targets.wheel.force-include`, so `ai-playbook deploy` works from an installed package: no need to clone the repo. The canonical maintenance source remains this repository; installed wheels carry a distribution copy of those assets.
 
@@ -284,7 +297,10 @@ The playbook uses three layers of mechanical enforcement to prevent violations: 
 Enforces the module dependency direction:
 
 ```text
-paths/config (foundation) → fs/discovery/mcp (middle) → backup (middle) → cli (top)
+paths/config/safety/console/errors (foundation)
+  → targets/discovery/fs/mcp/telemetry (middle)
+  → backup/upgrade/doctor/services/* (service)
+  → cli + deploy_render (top)
 ```
 
 Every module has a declared set of allowed imports. If someone adds a new module, it must declare its rules: or the test fails. The test also detects circular dependencies.
@@ -342,10 +358,11 @@ See **[Testing in CONTRIBUTING.md](../CONTRIBUTING.md#testing)** for the full te
 |--------|-----------|------------|
 | Claude | `.claude/agents/` | `CLAUDE.md` |
 | Copilot | `.github/agents/` | `.github/copilot-instructions.md` |
+| Codex | `.codex/agents/` (native `.toml` custom agents) | `AGENTS.md` |
 | Cursor | `.cursor/agents/` | `.cursor/rules/ai-playbook.mdc` |
 | Kiro | `.kiro/agents/` | `.kiro/steering/rules.md` |
 
-The same agent markdown works across all four: the CLI handles path translation.
+The same source agents deploy to all five: the CLI handles path translation. Codex is the one non-markdown target: deploy converts each source agent into a native TOML custom agent under `.codex/agents/`.
 
 ---
 
@@ -353,13 +370,13 @@ The same agent markdown works across all four: the CLI handles path translation.
 
 | Decision | Trade-off |
 |----------|-----------|
-| Markdown-only agents (no code framework) | Simpler, more portable: but no runtime validation of agent behavior |
+| Markdown-only agents (no code framework) | Simpler and more portable, but without runtime validation of agent behavior |
 | Deploy (copy) over link (symlink) | Self-contained projects: copy-based deploy is inherently drift-prone, mitigated by `ai-playbook doctor` (fingerprint warning) and `ai-playbook upgrade-check` (CI exit code) |
 | Quality tier defaults with per-agent override | One-line root change still cascades everywhere; per-agent exceptions add config to review |
-| File-based artifacts over database | Works offline, tool-agnostic, and searchable through `ai-playbook artifacts --query`: but no dashboard or relational history |
-| Single CLAUDE.md rules file | Everything in one place: but grows with the project |
+| File-based artifacts over database | Works offline, is tool-agnostic, and is searchable through `ai-playbook artifacts --query`, but has no dashboard or relational history |
+| Single CLAUDE.md rules file | Keeps rules in one place, but grows with the project |
 
-For full decision rationale, see [docs/adr/](adr/README.md) (that directory records decisions about the playbook itself).
+The trade-offs above are recorded inline on this page; they have no separate ADRs. The decisions that do have durable records live in [docs/adr/](adr/README.md) (that directory records decisions about the playbook itself: the Bitbucket Server scope boundary, CLI module layering, pack overlay precedence, and two-phase backup and restore).
 
 For the practical impact of these trade-offs, see [Known Limitations](limitations.md).
 

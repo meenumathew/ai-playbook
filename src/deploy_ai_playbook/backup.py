@@ -16,9 +16,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from deploy_ai_playbook.config import load_pack_config
+from deploy_ai_playbook.deployment_record import (
+    DeploymentRecord,
+    DeploymentScope,
+    deployment_record_text,
+)
 from deploy_ai_playbook.discovery import discover_layered
 from deploy_ai_playbook.fs import assert_safe_path, assert_safe_tree, compute_source_fingerprint
 from deploy_ai_playbook.paths import BACKUP_DIR, VERSION_FILE, Tool
+from deploy_ai_playbook.safety import write_text_safely
 from deploy_ai_playbook.targets import get_target_adapter
 
 MAX_BACKUPS = 5
@@ -42,39 +48,58 @@ def write_version_file(
     skip_files: set[str] | None = None,
     discovered_files: list | None = None,
     packs: list | None = None,
+    scope: DeploymentScope | None = None,
+    stale_fingerprint: str | None = None,
 ) -> str:
-    """Write a .playbook-version file to the project root. Returns status string."""
+    """Write a .playbook-version file to the project root. Returns status string.
+
+    `stale_fingerprint` carries the previous record's fingerprint forward when
+    a selective deploy left part of the merged scope at older content: the
+    fresh source fingerprint would falsely claim the whole surface is current
+    (see `upgrade.stale_carryover_fingerprint`).
+    """
     if discovered_files is None:
         resolved_packs = packs if packs is not None else load_pack_config(project_root)
         discovered_files = discover_layered(source_root, resolved_packs).files
-    fingerprint = compute_source_fingerprint(source_root, discovered_files, skip_files=skip_files)
+    deployment_scope = scope or DeploymentScope()
+    fingerprint = stale_fingerprint or compute_source_fingerprint(
+        source_root,
+        discovered_files,
+        skip_files=skip_files,
+        agent_names=deployment_scope.fingerprint_agent_names,
+        include_commands=deployment_scope.commands,
+        include_harness=deployment_scope.harness,
+        include_rules=deployment_scope.rules,
+    )
     timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    language_value = language or "all"
-    content = (
-        f"playbook-fingerprint: {fingerprint}\n"
-        f"deployed-at: {timestamp}\n"
-        f"tool: {tool.value}\n"
-        f"language: {language_value}\n"
-        f"{_pack_version_lines(packs)}"
+    content = deployment_record_text(
+        DeploymentRecord(
+            fingerprint=fingerprint,
+            deployed_at=timestamp,
+            tool=tool.value,
+            language=language or "all",
+            packs=_pack_versions(packs),
+            scope=deployment_scope,
+        )
     )
     dst = project_root / VERSION_FILE
     if dry_run:
         return "[yellow]would write[/yellow]"
-    dst.write_text(content, encoding="utf-8")
+    write_text_safely(dst, content, project_root)
     return "[green]written[/green]"
 
 
-def _pack_version_lines(packs: list | None) -> str:
+def _pack_versions(packs: list | None) -> list[str]:
     if not packs:
-        return ""
+        return []
     lines: list[str] = []
     for pack in packs:
         metadata = pack.metadata
         if metadata is None:
             continue
         version = metadata.version or "unversioned"
-        lines.append(f"pack: {metadata.name}@{version}\n")
-    return "".join(lines)
+        lines.append(f"{metadata.name}@{version}")
+    return lines
 
 
 # Backup flow keeps ordered filesystem branches together for rollback clarity.
@@ -141,19 +166,15 @@ def backup_deployed_files(project_root: Path, tool: Tool) -> Path | None:  # noq
 
 def _write_backup_metadata(backup_root: Path, tool: Tool, created_at: datetime) -> None:
     """Record the tool a backup belongs to so rollback can select safely."""
-    backup_root.joinpath(BACKUP_METADATA_FILE).write_text(
+    write_text_safely(
+        backup_root / BACKUP_METADATA_FILE,
         f"tool: {tool.value}\ncreated-at: {created_at.strftime('%Y-%m-%dT%H:%M:%SZ')}\n",
-        encoding="utf-8",
+        backup_root,
     )
 
 
 def _read_metadata_tool(backup_root: Path) -> str | None:
-    metadata_path = backup_root / BACKUP_METADATA_FILE
-    if metadata_path.exists():
-        tool = _read_tool_line(metadata_path)
-        if tool is not None:
-            return tool
-    return _read_tool_line(backup_root / VERSION_FILE)
+    return _read_tool_line(backup_root / BACKUP_METADATA_FILE)
 
 
 def _read_tool_line(path: Path) -> str | None:
@@ -184,7 +205,7 @@ def _rotate_backups(project_root: Path) -> None:
     """Keep only the most recent MAX_BACKUPS backups, remove older ones.
 
     Failures to remove are surfaced on stderr rather than silently swallowed.
-    The deploy itself still succeeds — rotation is housekeeping — but adopters
+    The deploy itself still succeeds: rotation is housekeeping: but adopters
     need to know when `.playbook-backup/` is filling up (full disk, locked
     backup, permission change) so they can investigate before the next deploy.
     """
@@ -204,6 +225,9 @@ def _rotate_backups(project_root: Path) -> None:
             try:
                 shutil.rmtree(old_backup)
             except OSError as exc:
+                # Plain stderr on purpose: the architecture contract
+                # (test_architecture.py) keeps Rich console out of the
+                # service layer; presentation lives in cli/deploy_render.
                 print(
                     f"warning: failed to rotate old backup {old_backup}: "
                     f"{exc.strerror or exc.__class__.__name__}",
@@ -317,7 +341,9 @@ def _snapshot_current_targets(targets: list[RestoreTarget], rollback_root: Path)
         snapshot = rollback_root / target.key
         snapshot.parent.mkdir(parents=True, exist_ok=True)
         if target.destination.is_dir() and not target.destination.is_symlink():
-            shutil.copytree(target.destination, snapshot)
+            # symlinks=True copies links as links: a dangling symlink in the
+            # current deployment must not abort the restore mid-swap.
+            shutil.copytree(target.destination, snapshot, symlinks=True)
         else:
             shutil.copy2(target.destination, snapshot)
 
@@ -341,7 +367,7 @@ def _restore_current_targets(targets: list[RestoreTarget], rollback_root: Path) 
             continue
         target.destination.parent.mkdir(parents=True, exist_ok=True)
         if target.is_dir:
-            shutil.copytree(snapshot, target.destination)
+            shutil.copytree(snapshot, target.destination, symlinks=True)
         else:
             shutil.copy2(snapshot, target.destination)
 

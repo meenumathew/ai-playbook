@@ -1,6 +1,7 @@
 ---
 provenance: curated
 negative_control: deliberately flawed — the LLM judge must FAIL this file
+violates: [INCIDENT-NOT-001, INCIDENT-NOT-002, INCIDENT-NOT-003, INCIDENT-NOT-006]
 ---
 
 # Incident: checkout-service error rate

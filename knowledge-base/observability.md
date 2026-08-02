@@ -194,4 +194,4 @@ What to capture during and after a SEV1/SEV2 incident so the postmortem has evid
 
 ## Agent Telemetry
 
-When agents run unattended (CI, scheduled jobs, hosted runners), the deployed `Stop` hook logs one JSON line per session (session ID, active agent, turns, model + token totals) to `.claude/usage.jsonl`. It never blocks the agent and degrades silently when `jq` or the transcript is unavailable. Wire-up, scope notes, and analysis queries: `docs/how-to/agent-telemetry.md`.
+For Claude and Codex, the deployed lifecycle hook can append a privacy-minimal local event containing only the UTC timestamp, source tool, approximate turns, and best-effort active playbook agent. It never stores session IDs, transcript content or paths, model details, tokens, credentials, or repository content; it makes no network calls and degrades silently when local parsing is unavailable. Wire-up, privacy contract, and analysis queries: `docs/how-to/agent-telemetry.md`.

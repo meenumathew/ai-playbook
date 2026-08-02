@@ -96,6 +96,8 @@ Load whatever exists. Don't ask separately. Report: `Loaded: story (STORY-001), 
 
 **Concise communication.** When the developer asks for terse/ultra-brief output: bullets over paragraphs, no restated context, no filler, no repeated rationale. Do not reduce research depth, validation, artifact quality, model tier, or safety checks. Preserve full clarity for risks, irreversible decisions, commands, test failures, security issues, and approval gates. Never compress code, diffs, error output, or instructions into ambiguity.
 
+**Plain status text.** Agent-authored output uses words, not emoji or icon glyphs, for status markers. Prefer `PASS:`, `FAIL:`, `WARN:`, `BLOCKED:`, `DONE:`, or plain bullets over checkmarks, crosses, warning triangles, diamonds, circles, or similar decorative symbols.
+
 **Context briefing.** When the developer asks "explain this", "zoom out", "what did you do?", or "help me understand before shipping": pause the workflow and give a short map: current flow, touched modules, key decisions, tests/evidence, risks, where to debug. No separate mode or artifact. Resume the active agent after.
 
 **Read budget: self-tracking.** Each agent declares a read budget (e.g. "max 20 reads"); xp-pair-programmer alone has no numeric cap and self-tracks. Report count at end of research. At 80%, narrow focus. At cap, STOP and ask.
@@ -159,7 +161,7 @@ Detail: `knowledge-base/model-tier.md`. Each agent declares `model: advisor` or 
 - docs-maintainer: writing an ADR or architecture-level doc
 - Any executor agent: "I don't know" twice in one session on the same question
 
-Advisor-tier agents (release-captain, incident-responder, story-refiner, slice-planner, diff-reviewer, code-inspector) escalate to **humans**, not higher models. Agent-specific human-escalation triggers (e.g. release-captain on smoke failure, incident-responder on SEV1) live in each agent file's `escalation:` frontmatter.
+Advisor-tier agents (release-captain, incident-responder, story-refiner, slice-planner, diff-reviewer, code-inspector) escalate to **humans**, not higher models. Agent-specific escalation routing: to humans (e.g. release-captain on smoke failure, incident-responder on SEV1) or to a peer agent: lives in each agent file's `escalation:` frontmatter.
 
 ---
 
@@ -207,7 +209,7 @@ If a gate fails, fix the issue: never skip with `--no-verify` or silence the too
 - [ ] No hardcoded secrets; input validated at boundaries; errors logged with context
 - [ ] Known limitations documented: not silently accepted
 - [ ] Commit body explains *why*; non-trivial commit types end with a Teach-back trailer (canonical format + type lists: `skills/git/SKILL.md` § Teach-back Trailer; enforced by `harness/check-teachback.sh`, `commit-msg` hook)
-- [ ] Feature flag *(if any)*: default OFF, cleanup date set, registered in `knowledge-base/feature-flag-registry.md` (`knowledge-base/feature-flags.md` § Flag Registry)
+- [ ] Feature flag *(if any)*: default OFF, registered in `knowledge-base/feature-flag-registry.md` with the lifecycle dates its category requires (`knowledge-base/feature-flags.md` § Flag Registry)
 
 ---
 
@@ -219,7 +221,7 @@ Moved on-demand. Canonical home: `knowledge-base/CHEATSHEET.md` § Decision Guid
 
 ## Tools
 
-**Context7** *(when available)*: use for third-party library docs instead of training-data recall. If Context7 MCP is not configured, use web search as fallback.
+**Context7** *(when available)*: use for third-party library docs instead of training-data recall. If Context7 MCP is not configured, fall back to web search where allowed (`knowledge-base/tool-policy.md` § Per-Agent Matrix); otherwise ask the user to paste the docs.
 
 ---
 
@@ -231,9 +233,9 @@ Moved on-demand. Canonical home: `knowledge-base/CHEATSHEET.md` § Review Rules.
 
 ## Knowledge Base (KB)
 
-Read on demand: not upfront. [knowledge-base/CHEATSHEET.md](knowledge-base/CHEATSHEET.md) is the one-line digest covering ~80% of cases; [knowledge-base/INDEX.md](knowledge-base/INDEX.md) is the authoritative routing table for everything else. Agents do not duplicate KB content and do not restate either file here.
+Read on demand: not upfront. [knowledge-base/CHEATSHEET.md](knowledge-base/CHEATSHEET.md) is the one-line digest for ~80% of cases; [knowledge-base/INDEX.md](knowledge-base/INDEX.md) authoritatively routes the rest. Agents do not duplicate or restate KB content here.
 
-**KB efficiency rule:** load the smallest source that can change the task outcome. Start with `CLAUDE.md`, try `CHEATSHEET.md` for the one-line rule, then on miss search `INDEX.md` and load the canonical file (or just the cited section). Stop once the rule is actionable. Every KB file declares machine-readable `load_when`, `canonical_for`, and `cross_refs` in its frontmatter: use those before reading the body. Reduces context usage only; never weakens quality gates, security checks, TDD, or review standards.
+**KB efficiency rule:** load the smallest source that can change the task outcome. Start with `CLAUDE.md`, then grep `CHEATSHEET.md` for the topic heading and read that section only; on miss grep `INDEX.md` and load just the section it cites. Never read a KB file whole when one section answers it. Stop once the rule is actionable. Use each KB file's `load_when`, `canonical_for`, and `cross_refs` frontmatter before its body. Reduces context usage only; never weakens quality gates, security checks, TDD, or review standards.
 
 First-use note: the system seeds project-specific registries from `templates/` when first needed:
 

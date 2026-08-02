@@ -1,4 +1,4 @@
-"""Deploy service — pure helpers for the deploy command.
+"""Deploy service: pure helpers for the deploy command.
 
 The Typer command in `cli.py` orchestrates printing; this module owns the
 calculation: language filtering, path rewriting, agent selection, harness
@@ -7,19 +7,34 @@ file enumeration. Anything that does not need a Console lives here.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from deploy_ai_playbook.config import ModelTierConfig, load_model_tier_config
+from deploy_ai_playbook.config import (
+    ModelReasoningConfig,
+    ModelTierConfig,
+    load_model_reasoning_config,
+    load_model_tier_config,
+)
 from deploy_ai_playbook.discovery import OVERLAY_DIRS, DeployableFile
-from deploy_ai_playbook.paths import HARNESS_FILES, LANGUAGE_FILES, RULES_SOURCE_FILE, Tool
-
-AGENT_FILE_SUFFIX = ".agent.md"
+from deploy_ai_playbook.paths import (
+    AGENT_FILE_SUFFIX,
+    HARNESS_FILES,
+    LANGUAGE_FILES,
+    RULES_SOURCE_FILE,
+    Tool,
+)
 
 # Values Claude Code accepts in an agent's `model:` frontmatter field, plus
-# full model IDs. Anything else stays a tier name — the adopter's tool maps it.
+# full model IDs. Anything else stays a tier name: the adopter's tool maps it.
 CLAUDE_MODEL_KEYWORDS = frozenset({"opus", "sonnet", "haiku", "inherit"})
+
+# The mapped value is interpolated into a frontmatter line of every deployed
+# agent; a permissive prefix check would let a config value smuggle newlines
+# (and with them arbitrary frontmatter keys) into the deployed files.
+_CLAUDE_MODEL_ID = re.compile(r"^claude-[A-Za-z0-9._-]+$")
 
 _MODEL_TIER_LINE = re.compile(r"^model:\s*(advisor|executor)\s*$")
 
@@ -41,7 +56,7 @@ def claude_model_tier_mapping(
     for tier, value in (("advisor", model_tiers.advisor), ("executor", model_tiers.executor)):
         if value is None:
             continue
-        if value in CLAUDE_MODEL_KEYWORDS or value.startswith("claude-"):
+        if value in CLAUDE_MODEL_KEYWORDS or _CLAUDE_MODEL_ID.match(value):
             mapping[tier] = value
         else:
             skipped[tier] = value
@@ -54,10 +69,14 @@ def agent_model_tier_transform(
 ) -> tuple[Callable[[str], str] | None, list[str]]:
     """Build the deploy-time agent frontmatter transform for `tool`, plus notes to print.
 
-    Only the `claude` target has a native per-agent `model:` field, so every
-    other tool gets no transform and no note (CLAUDE.md § Model Tier stays
-    documentation-only for those adopters, exactly as before this feature).
+    Claude keeps Markdown agents and can materialize its `model:` frontmatter.
+    Codex uses standalone TOML custom-agent files, so the same source Markdown
+    becomes native Codex `name` / `description` / `developer_instructions`.
     """
+    if tool is Tool.codex:
+        model_tiers = load_model_tier_config(project_root)
+        reasoning = load_model_reasoning_config(project_root)
+        return lambda content: codex_agent_toml(content, model_tiers, reasoning), []
     if tool is not Tool.claude:
         return None, []
     model_tiers = load_model_tier_config(project_root)
@@ -83,7 +102,7 @@ def agent_model_tier_transform(
 def materialize_model_tier(content: str, mapping: dict[str, str]) -> str:
     """Rewrite `model: advisor|executor` frontmatter lines to the mapped model.
 
-    Scoped to the leading YAML frontmatter block only — prose mentions of tier
+    Scoped to the leading YAML frontmatter block only: prose mentions of tier
     names are never touched. Content without frontmatter, or with an empty
     mapping, is returned unchanged.
     """
@@ -97,6 +116,89 @@ def materialize_model_tier(content: str, mapping: dict[str, str]) -> str:
         if match and match.group(1) in mapping:
             lines[index] = f"model: {mapping[match.group(1)]}"
     return "\n".join(lines)
+
+
+def codex_agent_toml(
+    content: str,
+    model_tiers: ModelTierConfig | None = None,
+    reasoning: ModelReasoningConfig | None = None,
+) -> str:
+    """Convert one playbook Markdown agent into Codex's custom-agent TOML."""
+    metadata, body = _split_agent_markdown(content)
+    agent_name = metadata.get("id") or _slug(metadata.get("name", "agent"))
+    description = metadata.get("description") or metadata.get("name") or agent_name
+    tier = metadata.get("model")
+
+    lines = [
+        f"name = {_toml_string(agent_name)}",
+        f"description = {_toml_string(description)}",
+    ]
+    model = _tier_value(model_tiers, tier)
+    if model is not None:
+        lines.append(f"model = {_toml_string(model)}")
+    effort = _tier_value(reasoning, tier)
+    if effort is not None:
+        lines.append(f"model_reasoning_effort = {_toml_string(effort)}")
+    lines.append(f"developer_instructions = {_toml_string(_codex_instructions(metadata, body))}")
+    return "\n".join(lines) + "\n"
+
+
+def _split_agent_markdown(content: str) -> tuple[dict[str, str], str]:
+    if not content.startswith("---\n"):
+        return {}, content
+    try:
+        frontmatter, body = content[4:].split("\n---\n", 1)
+    except ValueError:
+        return {}, content
+    metadata: dict[str, str] = {}
+    for raw_line in frontmatter.splitlines():
+        if not raw_line or raw_line.startswith("#") or ":" not in raw_line:
+            continue
+        key, value = raw_line.split(":", 1)
+        metadata[key.strip()] = _frontmatter_value(value)
+    return metadata, body.lstrip()
+
+
+def _frontmatter_value(value: str) -> str:
+    stripped = value.strip()
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {'"', "'"}:
+        return stripped[1:-1].replace(f"\\{stripped[0]}", stripped[0])
+    return stripped
+
+
+def _codex_instructions(metadata: dict[str, str], body: str) -> str:
+    metadata_lines = [
+        f"{key}: {value}"
+        for key, value in metadata.items()
+        if key not in {"description", "model", "name"}
+    ]
+    if not metadata_lines:
+        return body
+    return "Source agent metadata:\n" + "\n".join(metadata_lines) + "\n\n" + body
+
+
+def _tier_value(
+    config: ModelTierConfig | ModelReasoningConfig | None,
+    tier: str | None,
+) -> str | None:
+    if config is None or tier not in {"advisor", "executor"}:
+        return None
+    return getattr(config, tier)
+
+
+def _toml_string(value: str) -> str:
+    # ensure_ascii would escape non-BMP characters as UTF-16 surrogate
+    # pairs (\ud83d...), which JSON allows but TOML rejects. Keeping the
+    # characters literal is valid in both. DEL and C1 controls go the
+    # other way: JSON leaves them literal but TOML basic strings forbid
+    # them, so escape those explicitly.
+    encoded = json.dumps(value, ensure_ascii=False)
+    return re.sub(r"[\x7f-\x9f]", lambda m: f"\\u{ord(m.group()):04x}", encoded)
+
+
+def _slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "agent"
 
 
 def normalize_language_filter(language: str | None) -> str | None:

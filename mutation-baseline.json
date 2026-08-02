@@ -1,10 +1,10 @@
 {
-  "version": 1,
+  "version": 3,
   "scope": "src/deploy_ai_playbook/",
   "generated_by": "uv run mutmut export-cicd-stats",
-  "notes": "Regression baseline for the dedicated mutation workflow. Snapshot ratchet from CI run 29627561298 (total 4007, survived 580, timeout 436): drive max_survived/max_timeout DOWN over time, never up without reviewing survivors. max_skipped/min_total provenance: tools/check-mutation-baseline.py docstring.",
+  "notes": "Regression baseline for the dedicated mutation workflow. CI run 29627561298 had total 4007, survived 580, timeout 436 (25.36% unresolved); run 29994321084 reclassified the population to survived 701 and timeout 308, proving runner speed can move mutants between those states. Ratchet max_unresolved_basis_points down over time. max_timeout, max_skipped, and min_total provenance: tools/check-mutation-baseline.py docstring.",
   "thresholds": {
-    "max_survived": 600,
+    "max_unresolved_basis_points": 2600,
     "max_no_tests": 13,
     "max_skipped": 0,
     "max_suspicious": 0,

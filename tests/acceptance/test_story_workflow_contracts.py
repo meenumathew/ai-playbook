@@ -1,6 +1,6 @@
 """Contract tests for story-shape handling and story templates.
 
-These tests pin *behavioural* invariants — that each agent and template
+These tests pin *behavioural* invariants: that each agent and template
 documents the four work shapes, regression-test-first for bugs, spike
 short-circuit, etc. They deliberately avoid pinning prose position
 (`.find()` + slice) or exact heading wording, so legitimate copy-edits
@@ -17,7 +17,7 @@ import yaml
 from deploy_ai_playbook.cli import get_source_root
 
 # ---------------------------------------------------------------------------
-# Lightweight markdown parsing — no positional pinning
+# Lightweight markdown parsing: no positional pinning
 # ---------------------------------------------------------------------------
 
 
@@ -101,6 +101,21 @@ def test_xp_pair_short_circuits_on_spike_and_handles_bug_type():
     )
 
 
+def test_xp_refactor_cycle_checks_every_simple_design_rule():
+    agent = _read(get_source_root() / "agents" / "xp-pair-programmer.agent.md")
+    refactor = re.search(
+        r"4\. \*\*REFACTOR\*\*(.*?)(?=\n5\. \*\*REVIEW THE DIFF\*\*)",
+        agent,
+        re.DOTALL,
+    )
+    assert refactor, "xp-pair-programmer must define the REFACTOR cycle"
+    section = refactor.group(1)
+
+    assert "Stop at the first rule" not in section
+    assert "Evaluate all four rules" in section
+    assert "Stop refactoring when" in section
+
+
 # ---------------------------------------------------------------------------
 # story-refiner: classify before capturing anchors
 # ---------------------------------------------------------------------------
@@ -126,18 +141,18 @@ def test_test_story_type_is_first_class_across_agents_and_skill():
     # STRUCTURE-MARKER: enum value plus its filename-prefix rule.
     assert "`test-story`" in skill, "story-writing skill must list the test-story type"
     assert "STORY-NNN-" in skill, "story-writing skill must document the test-story prefix"
-    # STRUCTURE-MARKER: legacy no-type stories still trigger the test-story
-    # cycle in xp-pair-programmer as a secondary fallback.
+    # STRUCTURE-MARKER: stories with no `type:` field still trigger the
+    # test-story cycle in xp-pair-programmer as a secondary fallback.
     xp_pair = _read(root / "agents" / "xp-pair-programmer.agent.md")
-    assert re.search(r"[Ll]egacy fallback", xp_pair), (
-        "xp-pair-programmer must keep the no-type legacy test-story fallback"
+    assert re.search(r"[Nn]o-type fallback", xp_pair), (
+        "xp-pair-programmer must keep the no-type test-story fallback"
     )
 
 
 def test_story_refiner_classifies_work_shape_before_anchors():
     agent = _read(get_source_root() / "agents" / "story-refiner.agent.md")
 
-    # Find the two procedural steps by stable substrings — not by position.
+    # Find the two procedural steps by stable substrings: not by position.
     # Both must exist and "classify" must come first in document order.
     classify_match = re.search(r"\bClassify[^\n]+work shape\b", agent, re.IGNORECASE)
     anchors_match = re.search(r"\bCapture[^\n]+intent anchors\b", agent, re.IGNORECASE)
@@ -158,7 +173,7 @@ def test_story_refiner_classifies_work_shape_before_anchors():
         "story-refiner must keep the <PREFIX>-NNN placeholder in artifact paths"
     )
 
-    # Bug and spike paths replace the anchors step — flag presence, not phrasing.
+    # Bug and spike paths replace the anchors step: flag presence, not phrasing.
     assert re.search(r"bug\s+path", agent, re.IGNORECASE), (
         "story-refiner must document a bug-path branch that replaces anchors"
     )

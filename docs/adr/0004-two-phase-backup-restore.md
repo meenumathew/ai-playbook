@@ -14,6 +14,8 @@
 
 Restore in two phases (`src/deploy_ai_playbook/backup.py`): first `_stage_backup` writes the backup content into a staging area, then `_swap_staged` moves staged files into their final locations, snapshotting the current files into a `.rollback-current` directory first. If the swap fails partway, the rollback snapshot restores the prior state. Backups record which tool they belong to so rollback selects the right destination set.
 
+**Text equivalent:** stage the backup, snapshot the current files, then swap staged files into place. A successful swap completes the restore; a failed swap restores the snapshot so the prior state remains intact.
+
 ```mermaid
 flowchart TD
     start([restore / rollback]) --> stage[_stage_backup:<br/>write backup into staging]

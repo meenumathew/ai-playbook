@@ -6,7 +6,7 @@ load_when: test, TDD, AC coverage, retrofit tests, weak test, test quality, char
 audience: all
 canonical_for: TDD discipline, test naming convention, AC standards, test quality rules, retrofitting tests
 cross_refs: testing-techniques.md, languages/testing-python.md, debugging.md, feature-flags.md
-verified: 2026-07-17
+verified: 2026-07-23
 ---
 
 # Testing Rules
@@ -16,7 +16,7 @@ Optional techniques: `testing-techniques.md`.
 
 ## Agent Use
 
-- **Read first:** TDD Discipline, Choose The Testing Mode, Acceptance Test (AT) Standards, Test Quality Rules.
+- **Read first:** TDD Discipline, Choose The Testing Mode, Acceptance Test Standards, Test Quality Rules.
 - **Load deeper only on trigger:** mutation, property-based, contract, async/event-driven techniques: `testing-techniques.md`; language-specific techniques: `languages/testing-<lang>.md`.
 
 ---
@@ -47,14 +47,31 @@ Use the lightest test strategy that protects the change.
 
 ---
 
-## Acceptance Test (AT) Standards
+## Acceptance Test Standards
 
 - One AT per acceptance criterion.
-- Name: `test_ac_<what>_<condition>`.
 - Location: `tests/acceptance/`, organized by business capability.
+- Function name: `test_<what>_<condition>`.
+- Keep acceptance tests under `tests/acceptance/`; do not add a separate
+  top-level `acceptance/` tree or encode the layer in names such as
+  `test_ac_*`. The directory already communicates the test layer, the
+  descriptive name communicates the behaviour, and the story or plan maps
+  each acceptance criterion to its acceptance test.
 - Runs against the real public entry point: HTTP route, CLI command, message handler, component render.
-- Use fakes/in-memory adapters at external boundaries to keep ATs fast.
+- Use fakes/in-memory adapters at external boundaries to keep ATs fast. This trades away production-like AT environments by design; the mitigation is a pipeline stage that re-runs the AT suite against the deployed or installed artifact (`docs/limitations.md` § Limitation Registry, Testing row).
+- Keep scenarios atomic: no shared test-data between test cases. Each AT starts from a functioning system that contains no data and creates what it needs.
 - New-behaviour ATs should fail before coding starts. If one passes immediately, verify whether behaviour already exists or the test is too weak.
+
+### Acceptance Test Infrastructure
+
+- Write the test case in the language of the problem domain: what the user or external actor is trying to do, not how the system implements it.
+- Use four layers when acceptance tests need shared plumbing: test case -> domain DSL -> protocol driver -> system under test. The test case names the business scenario, the DSL supplies domain actions and defaults, and the protocol driver owns the channel-specific interaction details.
+- Put UI selectors, endpoint mechanics, message formats, retries, setup aliases, and default values in shared helpers or protocol drivers. That layer translates domain actions into interactions with the system under test.
+- Create a separate protocol driver for each public communication channel when channels differ, such as CLI, HTTP, UI, or message handling.
+- When a helper layer exists, give domain actions optional named parameters with sensible defaults: each test states only the values its behaviour depends on and skims over the rest. Precision where the test needs it, defaults everywhere else.
+- The test body should read like an executable specification. If the test body explains buttons, routes, database rows, or wire payload plumbing, move that detail down unless the public contract itself is the behaviour under test.
+- Two readability checks for an AT body: a person who knows the problem domain but not this codebase can follow it; and if the implementation were replaced by something completely different with the same goals, the test would still make sense.
+- Reuse helpers when a domain action appears in more than one acceptance test. For a one-step CLI/API assertion, plain Arrange-Act-Assert is enough: do not build a DSL before reuse or fragility justifies it.
 
 ---
 
@@ -64,7 +81,7 @@ Non-negotiable. Every test xp-pair-programmer writes and diff-reviewer checks mu
 
 1. **Test behaviour, not implementation**: assert return values, raised exceptions, state changes, emitted events, or user-visible output. Never assert private state or internal call order.
 2. **One behaviour per test**: if the name needs "and", split it.
-3. **Named `test_<what>_<condition>`**: e.g. `test_token_expires_after_15_minutes`.
+3. **Named `test_<what>_<condition>`**: e.g. `test_token_expires_after_15_minutes`. Do not use layer prefixes like `test_unit_` or `test_integration_`: the directory identifies the test layer.
 4. **Arrange-Act-Assert**: setup, execute, verify. Add AAA comments only when structure is not obvious.
 5. **Unit tests have no I/O**: no DB, filesystem, network, or clock.
 6. **Test independence**: no shared mutable state; tests pass in any order.
@@ -115,7 +132,7 @@ Every AC needs positive coverage. User-visible failure paths need negative cover
 
 Heuristic: stub queries, mock commands (verify side effects at external seams); use in-memory fakes for ports. Domain objects do not need mocks.
 
-Python projects: never import from `unittest.mock`; use the pytest `mocker` fixture. Details: `languages/testing-python.md` § Mocking.
+Python projects: use the pytest `mocker` fixture (`pytest-mock`); adding the plugin is the default in any pytest project, with the standard-library API reserved for the narrow cases and consistency rules defined in `languages/testing-python.md` § Mocking. Never mix mocking styles within one test module.
 
 ### Mock at boundaries only
 

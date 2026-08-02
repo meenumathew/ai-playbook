@@ -9,8 +9,10 @@
 #   2. Finds the most recent `Active agent: <id>` marker in the transcript.
 #   3. Looks up that agent's `read-budget:` in .claude/agents/<id>.agent.md.
 #   4. Counts Read calls per session AND agent in
-#      .claude/read-budget/<session>.<agent>.count — an agent switch resets
-#      the count so the new agent never inherits the previous agent's reads.
+#      .claude/read-budget/<session>.<agent>.count (one line appended per
+#      allowed read; the count is the line count, so parallel Reads cannot
+#      lose updates) — an agent switch resets the count so the new agent
+#      never inherits the previous agent's reads.
 #      Duplicate-read detection stays per-session (<session>.paths): a file
 #      already in context is in context regardless of which agent read it.
 #   5. At >=80% of cap: allows, emitting PreToolUse hook JSON on stdout
@@ -51,8 +53,20 @@ fi
 # No transcript => cannot attribute => fail open.
 [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || exit 0
 
-# Most recent agent marker wins (agents may switch mid-session).
-AGENT="$(grep -oE 'Active agent: [a-z][a-z-]*' "$TRANSCRIPT" 2>/dev/null | tail -1 | sed 's/^Active agent: //')"
+# Most recent agent marker wins (agents may switch mid-session). With jq,
+# only assistant-message text is searched: tool results carry read-file
+# contents, and any file containing the literal marker would otherwise flip
+# attribution (and with it, whose budget is charged). Without jq the raw
+# grep remains as a documented best-effort.
+if command -v jq >/dev/null 2>&1; then
+  AGENT="$(jq -r '
+      select(.type == "assistant") | .message
+      | if type == "string" then . else ((.content // [])[]? | .text? // empty) end
+    ' "$TRANSCRIPT" 2>/dev/null \
+      | grep -oE 'Active agent: [a-z][a-z-]*' | tail -1 | sed 's/^Active agent: //')"
+else
+  AGENT="$(grep -oE 'Active agent: [a-z][a-z-]*' "$TRANSCRIPT" 2>/dev/null | tail -1 | sed 's/^Active agent: //')"
+fi
 [ -n "$AGENT" ] || exit 0
 
 AGENT_FILE="${AGENTS_DIR}/${AGENT}.agent.md"
@@ -73,10 +87,17 @@ AGENT="$(printf '%s' "$AGENT" | tr -cd 'A-Za-z0-9._:-' | cut -c 1-64)"
 [ -n "$AGENT" ] || exit 0
 
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
+# Prune stale per-session state — the directory otherwise grows forever
+# (one .count plus one .paths file per session, on every adopter machine).
+# 7 days comfortably outlives any resumable session.
+find "$STATE_DIR" -type f -mtime +7 -exec rm -f {} + 2>/dev/null
 # Keyed by session AND agent: a mid-session role switch starts the new agent
 # at zero instead of inheriting the previous agent's read count.
 COUNT_FILE="${STATE_DIR}/${SESSION_ID}.${AGENT}.count"
-COUNT="$(cat "$COUNT_FILE" 2>/dev/null || echo 0)"
+# One line is appended per allowed read; the count is the line count.
+# O_APPEND appends are atomic, so parallel Read calls (Claude batches them)
+# cannot lose updates the way a read-increment-rewrite cycle does.
+COUNT="$(wc -l < "$COUNT_FILE" 2>/dev/null | tr -d '[:space:]')"
 case "$COUNT" in *[!0-9]*|'') COUNT=0 ;; esac
 NEXT=$((COUNT + 1))
 
@@ -110,15 +131,15 @@ _flush_notes() {
 }
 
 if [ "${CLAUDE_SKIP_READ_BUDGET:-0}" = "1" ]; then
-  printf '%s\n' "$NEXT" > "$COUNT_FILE" 2>/dev/null
-  echo "⚠ CLAUDE_SKIP_READ_BUDGET=1 set — read-budget enforcement bypassed (read ${NEXT}, cap ${BUDGET} for ${AGENT})." >&2
+  printf '.\n' >> "$COUNT_FILE" 2>/dev/null
+  echo "WARNING: CLAUDE_SKIP_READ_BUDGET=1 set — read-budget enforcement bypassed (read ${NEXT}, cap ${BUDGET} for ${AGENT})." >&2
   exit 0
 fi
 
 if [ "$NEXT" -gt "$BUDGET" ]; then
   # Blocked reads are not counted — the cap stays the cap on retry.
   cat >&2 <<EOF
-✗ Read budget reached: ${AGENT} has used ${COUNT} of ${BUDGET} reads this session.
+ERROR: Read budget reached: ${AGENT} has used ${COUNT} of ${BUDGET} reads this session.
 Per CLAUDE.md § Shared Rules (read budget), STOP and ask the user before
 reading more. Narrow the question, cite what you already read, and either
 finish with current context or ask the user to extend the budget
@@ -127,7 +148,7 @@ EOF
   exit 2
 fi
 
-printf '%s\n' "$NEXT" > "$COUNT_FILE" 2>/dev/null
+printf '.\n' >> "$COUNT_FILE" 2>/dev/null
 
 # Duplicate-read detection: re-reading a file already read this session is
 # pure budget waste (its content is in context). Warn-only — a re-read after

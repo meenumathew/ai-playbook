@@ -1,4 +1,4 @@
-"""Branch-coverage tests for fs.py — fingerprint, expected-files, prune.
+"""Branch-coverage tests for fs.py: fingerprint, expected-files, prune.
 
 These exercise edge cases in the unified discovery-driven API: empty trees,
 missing subdirs, skipped knowledge-base files, harness inclusion, copilot
@@ -257,3 +257,34 @@ def test_prune_orphaned_files_dry_run_keeps_orphan(tmp_path: Path) -> None:
 
     assert orphan.exists()
     assert any("would prune" in status for _, status in results)
+
+
+def test_prune_allowed_restricts_deletion_to_previewed_paths(tmp_path: Path) -> None:
+    """The confirm flow previews, then deletes: files that became orphans
+    between the two passes were never shown to the user and must survive."""
+    from deploy_ai_playbook.fs import prune_orphaned_files
+    from deploy_ai_playbook.paths import Tool
+
+    source = tmp_path / "source"
+    (source / "agents").mkdir(parents=True)
+    (source / "agents" / "keeper.agent.md").write_text("# keeper\n", encoding="utf-8")
+    project = tmp_path / "project"
+    agents_dir = project / ".claude" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "keeper.agent.md").write_text("# keeper\n", encoding="utf-8")
+    previewed_orphan = agents_dir / "previewed-orphan.agent.md"
+    previewed_orphan.write_text("# orphan\n", encoding="utf-8")
+    late_orphan = agents_dir / "late-orphan.agent.md"
+    late_orphan.write_text("# appeared after preview\n", encoding="utf-8")
+
+    from deploy_ai_playbook.discovery import discover_layered
+
+    discovered = discover_layered(source, packs=[]).files
+    allowed = {previewed_orphan.relative_to(project)}
+
+    pruned = prune_orphaned_files(project, source, Tool.claude, False, discovered, allowed=allowed)
+
+    pruned_paths = {path for path, _status in pruned}
+    assert previewed_orphan.relative_to(project) in pruned_paths
+    assert not previewed_orphan.exists()
+    assert late_orphan.exists(), "un-previewed orphans must survive the delete pass"

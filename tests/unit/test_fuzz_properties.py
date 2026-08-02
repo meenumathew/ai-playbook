@@ -3,8 +3,8 @@
 These are the fuzz targets `docs/limitations.md` § Security named: arbitrary
 input must never escape the documented error contract. Config parsing may
 reject input only via `ConfigError` or the CLI's `typer.Exit`; path safety must
-contain every write inside the project root. `derandomize=True` keeps CI runs reproducible —
-the same examples run every time, so a failure is always replayable.
+contain every write inside the project root. `derandomize=True` keeps CI runs
+reproducible: the same examples run every time, so a failure is always replayable.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ FUZZ_SETTINGS = settings(
     suppress_health_check=[HealthCheck.too_slow],
 )
 
-# Text without surrogates — surrogates fail at file-write time in the test
+# Text without surrogates: surrogates fail at file-write time in the test
 # harness itself, before the code under test ever runs.
 _writable_text = st.text(alphabet=st.characters(exclude_categories=("Cs",)), max_size=300)
 
@@ -45,7 +45,7 @@ _path_segment = st.text(
 @given(content=_writable_text)
 def test_load_pack_config_rejects_arbitrary_config_only_via_config_error(content: str) -> None:
     """Malformed `.ai-playbook.toml` content must never raise an unhandled
-    exception type — the library contract is a clean `ConfigError`."""
+    exception type: the library contract is a clean `ConfigError`."""
     with tempfile.TemporaryDirectory() as tmp:
         project_root = Path(tmp)
         (project_root / ".ai-playbook.toml").write_text(content, encoding="utf-8")
@@ -60,7 +60,7 @@ def test_load_pack_config_rejects_arbitrary_config_only_via_config_error(content
 @given(segments=st.lists(_path_segment, min_size=1, max_size=4))
 def test_load_pack_config_never_yields_pack_root_outside_project(segments: list[str]) -> None:
     """Whatever path string a config declares, an accepted pack root always
-    resolves inside the project root — traversal is rejected, not resolved."""
+    resolves inside the project root: traversal is rejected, not resolved."""
     pack_entry = "/".join(segments)
     with tempfile.TemporaryDirectory() as tmp:
         project_root = Path(tmp).resolve()

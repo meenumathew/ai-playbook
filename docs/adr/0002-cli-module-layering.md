@@ -14,6 +14,8 @@ The `deploy_ai_playbook` CLI grew to ~15 commands across a dozen modules. Withou
 
 Enforce a one-directional layering: **foundation** (`paths`, `config`, `safety`, `console`, `errors`) → **middle** (`targets`, `discovery`, `fs`, `mcp`, `telemetry`) → **service** (`backup`, `upgrade`, `services`, `doctor`) → **cli** (`cli.py`). Lower layers must never import from higher layers. Library layers raise typed errors and stay Rich/Typer-free; presentation lives only in `cli.py`. An AST-based test (`tests/unit/test_architecture.py`) fails the build on any backwards dependency.
 
+**Text equivalent:** imports flow from `cli` to service, from service to middle, and from middle to foundation. A lower layer never imports a higher layer.
+
 ```mermaid
 flowchart TD
     cli["cli (cli.py) — Typer wiring, presentation"]

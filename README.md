@@ -8,7 +8,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A developer workflow framework for AI-assisted software development. Eight agents take a change from idea to deployed code: and through production incidents: using **Extreme Programming (XP)**, **Test-Driven Development (TDD)**, and **Domain-Driven Design (DDD)** practices. Planning, audit, and incident work is captured in markdown artifacts, so work is resumable across sessions and AI tools.
+A developer workflow framework for AI-assisted software development. Eight agents take a change from idea to reviewed, release-ready code and support production-incident response using **Extreme Programming (XP)**, **Test-Driven Development (TDD)**, and **Domain-Driven Design (DDD)** practices. Planning, audit, and incident work is captured in markdown artifacts, so work is resumable across sessions and AI tools.
 
 > **Audience.** Developers building production-minded software who are comfortable with TDD, refactoring, and code review.
 
@@ -26,7 +26,7 @@ The playbook is most useful when you are already comfortable with:
 
 - You ship production code and want AI tools to follow your team's standards.
 - AI tools have produced code that ignores your architecture, skips tests, or drifts from requirements.
-- You work across multiple AI tools (Claude, Copilot, Cursor, Kiro) and want a consistent workflow.
+- You work across multiple AI tools (Claude, Copilot, Codex, Cursor, Kiro) and want a consistent workflow.
 - Your team uses any methodology (Scrum, Kanban, Shape Up, or no formal process) with any project-management tool or issue tracker (Jira, GitHub Issues/Projects, GitLab Issues, Bitbucket Issues, Linear, or none).
 
 ## When It Is Not
@@ -41,6 +41,21 @@ The playbook is most useful when you are already comfortable with:
 
 AI coding tools are capable but unguided: they write code without grounding in requirements, skip tests, ignore existing patterns, and drift from intent. The playbook gives AI tools a structured workflow: refine the idea or tracker work item, research the codebase, plan in vertical slices, build test-first, review against standards. The workflow uses markdown story artifacts, research, plans, audits, reviews, and incidents where durable context matters, so context survives across sessions, project-management tools, and AI tool switches.
 
+### Established practices vs playbook policy
+
+The knowledge base is not a claim that every rule is an industry standard.
+It combines established practices (XP/TDD, DDD, Semantic Versioning,
+OWASP-aligned security review, DORA metrics, and Diataxis documentation) with
+opinionated operating policy for AI-assisted delivery.
+
+Approval gates, agent handoffs, read budgets, artifact formats, quality tiers,
+and advisor/executor model routing are playbook defaults. They are
+contract-tested here, but teams should adapt them through documented
+configuration or adopter packs and measure results in their own environment.
+Python is the maintained language reference; other language templates require
+team-owned conventions. See [Known limitations](docs/limitations.md) for the
+current evidence boundary and unbenchmarked areas.
+
 ---
 
 ## Key Features
@@ -49,9 +64,11 @@ AI coding tools are capable but unguided: they write code without grounding in r
 - **Two-layer testing (acceptance tests + unit TDD)**: acceptance tests written from story acceptance criteria verify *built the right thing*; unit TDD drives the implementation, verifying *built it right*. xp-pair-programmer enforces both layers.
 - **Quality tiers**: set `prototype` or `production` globally, then override individual agents in `.ai-playbook.toml` when one needs different ceremony.
 - **Language-agnostic workflow**: agents and the starter harness detect common project configs. Python is the maintained reference implementation; other stacks start from team-owned convention templates.
-- **Tool-aware deployment** *(CLI)*: `ai-playbook deploy` writes the right files to the right places for Claude, GitHub Copilot, Cursor, and Kiro. Claude, Copilot, and Cursor get slash commands; Kiro uses natural-language invocation.
+- **Tool-aware deployment** *(CLI)*: `ai-playbook deploy` writes the right files to the right places for Claude, GitHub Copilot, Codex, Cursor, and Kiro. Claude, Copilot, and Cursor get slash commands; Codex and Kiro use natural-language invocation.
+- **Measurable static context**: `ai-playbook context-report --agent all` reports the fixed rules, each agent, and declared KB preloads as characters plus a clearly labelled token estimate. It supports pack overlays and does not misrepresent the estimate as provider billing telemetry.
+- **Privacy-minimal local telemetry**: optional Claude `Stop` and Codex `SessionEnd` hooks record only timestamp, source, approximate turns, and best-effort active-agent name. They never store or transmit session identifiers, content, model details, token counts, repository content, or credentials.
 - **Adopter-local packs**: extend or override the playbook core with project-specific agents, knowledge-base files, skills, or templates via `.ai-playbook.toml`. Optional `pack.toml` metadata records pack versions and compatibility bounds. Core updates flow through `uv tool upgrade ai-playbook` (or `pip install -U ai-playbook`); pack content survives. Commands are core-only in v1. See [CLI Reference § Packs](docs/cli-reference.md#packs).
-- **Model-agnostic tiers**: agents declare `advisor` or `executor` tier in frontmatter; map tiers to whatever models you use (Anthropic, OpenAI, Google, Ollama-backed local models, mixed). Source files never hard-code model IDs. Deploying to Claude materializes your `[model_tiers]` mapping into the deployed agent frontmatter, so per-agent model routing is automatic; other tools map tiers in their own config. See [`knowledge-base/model-tier.md`](knowledge-base/model-tier.md).
+- **Model-agnostic tiers**: agents declare `advisor` or `executor` tier in frontmatter; map tiers to whatever models you use (Anthropic, OpenAI, Google, Ollama-backed local models, mixed). Source files never hard-code model IDs. Deploying to Claude materializes your `[model_tiers]` mapping into deployed agent frontmatter, and deploying to Codex materializes `[model_tiers]` plus optional `[model_reasoning_efforts]` into native custom-agent TOML; other tools map tiers in their own config. See [`knowledge-base/model-tier.md`](knowledge-base/model-tier.md).
 - **Resumable**: file-based artifacts (stories, research, plans, audits, reviews, incidents) let any AI tool pick up where another left off.
 - **Project-management-tool agnostic** *(work item in, story artifact out)*: `skills/issue-fetch/SKILL.md` accepts a Jira issue key, GitHub issue or Project item, GitLab issue, Bitbucket Cloud issue, Linear issue ID, tracker URL, or pasted work item. The agent preserves the original reference in `issue-ref:`, resolves local story artifacts first, then fetches via the configured CLI, MCP server, or provider API. The CLI itself does not call any tracker.
 - **Host-agnostic** *(skill contract)*: `skills/host-adapter/SKILL.md` defines stable operation IDs (`host.pr.create`, `host.pr.review`, `host.pr.merge`) for GitHub, GitLab, Bitbucket Cloud, and Gitea/Forgejo. Adopters satisfy the contract with their host CLI (`gh`, `glab`, `tea`) or REST. This is a markdown contract for agents, not a Python runtime adapter inside the CLI.
@@ -118,7 +135,7 @@ xp-pair-programmer          →  Acceptance tests from acceptance criteria (oute
      ↓
 diff-reviewer    →  Verify against acceptance criteria, knowledge base standards, and Definition of Done
      ↓
-release-captain  →  Open PR/MR, watch CI, merge on approval, version bump, tag, post-deploy smoke
+release-captain  →  Open PR/MR, watch CI, merge on approval, merge a release PR, tag, post-deploy smoke
 ```
 
 When production breaks, **incident-responder** triages, ranks hypotheses, writes the blameless postmortem, and proposes follow-up artifacts. It is read-only on production; humans, with release-captain, execute mitigations.
@@ -133,11 +150,18 @@ release-captain ships up to the tag, not into production. The playbook deliberat
 |---|---|
 | Open PR/MR via the host-adapter (GitHub, GitLab, Bitbucket Cloud, Gitea) | Auto-merge: every merge requires explicit user approval |
 | Watch CI and refuse to proceed on red | Run `kubectl`, `terraform`, `ansible`, `helm`, `docker push`, or any deploy command |
-| Bump version, update `CHANGELOG`, create an annotated tag | Push a tag without explicit user approval for that push |
+| Bump version and update `CHANGELOG` through a release PR, then tag its merged remote commit | Push a tag without explicit user approval for that push |
 | Run the post-deploy smoke checklist after a deploy lands | Execute the deploy itself: your CI/CD picks up from the tag |
 | Hand off to incident-responder if smoke fails | Roll back deploys, toggle feature flags, scale services, rotate secrets |
 
 For auto-deploy on tag push, configure your CI/CD pipeline (GitHub Actions, GitLab CI, Bitbucket Pipelines, ArgoCD) to react to `v*` tags. Deploy is environment-specific, and the failure mode of an over-eager agent is high: the playbook stays out of that loop by design. See [`knowledge-base/release.md`](knowledge-base/release.md) for the full gate list.
+
+This repository's own [auto-release workflow](.github/workflows/auto-release.yml)
+also preserves that boundary: it opens a release PR for generated version and
+changelog changes, waits for humans and branch protection to govern the merge,
+then tags the exact merged commit. Credential setup and
+`Permission denied (publickey)` recovery are documented in
+[`RELEASING.md`](RELEASING.md#auto-release-credentials).
 
 ---
 
@@ -159,12 +183,12 @@ Reject empty names and emails without an @ symbol.
 Before any production code, xp-pair-programmer writes a failing acceptance test for each acceptance criterion at the system boundary:
 
 ```python
-# tests/acceptance/test_ac_create_user.py
-def test_ac_create_user_rejects_empty_name():
+# tests/acceptance/test_create_user.py
+def test_create_user_rejects_empty_name():
     with pytest.raises(ValueError, match="name"):
         create_user(name="", email="valid@example.com")
 
-def test_ac_create_user_rejects_invalid_email():
+def test_create_user_rejects_invalid_email():
     with pytest.raises(ValueError, match="email"):
         create_user(name="Alice", email="no-at-symbol")
 ```
@@ -185,8 +209,8 @@ Run the first acceptance test: green. Move to the next criterion, write code, re
 **Step 4. All acceptance tests pass.**
 
 ```text
-AC 1: rejects empty name ✅
-AC 2: rejects invalid email ✅
+AC 1: rejects empty name
+AC 2: rejects invalid email
 
 Changes staged. Say 'commit' to proceed.
 ```
@@ -294,6 +318,7 @@ This is an opinionated playbook, not a finished framework. It works well for the
 
 - **Single-maintainer project.** Designed and maintained by one person. Governance, the RFC process, and the compatibility promise are documented in [`GOVERNANCE.md`](GOVERNANCE.md), [`docs/rfcs/README.md`](docs/rfcs/README.md), and [`docs/deprecation-policy.md`](docs/deprecation-policy.md). Multi-maintainer transition criteria are explicit; until they are met, the maintainer has final say.
 - **Not benchmarked against alternatives.** No published comparison versus Cursor rules, Aider conventions, Cline, Continue, or other agent frameworks. Quality claims rest on the playbook's own evals, not external baselines.
+- **Runtime token telemetry depends on the host.** Use `ai-playbook context-report` for a provider-neutral static estimate. Optional Claude/Codex local telemetry is deliberately privacy-minimal; actual conversation, tool-schema, cache, model, token, and cost data stays with provider-native reports.
 - **Eval suite is v1.** Adversarial pairs, committed baselines, structural calibration, generated standard-agent discovery, and schema-backed rubrics for all standard agents are in place. Multi-turn agent simulation, judge-ensemble scoring, and historical regression budgets are not yet implemented. The drift job is opt-in (manual `workflow_dispatch`, weekly cron off by default), makes a single-judge call against committed baselines, and fails closed if no baselines or judge secret are configured.
 - **Python is the only fully supported language.** Other languages (Go, Rust, Java, TypeScript, and others) are auto-detected and work, but team-owned conventions in `knowledge-base/languages/<lang>.md` start from blank templates.
 - **Bitbucket Server / Data Center is not supported.** Bitbucket Cloud only: see [ADR-0001](docs/adr/0001-bitbucket-server-not-supported.md).

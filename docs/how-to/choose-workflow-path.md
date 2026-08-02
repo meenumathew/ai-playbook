@@ -38,7 +38,7 @@ Is the change trivial? (typo, rename, one-liner, config)
                     └─ NO  → Spike (timebox) → story-refiner → ...
 ```
 
-Same routing as a flowchart (the preceding `text` tree is the canonical, contract-synced copy; this diagram mirrors it for quick scanning):
+**Text equivalent:** the preceding `text` tree is the canonical, contract-synced routing. The Mermaid flowchart below mirrors it for quick scanning.
 
 ```mermaid
 flowchart TD
@@ -76,7 +76,7 @@ Spike code is throwaway and never committed to `main`.
 
 ### 5. Use the Fast Lane for Urgent Small Fixes
 
-For work that is urgent but not an active incident: the user says "asap" / "hotfix", or the story carries `priority: high` or `critical`: and the scope is small (≤ 3 points), run the same chain with prompts compressed:
+For work that is urgent but not an active incident, use the fast lane when the user says "asap" or "hotfix", or when the story carries `priority: high` or `critical`, and the scope is small (≤ 3 points). Run the same chain with compressed prompts:
 
 - **story-refiner**: classify and write the story with zero non-material questions; record assumptions instead of asking (`CLAUDE.md` § Shared Rules, Prompt minimization). One preview gate as usual.
 - **slice-planner**: use the small-story shortcut (append `## Implementation` to the story); skip design-options ceremony when one path is viable. One preview gate.

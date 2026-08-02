@@ -9,7 +9,7 @@ In this tutorial we will install AI Playbook, deploy it into a small demo projec
 - Python 3.12 or newer.
 - `uv` on PATH. If needed, install it from <https://docs.astral.sh/uv/getting-started/installation/>.
 - Git and `make` on PATH.
-- Claude Code, GitHub Copilot, Cursor, or Kiro ready when you reach the agent prompt. The shell commands below use `--tool claude`; replace it with your tool if needed.
+- Claude Code, GitHub Copilot, Codex, Cursor, or Kiro ready when you reach the agent prompt. The shell commands below use `--tool claude`; replace it with your tool if needed.
 
 ## 1. Install the CLI
 
@@ -83,7 +83,7 @@ ai-playbook deploy --agent all --tool claude
 
 `init` scaffolds the six artifact directories and a starter `.ai-playbook.toml`; it is idempotent and never overwrites existing files.
 
-Deploy copies agents, the knowledge base, skills, templates, the rules file (`CLAUDE.md`), the starter harness, and the issue-tracker MCP configuration into your project. Claude deploys also wire the harness telemetry Stop hook so completed sessions append to `.claude/usage.jsonl`.
+Deploy copies agents, the knowledge base, skills, templates, the rules file (`CLAUDE.md`), and the starter harness into your project. The MCP step prints `skipped` with the note `no issue-tracker provider configured`: this demo declares no issue-tracker provider, and deploy only auto-configures the Atlassian MCP when `.ai-playbook.toml` sets `provider = "jira"` (see [Set Up Your Project Management Tool](how-to/setup-issue-tracker.md)). Claude and Codex deploys also wire an optional privacy-minimal local telemetry hook; it records only timestamp, source, approximate turns, and best-effort active-agent name.
 
 Decide as a team whether generated artifacts (`stories/`, `plans/`, `research/`, `audits/`, `reviews/`, and `incidents/`) should be committed. Run `ai-playbook artifact-policy local` to add a managed `.gitignore` block for local-only artifacts, or `ai-playbook artifact-policy shared` to remove that managed block when artifacts should be committed or governed manually.
 
@@ -108,7 +108,7 @@ executor = "sonnet"
 TOML
 ```
 
-For non-Claude tools, or values Claude Code does not recognize (for example Ollama identifiers), the mapping is left as the tier name and you map it in your tool's own config.
+For Codex, the mapping is written into `.codex/agents/*.toml`; add `[model_reasoning_efforts]` when you also want Codex-native reasoning hints. For Copilot, Cursor, Kiro, or values Claude Code does not recognize (for example Ollama identifiers), the mapping stays as the tier name and you map it in your tool's own config.
 
 ## 5. Install the Local Hooks
 
@@ -171,7 +171,7 @@ Run the doctor command:
 ai-playbook doctor --tool claude
 ```
 
-A healthy deployment prints `✓ All healthy: deployment is up to date`.
+A healthy deployment prints `All healthy: deployment is up to date`.
 
 For CI checks that need an exit code rather than a report, use:
 

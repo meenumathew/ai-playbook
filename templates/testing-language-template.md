@@ -63,7 +63,7 @@ verified: <YYYY-MM-DD>
 
 | Banned / discouraged | Use instead | Reason |
 |---|---|---|
-| `<legacy or discouraged mock API>` | `<preferred API>` | `<rationale>` |
+| `<banned or discouraged mock API>` | `<preferred API>` | `<rationale>` |
 
 **Rules:** Never mock the type under test. Reset mocks before each test. Use patching only when DI is impossible.
 

@@ -6,7 +6,7 @@ Start any agent with the correct input so it produces the right artifact on the 
 
 ## Prerequisites
 
-- AI Playbook deployed into your project: `ai-playbook deploy --agent all --tool <claude|copilot|cursor|kiro>`
+- AI Playbook deployed into your project: `ai-playbook deploy --agent all --tool <claude|copilot|codex|cursor|kiro>`
 - Runtime directories created: `stories/`, `plans/`, `research/`, `audits/`, `reviews/`, and `incidents/`
 - Team artifact policy decided: run `ai-playbook artifact-policy shared` when generated story, research, plan, audit, review, and incident files are shared records, or `ai-playbook artifact-policy local` when they are local working notes.
 
@@ -45,10 +45,11 @@ Any of these triggers artifact-chain resolution: the agent auto-loads matching r
 |------|---------------|------------------|
 | Claude | `/story-refiner <input>` | `Use story-refiner: <input>` |
 | Copilot | `/story-refiner <input>` | `Use story-refiner: <input>` |
+| Codex | Not supported | `Use story-refiner: <input>` |
 | Cursor | `/story-refiner <input>` | `Use story-refiner: <input>` |
 | Kiro | Not supported | `Use story-refiner: <input>` |
 
-Kiro does not support custom slash commands: use natural language.
+Codex and Kiro do not use the playbook's slash-command shims: use natural language with the agent name.
 
 ## Troubleshooting
 

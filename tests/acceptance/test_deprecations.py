@@ -21,7 +21,11 @@ from __future__ import annotations
 import re
 import tomllib
 
+import pytest
+
 from deploy_ai_playbook.cli import get_source_root
+
+pytestmark = pytest.mark.repo_contract
 
 VALID_SURFACES = frozenset(
     {

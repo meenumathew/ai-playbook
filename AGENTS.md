@@ -18,13 +18,14 @@ The playbook ships a CLI that writes the right files into the right places for e
 |------------------|----------------------------------|------------------------|--------------------------|
 | Claude Code      | `CLAUDE.md`                      | `.claude/agents/`      | `.claude/commands/`      |
 | GitHub Copilot   | `.github/copilot-instructions.md`| `.github/agents/`      | `.github/prompts/`       |
+| OpenAI Codex     | `AGENTS.md`                      | `.codex/agents/`       | (custom agents, no slash commands) |
 | Cursor           | `.cursor/rules/ai-playbook.mdc`  | `.cursor/agents/`      | `.cursor/commands/`      |
 | Kiro             | `.kiro/steering/rules.md`        | `.kiro/agents/`        | (no slash commands)      |
 
 Run:
 
 ```bash
-ai-playbook deploy --agent all --tool <claude|copilot|cursor|kiro>
+ai-playbook deploy --agent all --tool <claude|copilot|codex|cursor|kiro>
 ```
 
 Additional tool targets (Cline, Continue, Aider, Goose, Cody, Gemini CLI) are candidates for a future release and not yet supported by the CLI.
@@ -35,8 +36,9 @@ How you trigger an agent depends on the tool:
 
 - **Claude Code**: slash commands from `.claude/commands/` (for example `/story-refiner`), or natural language.
 - **GitHub Copilot**: prompt files in `.github/prompts/`, or natural language.
+- **OpenAI Codex**: custom agents from `.codex/agents/`; invoke by name in natural language, for example "Use story-refiner: STORY-001".
 - **Cursor**: slash commands from `.cursor/commands/`, or natural language.
-- **Kiro, and `AGENTS.md`-only tools (Cline, Aider, Ollama-backed tools, OSS/local models)**: no slash commands; invoke by name in natural language, for example "Use the story-refiner agent to refine this story." The behaviour comes from the deployed `agents/<id>.agent.md` file, not from a command shim.
+- **Kiro, and `AGENTS.md`-only tools (Cline, Aider, Ollama-backed tools, OSS/local models)**: no slash commands; invoke by name in natural language, for example "Use the story-refiner agent to refine this story." The behaviour comes from the deployed agent file, not from a command shim.
 
 Agent files sometimes use shorthand such as `use slice-planner: STORY-NNN`; read it as "invoke that agent for that artifact" by whatever mechanism your tool offers. Approval gates are tool-neutral: where an agent pauses for explicit approval (commit, merge, tag push, artifact save), give that approval in plain language the same way on every tool: see [`CLAUDE.md`](CLAUDE.md) § Shared Rules § Approval gate.
 

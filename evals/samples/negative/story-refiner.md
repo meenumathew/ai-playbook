@@ -1,6 +1,7 @@
 ---
 provenance: curated
 negative_control: deliberately flawed — the LLM judge must FAIL this file
+violates: [STORY-NOT-001, STORY-NOT-002, STORY-NOT-003, STORY-NOT-006]
 ---
 
 # Story: STORY-001 usage dashboard

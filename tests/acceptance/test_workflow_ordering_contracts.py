@@ -2,10 +2,10 @@
 
 The agent chain (story-refiner → slice-planner → xp-pair-programmer →
 diff-reviewer → release-captain) is the most-cited piece of prose in the
-repo — it appears in CLAUDE.md, README.md, the user guide, the cheatsheet,
+repo: it appears in CLAUDE.md, README.md, the user guide, the cheatsheet,
 and the choose-workflow-path how-to. Each file uses its own lead-in
 phrase ("Default workflow path:", "Recommended invocation sequence:",
-"Refine before build —", "Pipeline:"). That is fine — different docs have
+"Refine before build -", "Pipeline:"). That is fine: different docs have
 different voices.
 
 What is NOT fine is the *order* drifting. If one file accidentally moves
@@ -29,7 +29,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from deploy_ai_playbook.cli import get_source_root
+
+pytestmark = pytest.mark.repo_contract
 
 # Canonical sequence: each agent's index is its position in the chain.
 # release-captain is last because it ships; story-refiner is first because
@@ -43,7 +47,7 @@ CANONICAL_CHAIN: tuple[str, ...] = (
 )
 
 # Files that MUST cite the chain. Adding a file here pins both presence
-# and ordering. Removing one is a deliberate decision — record it in the
+# and ordering. Removing one is a deliberate decision: record it in the
 # PR body.
 CANONICAL_FILES: tuple[str, ...] = (
     "CLAUDE.md",
@@ -104,7 +108,7 @@ def _ordering_violations(line: str) -> list[str]:
     """Return human-readable ordering violations on a single line, or [].
 
     Algorithm: split the line on arrows. The "chain" is the sequence of
-    agent names *adjacent to arrows* — the last agent named in segment N
+    agent names *adjacent to arrows*: the last agent named in segment N
     paired with the first agent named in segment N+1. Prose mentions of
     other agents elsewhere in a segment do not count.
 
@@ -112,7 +116,7 @@ def _ordering_violations(line: str) -> list[str]:
         "xp-pair-programmer → diff-reviewer. Do not skip story-refiner..."
         seg[0]="xp-pair-programmer " (last=xp-pair-programmer)
         seg[1]=" diff-reviewer. Do not skip story-refiner..." (first=diff-reviewer)
-        chain pair: (xp-pair-programmer=2, diff-reviewer=3) — OK.
+        chain pair: (xp-pair-programmer=2, diff-reviewer=3): OK.
 
     The "story-refiner" prose mention in seg[1] is ignored because it is
     not adjacent to an arrow.
@@ -128,7 +132,7 @@ def _ordering_violations(line: str) -> list[str]:
         chain.append(head)
     # For each subsequent segment, take its first agent (right edge of
     # the preceding arrow). For interior segments we still anchor on the
-    # FIRST agent — its position relative to the arrow on its left is
+    # FIRST agent: its position relative to the arrow on its left is
     # what defines its place in the chain. If a segment names no agent,
     # the chain is broken on that side; skip it.
     for seg in segments[1:]:
@@ -229,7 +233,7 @@ def test_ordering_detector_handles_minimal_path_phrasing():
 
     The minimal-path sentence in CLAUDE.md mentions `story-refiner` AFTER
     the arrow chain ends, in a follow-up sentence. The detector must NOT
-    misread the prose mention as part of the chain — only agents adjacent
+    misread the prose mention as part of the chain: only agents adjacent
     to arrows count.
     """
     line = (

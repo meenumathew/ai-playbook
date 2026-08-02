@@ -1,4 +1,4 @@
-"""Claude telemetry Stop-hook configuration helpers."""
+"""Privacy-minimal local telemetry hook configuration for supported tools."""
 
 from __future__ import annotations
 
@@ -16,8 +16,21 @@ from deploy_ai_playbook.safety import (
 from deploy_ai_playbook.targets import get_target_adapter
 
 TELEMETRY_HOOK_COMMAND = "${CLAUDE_PROJECT_DIR}/harness/telemetry.sh"
+# Codex hooks run from the project directory but expose no project-root
+# variable, so the command resolves the harness script itself: the local
+# harness copy when the working directory has one, else the git toplevel
+# (session cwd may sit below the project root), else the working directory.
+# Local-first matters for a non-repo project folder nested inside an outer
+# git repository: a git-first probe would resolve to the outer repo root,
+# which has no harness script.
+CODEX_TELEMETRY_HOOK_COMMAND = (
+    '/bin/sh "$([ -f harness/telemetry.sh ] && pwd'
+    ' || git rev-parse --show-toplevel 2>/dev/null || pwd)/harness/telemetry.sh" codex'
+)
 TELEMETRY_HARNESS_SCRIPT = Path("harness") / "telemetry.sh"
 TELEMETRY_USAGE_LOG = Path(".claude") / "usage.jsonl"
+CODEX_TELEMETRY_HOOKS = Path(".codex") / "hooks.json"
+CODEX_TELEMETRY_USAGE_LOG = Path(".codex") / "usage.jsonl"
 
 
 @dataclass(frozen=True)
@@ -34,13 +47,16 @@ class TelemetryStatus:
 
 
 def deploy_telemetry_hook_config(project_root: Path, tool: Tool, dry_run: bool) -> str:
-    """Ensure Claude Stop hook writes session telemetry through the starter harness."""
-    if tool is not Tool.claude:
-        return "[dim]skipped[/dim] telemetry Stop hook (Claude only)"
-    settings_path = _claude_settings_path(project_root)
+    """Ensure a supported tool writes session telemetry through the starter harness."""
+    if tool not in {Tool.claude, Tool.codex}:
+        return f"[dim]skipped[/dim] telemetry hook ({tool.value} has no supported lifecycle hook)"
+    event = "Stop" if tool is Tool.claude else "SessionEnd"
     if dry_run:
-        return "[yellow]would configure[/yellow] telemetry Stop hook"
+        return f"[yellow]would configure[/yellow] telemetry {event} hook"
+    if tool is Tool.codex:
+        return _deploy_codex_telemetry_hook(project_root)
 
+    settings_path = _claude_settings_path(project_root)
     settings = _read_settings(settings_path, project_root)
     if isinstance(settings, str):
         return settings
@@ -57,52 +73,69 @@ def deploy_telemetry_hook_config(project_root: Path, tool: Tool, dry_run: bool) 
 
 def has_telemetry_hook(settings: dict[str, Any]) -> bool:
     """Return True when a Claude settings object already calls the telemetry hook."""
-    hooks = settings.get("hooks")
-    if not isinstance(hooks, dict):
-        return False
-    stop_hooks = hooks.get("Stop")
-    if not isinstance(stop_hooks, list):
-        return False
-    return any(_entry_has_telemetry_hook(entry) for entry in stop_hooks)
+    return _has_command_hook(settings, "Stop", TELEMETRY_HOOK_COMMAND)
 
 
-def telemetry_hook_configured(project_root: Path) -> bool:
-    """Return True when deployed Claude settings contain the AI Playbook Stop hook."""
-    settings_path = _claude_settings_path(project_root)
+def has_codex_telemetry_hook(settings: dict[str, Any]) -> bool:
+    """Return True when Codex hooks contain the AI Playbook SessionEnd hook."""
+    return _has_command_hook(settings, "SessionEnd", CODEX_TELEMETRY_HOOK_COMMAND)
+
+
+def telemetry_hook_configured(project_root: Path, tool: Tool = Tool.claude) -> bool:
+    """Return True when the selected tool contains the AI Playbook telemetry hook."""
+    if tool not in {Tool.claude, Tool.codex}:
+        return False
+    settings_path = _telemetry_settings_path(project_root, tool)
     if not settings_path.exists():
         return False
     try:
         settings = json.loads(settings_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return False
-    return isinstance(settings, dict) and has_telemetry_hook(settings)
+    if not isinstance(settings, dict):
+        return False
+    return (
+        has_telemetry_hook(settings) if tool is Tool.claude else has_codex_telemetry_hook(settings)
+    )
 
 
-def disable_telemetry_hook(project_root: Path) -> str:
-    """Remove the AI Playbook Stop hook from Claude settings, leaving other hooks intact."""
-    settings_path = _claude_settings_path(project_root)
+def disable_telemetry_hook(project_root: Path, tool: Tool = Tool.claude) -> str:
+    """Remove the selected tool's AI Playbook hook, leaving other hooks intact."""
+    if tool not in {Tool.claude, Tool.codex}:
+        return f"[dim]not configured[/dim] telemetry hook ({tool.value} unsupported)"
+    settings_path = _telemetry_settings_path(project_root, tool)
+    event = "Stop" if tool is Tool.claude else "SessionEnd"
     if not settings_path.exists():
-        return "[dim]not configured[/dim] telemetry Stop hook (no settings.json)"
+        return f"[dim]not configured[/dim] telemetry {event} hook (no config file)"
 
     settings = _read_settings(settings_path, project_root)
     if isinstance(settings, str):
         return settings
-    if not has_telemetry_hook(settings):
-        return "[dim]not configured[/dim] telemetry Stop hook"
+    configured = (
+        has_telemetry_hook(settings) if tool is Tool.claude else has_codex_telemetry_hook(settings)
+    )
+    if not configured:
+        return f"[dim]not configured[/dim] telemetry {event} hook"
 
-    _remove_telemetry_hook(settings)
+    command = TELEMETRY_HOOK_COMMAND if tool is Tool.claude else CODEX_TELEMETRY_HOOK_COMMAND
+    _remove_command_hook(settings, event, command)
     write_text_safely(settings_path, json.dumps(settings, indent=2) + "\n", project_root)
-    return "[green]disabled[/green] telemetry Stop hook"
+    return f"[green]disabled[/green] telemetry {event} hook"
 
 
-def telemetry_status(project_root: Path) -> TelemetryStatus:
+def telemetry_status(
+    project_root: Path,
+    tool: Tool = Tool.claude,
+) -> TelemetryStatus:
     """Inspect the on-disk state of telemetry wiring in an adopter project."""
-    settings_path = _claude_settings_path(project_root)
-    usage_log_path = project_root / TELEMETRY_USAGE_LOG
+    settings_path = _telemetry_settings_path(project_root, tool)
+    usage_log_path = project_root / (
+        CODEX_TELEMETRY_USAGE_LOG if tool is Tool.codex else TELEMETRY_USAGE_LOG
+    )
     return TelemetryStatus(
         settings_path=settings_path,
         settings_exists=settings_path.exists(),
-        hook_configured=telemetry_hook_configured(project_root),
+        hook_configured=telemetry_hook_configured(project_root, tool),
         harness_script_present=(project_root / TELEMETRY_HARNESS_SCRIPT).exists(),
         usage_log_path=usage_log_path,
         usage_log_exists=usage_log_path.exists(),
@@ -114,12 +147,46 @@ def _claude_settings_path(project_root: Path) -> Path:
     return project_root / get_target_adapter(Tool.claude).mcp_config.path
 
 
+def _telemetry_settings_path(project_root: Path, tool: Tool) -> Path:
+    if tool is Tool.codex:
+        return project_root / CODEX_TELEMETRY_HOOKS
+    return _claude_settings_path(project_root)
+
+
+def _deploy_codex_telemetry_hook(project_root: Path) -> str:
+    hooks_path = project_root / CODEX_TELEMETRY_HOOKS
+    settings = _read_settings(hooks_path, project_root)
+    if isinstance(settings, str):
+        return settings
+    if has_codex_telemetry_hook(settings):
+        return "[dim]already configured[/dim] telemetry SessionEnd hook"
+    _append_command_hook(
+        settings,
+        event="SessionEnd",
+        command=CODEX_TELEMETRY_HOOK_COMMAND,
+        timeout=3,
+    )
+    write_text_safely(hooks_path, json.dumps(settings, indent=2) + "\n", project_root)
+    return (
+        "[green]configured[/green] telemetry SessionEnd hook — local-only session log in "
+        ".codex/usage.jsonl; review and trust it with [bold]/hooks[/bold]; "
+        "opt out with [bold]ai-playbook telemetry disable --tool codex[/bold]"
+    )
+
+
 def _read_settings(settings_path: Path, safe_root: Path) -> dict[str, Any] | str:
     assert_safe_destination(settings_path, safe_root)
     if not settings_path.exists():
         return {}
     try:
         settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        backup_path = preserve_broken_config(settings_path, safe_root)
+        return (
+            f"[red]{settings_path} is not valid UTF-8[/red]. "
+            f"Saved a copy to [cyan]{backup_path.name}[/cyan]; "
+            "fix the file by hand or delete it and re-run deploy."
+        )
     except json.JSONDecodeError as exc:
         backup_path = preserve_broken_config(settings_path, safe_root)
         return (
@@ -140,39 +207,54 @@ def _read_settings(settings_path: Path, safe_root: Path) -> dict[str, Any] | str
 
 
 def _append_telemetry_hook(settings: dict[str, Any]) -> None:
+    _append_command_hook(
+        settings,
+        event="Stop",
+        command=TELEMETRY_HOOK_COMMAND,
+        timeout=5,
+        matcher="",
+    )
+
+
+def _append_command_hook(
+    settings: dict[str, Any],
+    *,
+    event: str,
+    command: str,
+    timeout: int,
+    matcher: str | None = None,
+) -> None:
     hooks = settings.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         hooks = {}
         settings["hooks"] = hooks
-    stop_hooks = hooks.setdefault("Stop", [])
-    if not isinstance(stop_hooks, list):
-        stop_hooks = []
-        hooks["Stop"] = stop_hooks
-    stop_hooks.append(_telemetry_stop_entry())
-
-
-def _telemetry_stop_entry() -> dict[str, Any]:
-    return {
-        "matcher": "",
+    event_hooks = hooks.setdefault(event, [])
+    if not isinstance(event_hooks, list):
+        event_hooks = []
+        hooks[event] = event_hooks
+    entry: dict[str, Any] = {
         "hooks": [
             {
                 "type": "command",
-                "command": TELEMETRY_HOOK_COMMAND,
-                "timeout": 5,
+                "command": command,
+                "timeout": timeout,
             }
-        ],
+        ]
     }
+    if matcher is not None:
+        entry["matcher"] = matcher
+    event_hooks.append(entry)
 
 
-def _remove_telemetry_hook(settings: dict[str, Any]) -> None:
+def _remove_command_hook(settings: dict[str, Any], event: str, command: str) -> None:
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
         return
-    stop_hooks = hooks.get("Stop")
-    if not isinstance(stop_hooks, list):
+    event_hooks = hooks.get(event)
+    if not isinstance(event_hooks, list):
         return
     pruned_entries: list[Any] = []
-    for entry in stop_hooks:
+    for entry in event_hooks:
         if not isinstance(entry, dict):
             pruned_entries.append(entry)
             continue
@@ -183,7 +265,7 @@ def _remove_telemetry_hook(settings: dict[str, Any]) -> None:
         kept_inner = [
             hook
             for hook in inner
-            if not (isinstance(hook, dict) and hook.get("command") == TELEMETRY_HOOK_COMMAND)
+            if not (isinstance(hook, dict) and hook.get("command") == command)
         ]
         if not kept_inner:
             continue
@@ -191,19 +273,27 @@ def _remove_telemetry_hook(settings: dict[str, Any]) -> None:
         new_entry["hooks"] = kept_inner
         pruned_entries.append(new_entry)
     if pruned_entries:
-        hooks["Stop"] = pruned_entries
+        hooks[event] = pruned_entries
     else:
-        hooks.pop("Stop", None)
+        hooks.pop(event, None)
     if not hooks:
         settings.pop("hooks", None)
 
 
-def _entry_has_telemetry_hook(entry: Any) -> bool:
+def _has_command_hook(settings: dict[str, Any], event: str, command: str) -> bool:
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return False
+    event_hooks = hooks.get(event)
+    if not isinstance(event_hooks, list):
+        return False
+    return any(_entry_has_command_hook(entry, command) for entry in event_hooks)
+
+
+def _entry_has_command_hook(entry: Any, command: str) -> bool:
     if not isinstance(entry, dict):
         return False
     hooks = entry.get("hooks")
     if not isinstance(hooks, list):
         return False
-    return any(
-        isinstance(hook, dict) and hook.get("command") == TELEMETRY_HOOK_COMMAND for hook in hooks
-    )
+    return any(isinstance(hook, dict) and hook.get("command") == command for hook in hooks)

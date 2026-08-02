@@ -144,13 +144,13 @@ Use `logging.getLogger(__name__)`. Lazy evaluation (`logger.info("user %s", user
 
 Use only when the trigger appears:
 
-| Topic | Load when |
-|-------|-----------|
-| `Protocol` | Ports/interfaces need Python-specific typing guidance |
-| `TypedDict` | Dict-shaped boundary data needs typing |
-| `TYPE_CHECKING` | Circular imports or heavy runtime type imports are in scope |
-| `assert_never` | `match`/union exhaustiveness is in scope |
-| Async layering | Python async services/adapters or timeout rules are in scope |
+| Topic | Load when | Rule |
+|-------|-----------|------|
+| `Protocol` | Ports/interfaces need Python-specific typing guidance | Define ports as `typing.Protocol` classes (structural typing, no inheritance needed); adapters satisfy them implicitly. Runtime `isinstance` checks need `@runtime_checkable`, which checks method presence only, not signatures. |
+| `TypedDict` | Dict-shaped boundary data needs typing | Type wire/dict-shaped boundary data with `TypedDict` (use `total=False` or `NotRequired` for optional keys); convert to a dataclass or Pydantic model at the boundary, never pass raw dicts inward. |
+| `TYPE_CHECKING` | Circular imports or heavy runtime type imports are in scope | Guard annotation-only imports behind `if TYPE_CHECKING:` with `from __future__ import annotations`; if two modules need each other's types at runtime, that is a layering smell to fix, not to guard around. |
+| `assert_never` | `match`/union exhaustiveness is in scope | End `match` statements over unions/enums with a `case _: assert_never(value)` arm so pyright fails the build when a new variant appears unhandled. |
+| Async layering | Python async services/adapters or timeout rules are in scope | Keep the domain synchronous; async lives in adapters and service orchestration. Never call blocking I/O inside `async def` (use the async client or `asyncio.to_thread`), and set explicit timeouts at every external await. |
 
 ---
 

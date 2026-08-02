@@ -56,6 +56,21 @@ def test_cursor_adapter_supports_commands_and_mdc_rules() -> None:
     assert content == "Run with $ARGUMENTS"
 
 
+def test_codex_adapter_uses_native_toml_agents_and_no_commands() -> None:
+    adapter = get_target_adapter(Tool.codex)
+
+    assert adapter.supports_commands is False
+    assert adapter.agent_output_suffix == ".toml"
+    assert adapter.agent_output_name("story-refiner.agent.md") == "story-refiner.toml"
+    assert adapter.destination("agents") == ".codex/agents"
+    assert adapter.destination("skills") == ".agents/skills"
+    assert adapter.destination("rules") == "AGENTS.md"
+    assert adapter.mcp_config.path == ".codex/config.toml"
+    assert adapter.mcp_config.key == "mcp_servers"
+    with pytest.raises(UnsupportedTargetCapabilityError):
+        adapter.transform_command("story-refiner.md", "Run with $ARGUMENTS")
+
+
 def test_kiro_adapter_declares_no_slash_command_support() -> None:
     adapter = get_target_adapter(Tool.kiro)
 

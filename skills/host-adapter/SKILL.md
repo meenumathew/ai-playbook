@@ -148,6 +148,6 @@ Adapters never silently fall back or paper over auth errors with manual paste: a
 
 - `knowledge-base/design-patterns.md` § Layer 1: Vendor-Neutral Operation IDs. The playbook-wide rule this skill instantiates: `host.pr.*` is the stable contract, `gh` / `glab` / `tea` / Bitbucket REST are interchangeable backends.
 - `skills/issue-fetch/SKILL.md`: uses the same provider config for issue tracker hops on the same host.
-- `agents/diff-reviewer.agent.md`: primary consumer of `pr.diff` and `pr.review`.
-- `agents/release-captain.agent.md`: primary consumer of `pr.create`, `pr.checks`, and `pr.merge`.
+- `agents/diff-reviewer.agent.md`: primary consumer of `host.pr.diff` and `host.pr.review`.
+- `agents/release-captain.agent.md`: primary consumer of `host.pr.create`, `host.pr.checks`, and `host.pr.merge`.
 - `docs/adr/0001-bitbucket-server-not-supported.md`: scope decision: Bitbucket Server / Data Center is intentionally out of scope.

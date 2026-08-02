@@ -61,7 +61,7 @@ def run_hook(
     env.pop("CLAUDE_SKIP_READ_BUDGET", None)
     if env_overrides:
         env.update(env_overrides)
-    return subprocess.run(  # noqa: S603 — repo-owned hook under test
+    return subprocess.run(  # noqa: S603 - repo-owned hook under test
         ["/bin/sh", str(HOOK)],
         input=payload,
         capture_output=True,
@@ -72,8 +72,18 @@ def run_hook(
 
 
 def read_count(project: Path, session_id: str = "sess-1", agent: str = "story-refiner") -> int:
+    """The count file holds one appended line per allowed read (atomic O_APPEND)."""
     count_file = project / ".claude" / "read-budget" / f"{session_id}.{agent}.count"
-    return int(count_file.read_text()) if count_file.exists() else 0
+    return len(count_file.read_text().splitlines()) if count_file.exists() else 0
+
+
+def seed_count(
+    project: Path, reads: int, session_id: str = "sess-1", agent: str = "story-refiner"
+) -> None:
+    """Pre-populate the count file as if `reads` reads already happened."""
+    state_dir = project / ".claude" / "read-budget"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / f"{session_id}.{agent}.count").write_text(".\n" * reads)
 
 
 def hook_context(result: subprocess.CompletedProcess[str]) -> str:
@@ -99,8 +109,7 @@ def test_read_within_budget_allows_and_counts(tmp_path: Path) -> None:
 def test_read_over_cap_blocks_with_stop_and_ask_message(tmp_path: Path) -> None:
     """The 21st read for a cap-20 agent exits 2 naming the cap."""
     project, transcript = make_project(tmp_path, budget="20", marker="Active agent: story-refiner")
-    (project / ".claude" / "read-budget").mkdir(parents=True)
-    (project / ".claude" / "read-budget" / "sess-1.story-refiner.count").write_text("20\n")
+    seed_count(project, 20)
 
     result = run_hook(project, transcript)
 
@@ -113,13 +122,12 @@ def test_read_over_cap_blocks_with_stop_and_ask_message(tmp_path: Path) -> None:
 def test_read_at_80_percent_warns_but_allows(tmp_path: Path) -> None:
     """Read 16 of 20 (80%) is allowed with hook-JSON context the model sees."""
     project, transcript = make_project(tmp_path, budget="20", marker="Active agent: story-refiner")
-    (project / ".claude" / "read-budget").mkdir(parents=True)
-    (project / ".claude" / "read-budget" / "sess-1.story-refiner.count").write_text("15\n")
+    seed_count(project, 15)
 
     result = run_hook(project, transcript)
 
     assert result.returncode == 0
-    # stderr with exit 0 is invisible to the model — the warning must arrive
+    # stderr with exit 0 is invisible to the model: the warning must arrive
     # as PreToolUse hook JSON (hookSpecificOutput.additionalContext) on stdout.
     assert "16/20" in hook_context(result)
 
@@ -135,7 +143,7 @@ def test_no_marker_fails_open_silently(tmp_path: Path) -> None:
 
 
 def test_self_tracked_agent_fails_open_silently(tmp_path: Path) -> None:
-    """xp-pair-programmer declares self-tracked — no enforcement."""
+    """xp-pair-programmer declares self-tracked: no enforcement."""
     project, transcript = make_project(
         tmp_path,
         agent="xp-pair-programmer",
@@ -152,8 +160,7 @@ def test_self_tracked_agent_fails_open_silently(tmp_path: Path) -> None:
 def test_skip_flag_allows_over_cap_with_notice(tmp_path: Path) -> None:
     """CLAUDE_SKIP_READ_BUDGET=1 bypasses the block with a notice."""
     project, transcript = make_project(tmp_path, budget="20", marker="Active agent: story-refiner")
-    (project / ".claude" / "read-budget").mkdir(parents=True)
-    (project / ".claude" / "read-budget" / "sess-1.story-refiner.count").write_text("25\n")
+    seed_count(project, 25)
 
     result = run_hook(project, transcript, env_overrides={"CLAUDE_SKIP_READ_BUDGET": "1"})
 
@@ -162,7 +169,7 @@ def test_skip_flag_allows_over_cap_with_notice(tmp_path: Path) -> None:
 
 
 def test_agent_switch_resets_count_for_new_agent(tmp_path: Path) -> None:
-    """A mid-session role switch starts the NEW agent at zero — it must not
+    """A mid-session role switch starts the NEW agent at zero: it must not
     be blocked for reads the previous agent made (count is per session+agent)."""
     project, transcript = make_project(
         tmp_path, agent="diff-reviewer", budget="20", marker="Active agent: story-refiner"
@@ -170,8 +177,7 @@ def test_agent_switch_resets_count_for_new_agent(tmp_path: Path) -> None:
     with transcript.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({"type": "assistant", "message": "Active agent: diff-reviewer"}) + "\n")
 
-    (project / ".claude" / "read-budget").mkdir(parents=True)
-    (project / ".claude" / "read-budget" / "sess-1.story-refiner.count").write_text("20\n")
+    seed_count(project, 20)
 
     result = run_hook(project, transcript)
 
@@ -190,13 +196,32 @@ def test_switched_agent_is_blocked_at_its_own_cap(tmp_path: Path) -> None:
     with transcript.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({"type": "assistant", "message": "Active agent: diff-reviewer"}) + "\n")
 
-    (project / ".claude" / "read-budget").mkdir(parents=True)
-    (project / ".claude" / "read-budget" / "sess-1.diff-reviewer.count").write_text("20\n")
+    seed_count(project, 20, agent="diff-reviewer")
 
     result = run_hook(project, transcript)
 
     assert result.returncode == 2
     assert "diff-reviewer" in result.stderr
+
+
+def test_parallel_reads_are_all_counted(tmp_path: Path) -> None:
+    """Claude batches independent Read calls; concurrent hook invocations
+    must not lose counts. A read-increment-rewrite cycle drops updates under
+    parallelism; atomic line appends must record every allowed read."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    project, transcript = make_project(tmp_path, marker="Active agent: story-refiner")
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        results = list(
+            pool.map(
+                lambda i: run_hook(project, transcript, file_path=f"/repo/src/f{i}.py"),
+                range(10),
+            )
+        )
+
+    assert all(result.returncode == 0 for result in results)
+    assert read_count(project) == 10, "parallel reads must not lose counter updates"
 
 
 def test_sessions_count_independently(tmp_path: Path) -> None:
@@ -219,7 +244,7 @@ def test_missing_transcript_fails_open(tmp_path: Path) -> None:
 
 
 def test_duplicate_read_of_same_path_warns(tmp_path: Path) -> None:
-    """Re-reading a file already read this session is pure budget waste — the
+    """Re-reading a file already read this session is pure budget waste: the
     warning must reach the model as PreToolUse hook JSON on stdout."""
     project, transcript = make_project(tmp_path, marker="Active agent: story-refiner")
 
@@ -256,3 +281,51 @@ def test_session_id_is_sanitized_before_filesystem_use(tmp_path: Path) -> None:
     assert count_files[0].parent == state_dir
     # tr -cd 'A-Za-z0-9._:-' strips the slashes; dots and hyphens survive.
     assert count_files[0].name == "....evilsess.story-refiner.count"
+
+
+def test_marker_in_non_assistant_message_does_not_flip_attribution(tmp_path: Path) -> None:
+    """Tool results (read file contents) appear in the transcript as
+    user-type entries; a file containing the literal marker must not
+    re-attribute the budget to another agent."""
+    import shutil
+
+    import pytest
+
+    if shutil.which("jq") is None:
+        pytest.skip("assistant-only extraction requires jq")
+
+    project, transcript = make_project(
+        tmp_path, agent="story-refiner", budget="20", marker="Active agent: story-refiner"
+    )
+    with transcript.open("a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps({"type": "user", "message": "file contents: Active agent: diff-reviewer"})
+            + "\n"
+        )
+
+    result = run_hook(project, transcript)
+
+    assert result.returncode == 0
+    assert read_count(project, agent="story-refiner") == 1
+    assert read_count(project, agent="diff-reviewer") == 0
+
+
+def test_stale_state_files_are_pruned(tmp_path: Path) -> None:
+    """Session state otherwise accumulates forever on adopter machines: one
+    count file and one paths file per session."""
+    import os
+    import time
+
+    project, transcript = make_project(tmp_path, marker="Active agent: story-refiner")
+    state_dir = project / ".claude" / "read-budget"
+    state_dir.mkdir(parents=True)
+    stale = state_dir / "old-session.story-refiner.count"
+    stale.write_text(".\n")
+    ten_days_ago = time.time() - 10 * 86400
+    os.utime(stale, (ten_days_ago, ten_days_ago))
+
+    result = run_hook(project, transcript)
+
+    assert result.returncode == 0
+    assert not stale.exists(), "state older than the prune window must be removed"
+    assert read_count(project) == 1, "the current session's count is unaffected"

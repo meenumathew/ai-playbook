@@ -3,7 +3,7 @@
 Skills like `host-adapter`, `notifier`, and `issue-fetch` expose a vendor-neutral
 operation API that agents call by name (`host.pr.create`, `notify(release_shipped,
 …)`, `issue.fetch`). When an agent references an operation, event, or config key
-that the skill never declares, the playbook ships a silent broken surface — the
+that the skill never declares, the playbook ships a silent broken surface: the
 agent calls into the void.
 
 These tests are structural, not phrase-pinned: they walk every agent and CLAUDE.md,
@@ -54,6 +54,23 @@ def test_every_host_pr_operation_referenced_by_agents_is_declared_in_host_adapte
     )
 
 
+def test_agent_operation_ids_use_canonical_host_prefix():
+    source_root = get_source_root()
+    files = [
+        *sorted((source_root / "agents").glob("*.agent.md")),
+        *sorted((source_root / "knowledge-base").glob("*.md")),
+        *sorted((source_root / "skills").glob("*/SKILL.md")),
+    ]
+    bare_operation = re.compile(r"(?<!host\.)\bpr\.(diff|review|create|merge|checks)\b")
+    failures = {
+        str(path.relative_to(source_root)): bare_operation.findall(path.read_text())
+        for path in files
+        if bare_operation.search(path.read_text())
+    }
+
+    assert not failures, f"Use canonical host.pr.* operation IDs: {failures}"
+
+
 def test_every_notifier_event_emitted_by_agents_is_a_canonical_event_name():
     skill = read_skill("notifier")
     canonical_section = re.search(
@@ -86,7 +103,7 @@ def test_skills_declare_failure_modes_or_fallback_path():
 
     Without a declared failure mode an adopter wiring a new provider has no
     contract for what to do when the provider returns 4xx, 5xx, or is missing
-    config. We don't pin wording — we just require the section exists.
+    config. We don't pin wording: we just require the section exists.
     """
     expected = {
         "host-adapter": ("Failure Modes",),
@@ -125,7 +142,7 @@ def test_notifier_payloads_are_sanitized_before_external_send():
     # STRUCTURE-MARKER: section heading must exist; body wording is free to evolve.
     assert "## Sanitization" in skill
     # CONTRACT-PHRASE: these are the explicit categories the skill MUST list.
-    # Removing one is a contract change — silent drop = silent leakage of that category.
+    # Removing one is a contract change: silent drop = silent leakage of that category.
     for required in ("raw issue bodies", "logs", "stack traces", "context"):
         assert required in skill
     # CONTRACT-PHRASE (negative): forbidden anti-patterns. Re-introducing either
@@ -134,6 +151,22 @@ def test_notifier_payloads_are_sanitized_before_external_send():
     assert "would have sent: <event> <message>" not in skill
     # STRUCTURE-MARKER: indirect env expansion is unsafe regardless of wording.
     assert "${!" not in skill, "notifier snippets must not use indirect env expansion"
+
+
+def test_notifier_examples_json_encode_messages():
+    skill = read_skill("notifier")
+    slack = re.search(
+        r"### Slack adapter.*?```bash\n(.*?)```",
+        skill,
+        re.DOTALL,
+    )
+    assert slack, "notifier must include a Slack adapter shell example"
+    snippet = slack.group(1)
+
+    assert "jq -nc" in snippet
+    assert '--arg severity "$severity"' in snippet
+    assert '--arg message "$message"' in snippet
+    assert 'printf \'{"text":' not in snippet
 
 
 def test_issue_fetch_resolves_locally_before_calling_a_provider():
@@ -227,7 +260,7 @@ def test_skill_operation_tests_walk_at_least_the_known_skills():
 def test_vendor_neutral_skills_state_contract_boundary():
     # CONTRACT-PHRASE: these phrases are how each skill tells adopters the
     # boundary between markdown contract and runtime code. Re-wording them
-    # blurs that boundary — exactly the README ambiguity PR-A clarified.
+    # blurs that boundary: exactly the README ambiguity PR-A clarified.
     for skill_name in ("host-adapter", "issue-fetch", "notifier"):
         body = read_skill(skill_name)
         assert "agent operation contract" in body

@@ -7,11 +7,38 @@ imported by every other module without risk of circular imports.
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from enum import StrEnum
 from pathlib import Path
 
+
+def _capture_original_pwd() -> Path:
+    """Prefer the shell's logical $PWD, but only when it is the real cwd.
+
+    $PWD is inherited by subprocesses that change directory (subprocess
+    with cwd=, make -C, CI runners), where it still points at the caller's
+    directory. Trusting it blind would aim every write at the wrong tree,
+    so it is used only when it resolves to the actual cwd: keeping the
+    symlinked-path spelling the user typed: and ignored otherwise.
+    """
+    cwd = Path.cwd()
+    pwd = os.getenv("PWD")
+    if not pwd:
+        return cwd
+    candidate = Path(pwd)
+    with suppress(OSError):
+        if candidate.resolve() == cwd.resolve():
+            return candidate
+    return cwd
+
+
 # Captured at import time, before any uv/wrapper changes the cwd.
-ORIGINAL_PWD = Path(os.getenv("PWD", str(Path.cwd())))
+ORIGINAL_PWD = _capture_original_pwd()
+
+# Single source of truth for the agent-file suffix: fs, targets, discovery,
+# and the deploy/diff services all filter on it; drift produces subtle
+# selection bugs.
+AGENT_FILE_SUFFIX = ".agent.md"
 
 DISABLED_SUFFIX = ".disabled"
 VERSION_FILE = ".playbook-version"
@@ -26,6 +53,7 @@ class Tool(StrEnum):
 
     claude = "claude"
     copilot = "copilot"
+    codex = "codex"
     cursor = "cursor"
     kiro = "kiro"
 
@@ -49,6 +77,13 @@ TOOL_DESTINATIONS: dict[Tool, dict[str, str]] = {
         "commands": ".github/prompts",
         "rules": ".github/copilot-instructions.md",
     },
+    Tool.codex: {
+        "agents": ".codex/agents",
+        "knowledge-base": ".codex/knowledge-base",
+        "skills": ".agents/skills",
+        "templates": ".codex/templates",
+        "rules": "AGENTS.md",
+    },
     Tool.cursor: {
         "agents": ".cursor/agents",
         "knowledge-base": ".cursor/knowledge-base",
@@ -67,7 +102,7 @@ TOOL_DESTINATIONS: dict[Tool, dict[str, str]] = {
 }
 
 
-# Per-tool MCP config — path and the JSON key under which servers are listed.
+# Per-tool MCP config: path and the JSON key under which servers are listed.
 MCP_CONFIG: dict[Tool, dict[str, str]] = {
     Tool.claude: {
         "path": ".claude/settings.json",
@@ -76,6 +111,10 @@ MCP_CONFIG: dict[Tool, dict[str, str]] = {
     Tool.copilot: {
         "path": ".vscode/mcp.json",
         "key": "servers",
+    },
+    Tool.codex: {
+        "path": ".codex/config.toml",
+        "key": "mcp_servers",
     },
     Tool.cursor: {
         "path": ".cursor/mcp.json",
@@ -103,7 +142,7 @@ HARNESS_FILES: dict[str, str] = {
     "pre-commit-config.yaml": ".pre-commit-config.yaml",
     "ci.yml": ".github/workflows/ci.yml",
     "security.yml": ".github/workflows/security.yml",
-    # security.yml's SHA-pinned Actions rely on Dependabot for weekly bumps —
+    # security.yml's SHA-pinned Actions rely on Dependabot for weekly bumps:
     # ship the config that makes that claim true.
     "dependabot.yml": ".github/dependabot.yml",
     "check-teachback.sh": "harness/check-teachback.sh",

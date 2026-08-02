@@ -2,9 +2,10 @@
 
 import re
 
-from typer.testing import CliRunner
+import pytest
 
-from deploy_ai_playbook.cli import app, get_source_root
+from deploy_ai_playbook.cli import get_source_root
+from tests.acceptance._dsl import deploy
 from tests.acceptance.contract_data import (
     KB_CONTRACTS,
     SKILL_CONTRACTS,
@@ -81,6 +82,33 @@ def test_quality_gates_are_filled_for_this_repo():
         assert placeholder not in content
     assert "make format-check" in content
     assert "mutation-baseline.json" in content
+    assert "survived + timeout" in content
+    assert "survived <= 0" not in content
+
+
+@pytest.mark.repo_contract
+def test_token_guidance_bounds_parallel_agent_work():
+    # docs/ is repo-only: the wheel ships knowledge-base, skills, and
+    # templates, so this file is unreadable from an installed artifact.
+    content = (get_source_root() / "docs" / "how-to" / "reduce-token-usage.md").read_text()
+    required = [
+        TextContract(
+            name="parallel work has a bounded integration protocol",
+            terms=(
+                "independent",
+                "self-contained",
+                "overlapping writes",
+                "integrated verification",
+            ),
+        )
+    ]
+
+    assert re.search(
+        r"^###\s+\d+\.\s+Spend subagents deliberately\s*$",
+        content,
+        re.MULTILINE,
+    )
+    assert not contract_failures(content, required)
 
 
 def test_kb_and_skill_contracts_are_structured_not_raw_phrase_pins():
@@ -94,11 +122,7 @@ def test_kb_and_skill_contracts_are_structured_not_raw_phrase_pins():
 
 
 def test_deployed_kb_skills_templates_have_no_unresolved_root_paths(tmp_path):
-    runner = CliRunner()
-    result = runner.invoke(
-        app,
-        ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path), "--no-mcp"],
-    )
+    result = deploy(tmp_path, mcp=False)
     assert result.exit_code == 0, result.output
 
     forbidden = (
@@ -130,7 +154,7 @@ def test_every_skill_is_cited_outside_the_index():
     """Every shipped skill is referenced by an agent, CLAUDE.md, or KB file.
 
     INDEX.md lists all skills by definition, so it doesn't count as a real
-    citation. A skill that only appears in INDEX.md is a drift hazard — it
+    citation. A skill that only appears in INDEX.md is a drift hazard: it
     will rot silently because no behaviour reaches for it. Wiring the skill
     into a concrete agent step keeps it load-bearing.
     """
@@ -206,3 +230,24 @@ def test_definition_of_done_templates_reference_canonical_source():
     # surrounding wording is free.
     assert "reduced" in spike_section.lower()
     assert re.findall(r"^- \[ \] ", spike_section, re.MULTILINE)
+
+
+def test_audit_template_matches_code_inspector_contract():
+    source_root = get_source_root()
+    audit_template = (source_root / "templates" / "audit-template.md").read_text()
+    index = (source_root / "knowledge-base" / "INDEX.md").read_text()
+
+    for heading in (
+        "## Summary",
+        "## Findings by Priority",
+        "## Cross-File Issues",
+        "## Health Score",
+        "## Recommended Actions",
+    ):
+        assert heading in audit_template
+    assert re.search(
+        r"`templates/audit-template\.md`.*code-inspector",
+        index,
+        re.IGNORECASE,
+    )
+    assert "code-inspector writes audit" not in index

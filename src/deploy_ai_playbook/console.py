@@ -6,5 +6,5 @@ for `--json` payloads and piped output (Unix convention).
 
 from rich.console import Console
 
-console = Console()
-error_console = Console(stderr=True)
+console = Console(highlight=False)
+error_console = Console(stderr=True, highlight=False)

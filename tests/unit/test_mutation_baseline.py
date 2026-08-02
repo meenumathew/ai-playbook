@@ -28,7 +28,7 @@ def _stats(**overrides: int) -> dict[str, int]:
 
 def _baseline(**overrides: int) -> dict:
     thresholds = {
-        "max_survived": 0,
+        "max_unresolved_basis_points": 0,
         "max_no_tests": 13,
         "max_skipped": 0,
         "max_suspicious": 0,
@@ -38,7 +38,7 @@ def _baseline(**overrides: int) -> dict:
         "min_total": 101,
     }
     thresholds.update(overrides)
-    return {"version": 1, "thresholds": thresholds}
+    return {"version": 3, "thresholds": thresholds}
 
 
 def _run_checker(stats_path: Path, baseline_path: Path) -> subprocess.CompletedProcess[str]:
@@ -63,7 +63,7 @@ def test_accepts_stats_within_baseline(tmp_path: Path):
     assert "within the committed baseline" in result.stdout
 
 
-def test_rejects_surviving_mutant_regression(tmp_path: Path):
+def test_rejects_unresolved_mutant_regression(tmp_path: Path):
     stats_path = tmp_path / "stats.json"
     baseline_path = tmp_path / "baseline.json"
     _write_json(stats_path, _stats(survived=1))
@@ -72,7 +72,53 @@ def test_rejects_surviving_mutant_regression(tmp_path: Path):
     result = _run_checker(stats_path, baseline_path)
 
     assert result.returncode == 1
-    assert "survived: observed 1, baseline allows 0" in result.stderr
+    assert "unresolved rate (survived + timeout)" in result.stderr
+    assert "baseline allows 0.00%" in result.stderr
+
+
+def test_accepts_timeout_to_survivor_reclassification(tmp_path: Path):
+    """Runner speed may turn old timeouts into survivors without weakening tests."""
+    stats_path = tmp_path / "stats.json"
+    baseline_path = tmp_path / "baseline.json"
+    _write_json(stats_path, _stats(survived=70, timeout=30))
+    _write_json(
+        baseline_path,
+        _baseline(max_unresolved_basis_points=8900, max_timeout=100),
+    )
+
+    result = _run_checker(stats_path, baseline_path)
+
+    assert result.returncode == 0
+
+
+def test_rejects_combined_survivor_and_timeout_regression(tmp_path: Path):
+    stats_path = tmp_path / "stats.json"
+    baseline_path = tmp_path / "baseline.json"
+    _write_json(stats_path, _stats(survived=70, timeout=31))
+    _write_json(
+        baseline_path,
+        _baseline(max_unresolved_basis_points=8900, max_timeout=100),
+    )
+
+    result = _run_checker(stats_path, baseline_path)
+
+    assert result.returncode == 1
+    assert "unresolved rate (survived + timeout)" in result.stderr
+    assert "observed 89.38%" in result.stderr
+
+
+def test_unresolved_rate_scales_with_larger_mutant_population(tmp_path: Path):
+    stats_path = tmp_path / "stats.json"
+    baseline_path = tmp_path / "baseline.json"
+    _write_json(stats_path, _stats(total=200, survived=20))
+    _write_json(
+        baseline_path,
+        _baseline(max_unresolved_basis_points=1000),
+    )
+
+    result = _run_checker(stats_path, baseline_path)
+
+    assert result.returncode == 0
 
 
 def test_rejects_infrastructure_statuses(tmp_path: Path):

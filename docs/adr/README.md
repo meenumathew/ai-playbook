@@ -46,7 +46,7 @@ Create an ADR only when all three criteria are true:
 |---|---|
 | Someone sets or changes a scope boundary | "Drop Python 3.11 support," "Drop Jira integration" |
 | Someone establishes a convention or contract | "Every agent must declare a read budget," "Stories > 3 points require a plan file" |
-| The team chooses a technology over alternatives | "Typer over Click," "uv over pip," "MADR over Nygard" |
+| The team chooses a technique or technology over alternatives | "Two-phase backup and restore over in-place overwrite" ([ADR-0004](0004-two-phase-backup-restore.md)), "Pack overlays resolve last-wins over core" ([ADR-0003](0003-pack-overlay-last-wins.md)) |
 | A trade-off is likely to be re-litigated | "Feature flags default OFF," "No network calls in tests" |
 | An earlier decision reverses | Creates a new ADR that supersedes the old one |
 | An external constraint locks in | "Must stay MIT licensed," "Must support offline mode" |

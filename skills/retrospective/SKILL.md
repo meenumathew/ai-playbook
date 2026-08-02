@@ -44,11 +44,11 @@ Scan:
 
 Map findings to target:
 
-- missing rule/pattern -> `design-patterns.md` / `style-guide.md`
+- missing rule/pattern -> `knowledge-base/design-patterns.md` / `knowledge-base/style-guide.md`
 - term drift -> `knowledge-base/domain-language.md`
 - known limitation -> `docs/limitations.md`
 - architecture decision -> `docs/adr/NNNN-*.md`
-- testing/perf lesson -> `testing.md` / `performance.md`
+- testing/perf lesson -> `knowledge-base/testing.md` / `knowledge-base/performance.md`
 
 Capture only if:
 

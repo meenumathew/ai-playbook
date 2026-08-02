@@ -2,23 +2,35 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 from typing import NoReturn
 
 import pytest
 
-import deploy_ai_playbook.config as config
 from deploy_ai_playbook.config import (
     PACK_METADATA_FILE,
     ConfigError,
+    PackageNotFoundError,
+    current_playbook_version,
+    load_issue_tracker_provider,
+    load_model_reasoning_config,
     load_model_tier_config,
     load_pack_config,
     load_quality_tier_config,
 )
 
 
+def _project_version_from_pyproject() -> str:
+    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    project = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))["project"]
+    version = project["version"]
+    assert isinstance(version, str)
+    return version
+
+
 def test_load_pack_config_returns_empty_list_when_no_toml_file(tmp_path: Path) -> None:
-    """A project without `.ai-playbook.toml` has no packs — return an empty list."""
+    """A project without `.ai-playbook.toml` has no packs: return an empty list."""
     assert load_pack_config(tmp_path) == []
 
 
@@ -68,6 +80,40 @@ def test_load_model_tier_config_rejects_empty_tier_value(tmp_path: Path) -> None
 
     with pytest.raises(ConfigError):
         load_model_tier_config(tmp_path)
+
+
+def test_load_model_reasoning_config_returns_none_when_table_missing(tmp_path: Path) -> None:
+    (tmp_path / ".ai-playbook.toml").write_text("packs = []\n")
+
+    assert load_model_reasoning_config(tmp_path) is None
+
+
+def test_load_model_reasoning_config_reads_advisor_and_executor(tmp_path: Path) -> None:
+    (tmp_path / ".ai-playbook.toml").write_text(
+        '[model_reasoning_efforts]\nadvisor = "high"\nexecutor = "medium"\n'
+    )
+
+    reasoning = load_model_reasoning_config(tmp_path)
+
+    assert reasoning is not None
+    assert reasoning.advisor == "high"
+    assert reasoning.executor == "medium"
+
+
+def test_load_model_reasoning_config_rejects_non_table_mapping(tmp_path: Path) -> None:
+    (tmp_path / ".ai-playbook.toml").write_text('model_reasoning_efforts = "high"\n')
+
+    with pytest.raises(ConfigError):
+        load_model_reasoning_config(tmp_path)
+
+
+def test_load_model_reasoning_config_rejects_empty_effort_value(tmp_path: Path) -> None:
+    (tmp_path / ".ai-playbook.toml").write_text(
+        '[model_reasoning_efforts]\nadvisor = ""\nexecutor = "medium"\n'
+    )
+
+    with pytest.raises(ConfigError):
+        load_model_reasoning_config(tmp_path)
 
 
 def test_load_quality_tier_config_returns_empty_when_no_toml_file(tmp_path: Path) -> None:
@@ -137,7 +183,7 @@ def test_load_quality_tier_config_rejects_non_string_tier_value(tmp_path: Path) 
 
 
 def test_load_pack_config_reads_packs_field_in_order(tmp_path: Path) -> None:
-    """`packs` list order is preserved — last-pack-wins precedence depends on it."""
+    """`packs` list order is preserved: last-pack-wins precedence depends on it."""
     (tmp_path / ".ai-playbook").mkdir()
     (tmp_path / ".ai-playbook" / "packs").mkdir()
     for name in ("django", "internal", "project-a"):
@@ -200,6 +246,28 @@ def test_load_pack_config_rejects_incompatible_pack(tmp_path: Path) -> None:
     (tmp_path / ".ai-playbook.toml").write_text('packs = [".ai-playbook/packs/future"]\n')
 
     with pytest.raises(ConfigError):
+        load_pack_config(tmp_path)
+
+
+def test_semver_prerelease_bounds_follow_precedence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pack_dir = tmp_path / ".ai-playbook" / "packs" / "future-prerelease"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / PACK_METADATA_FILE).write_text(
+        'name = "future-prerelease"\n'
+        'version = "1.0.0-alpha.1"\n'
+        'min_playbook_version = "1.0.0-alpha.10"\n'
+    )
+    (tmp_path / ".ai-playbook.toml").write_text(
+        'packs = [".ai-playbook/packs/future-prerelease"]\n'
+    )
+    monkeypatch.setattr(
+        "deploy_ai_playbook.config.current_playbook_version",
+        lambda: "1.0.0-alpha.2",
+    )
+
+    with pytest.raises(ConfigError, match="requires ai-playbook >="):
         load_pack_config(tmp_path)
 
 
@@ -290,7 +358,7 @@ def test_load_pack_config_skips_compatibility_when_playbook_version_is_unparseab
         'name = "future"\nversion = "1.0.0"\nmin_playbook_version = "999.0.0"\n'
     )
     (tmp_path / ".ai-playbook.toml").write_text('packs = [".ai-playbook/packs/future"]\n')
-    monkeypatch.setattr(config, "current_playbook_version", lambda: "local-dev")
+    monkeypatch.setattr("deploy_ai_playbook.config.current_playbook_version", lambda: "local-dev")
 
     metadata = load_pack_config(tmp_path)[0].metadata
     assert metadata is not None
@@ -301,13 +369,13 @@ def test_load_pack_config_handles_missing_package_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def raise_package_not_found(_: str) -> NoReturn:
-        raise config.PackageNotFoundError
+        raise PackageNotFoundError
 
     pack_dir = tmp_path / ".ai-playbook" / "packs" / "internal"
     pack_dir.mkdir(parents=True)
     (pack_dir / PACK_METADATA_FILE).write_text('name = "internal"\nversion = "1.0.0"\n')
     (tmp_path / ".ai-playbook.toml").write_text('packs = [".ai-playbook/packs/internal"]\n')
-    monkeypatch.setattr(config, "version", raise_package_not_found)
+    monkeypatch.setattr("deploy_ai_playbook.config.version", raise_package_not_found)
 
     metadata = load_pack_config(tmp_path)[0].metadata
     assert metadata is not None
@@ -318,11 +386,11 @@ def test_current_playbook_version_reads_local_pyproject_when_package_metadata_mi
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def raise_package_not_found(_: str) -> NoReturn:
-        raise config.PackageNotFoundError
+        raise PackageNotFoundError
 
-    monkeypatch.setattr(config, "version", raise_package_not_found)
+    monkeypatch.setattr("deploy_ai_playbook.config.version", raise_package_not_found)
 
-    assert config.current_playbook_version() == "1.0.0"
+    assert current_playbook_version() == _project_version_from_pyproject()
 
 
 def test_load_pack_config_raises_on_malformed_toml(
@@ -339,7 +407,7 @@ def test_load_pack_config_raises_on_malformed_toml(
 
 
 def test_load_pack_config_raises_on_missing_pack_dir(tmp_path: Path) -> None:
-    """A pack path that does not exist on disk must fail loudly — typo detection."""
+    """A pack path that does not exist on disk must fail loudly: typo detection."""
     (tmp_path / ".ai-playbook.toml").write_text('packs = [".ai-playbook/packs/does-not-exist"]\n')
 
     with pytest.raises(ConfigError):
@@ -411,30 +479,22 @@ def test_load_pack_config_rejects_paths_outside_project_root(tmp_path: Path) -> 
 
 
 def test_load_issue_tracker_provider_returns_none_without_config(tmp_path):
-    from deploy_ai_playbook.config import load_issue_tracker_provider
-
     assert load_issue_tracker_provider(tmp_path) is None
 
 
 def test_load_issue_tracker_provider_returns_none_without_table(tmp_path):
-    from deploy_ai_playbook.config import load_issue_tracker_provider
-
     (tmp_path / ".ai-playbook.toml").write_text('[model_tiers]\nadvisor = "m"\n')
 
     assert load_issue_tracker_provider(tmp_path) is None
 
 
 def test_load_issue_tracker_provider_normalizes_case(tmp_path):
-    from deploy_ai_playbook.config import load_issue_tracker_provider
-
     (tmp_path / ".ai-playbook.toml").write_text('[issue-tracker]\nprovider = "Jira"\n')
 
     assert load_issue_tracker_provider(tmp_path) == "jira"
 
 
 def test_load_issue_tracker_provider_rejects_non_table(tmp_path):
-    from deploy_ai_playbook.config import ConfigError, load_issue_tracker_provider
-
     (tmp_path / ".ai-playbook.toml").write_text('issue-tracker = "jira"\n')
 
     with pytest.raises(ConfigError):
@@ -442,8 +502,6 @@ def test_load_issue_tracker_provider_rejects_non_table(tmp_path):
 
 
 def test_load_issue_tracker_provider_rejects_empty_string(tmp_path):
-    from deploy_ai_playbook.config import ConfigError, load_issue_tracker_provider
-
     (tmp_path / ".ai-playbook.toml").write_text('[issue-tracker]\nprovider = ""\n')
 
     with pytest.raises(ConfigError):

@@ -231,7 +231,7 @@ make quality
 
 The public repository was re-initialized at the open-source release boundary, so `git log` on `main` starts from a single squashed commit. Pre-release development used Conventional Commits and the `Teach-back:` trailer; that history is not exposed publicly. Going forward, every commit on `main` follows the conventions in the next section, and `harness/check-teachback.sh` enforces the trailer for non-trivial commit types via the `commit-msg` hook (type lists: `skills/git/SKILL.md` § Teach-back Trailer).
 
-If you are evaluating the project against the commit conventions, look at PR commit history and the CI `commit-hygiene` job: which runs the same `harness/check-teachback.sh` on every non-merge commit a PR adds: rather than the squashed `main` log.
+If you are evaluating the project against the commit conventions, look at PR commit history and the CI `commit-hygiene` job, which runs the same `harness/check-teachback.sh` on every non-merge commit a PR adds, rather than the squashed `main` log.
 
 ---
 
@@ -358,8 +358,14 @@ ai-playbook deploy --agent all --tool claude
 - Overly general advice that applies to all software everywhere
 - Template notes and motivational text: agents need instructions, not persuasion
 
-**Token budget:**
-The full playbook deploys ~23,000 words (~30,000 tokens) per session. Every word costs context window space. When adding content, identify what to trim or consolidate. Run `wc -w` on your changes.
+**Context budget:**
+Deploying a file does not prove the host loads it into every session. The rules
+file has a fixed context cost; agent, skill, template, and knowledge-base costs
+depend on host discovery and selective loading. Every added word can still
+increase that potential cost. Before expanding a context-bearing surface, run
+`ai-playbook context-report --agent all`, identify what can be trimmed or
+loaded on demand, and compare the same report after the change. Treat its
+characters/4 value as a static estimate, not provider token or billing data.
 
 ---
 

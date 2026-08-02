@@ -62,6 +62,8 @@ AI Playbook packages established software-engineering practices into deployable 
 | 23 | Semantic Versioning. https://semver.org/ | Version numbering. Compatibility surface defined in [`docs/deprecation-policy.md`](deprecation-policy.md). |
 | 24 | Michael Nygard. "Documenting Architecture Decisions." *Cognitect Blog*, Nov 2011. | ADR template format |
 | 25 | RFC process for proposals larger than a PR. | See [`docs/rfcs/README.md`](rfcs/README.md) |
+| 26 | Amazon Web Services. *AWS Well-Architected Framework*. https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html | Workload quality attributes and explicit architecture trade-offs |
+| 27 | Microsoft. *Azure Well-Architected Framework*. https://learn.microsoft.com/azure/well-architected/ | Reliability, security, cost, operational excellence, and performance as workload-specific concerns |
 
 ---
 
@@ -73,6 +75,7 @@ AI Playbook packages established software-engineering practices into deployable 
 | Testing conventions | [../knowledge-base/testing.md](../knowledge-base/testing.md) |
 | Security conventions | [../knowledge-base/security.md](../knowledge-base/security.md) |
 | Architecture and design patterns | [../knowledge-base/design-patterns.md](../knowledge-base/design-patterns.md) |
+| Evidence-based architecture decisions | [../knowledge-base/architecture-decisions.md](../knowledge-base/architecture-decisions.md) |
 | Cohesion, coupling, abstraction (property vocabulary) | [../knowledge-base/design-fundamentals.md](../knowledge-base/design-fundamentals.md) |
 | Debugging discipline | [../knowledge-base/debugging.md](../knowledge-base/debugging.md) |
 | Git workflow | [../skills/git/SKILL.md](../skills/git/SKILL.md) |

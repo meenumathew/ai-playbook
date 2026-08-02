@@ -1,6 +1,6 @@
 # Eval rubric schemas
 
-Schema-backed rubrics are the durable source for eval criteria. Every standard shipped agent has a JSON rubric; legacy `evals/*-expected.md` files remain as human-readable contracts and as a compatibility fallback for custom or older evals.
+Schema-backed rubrics are the durable source for eval criteria. Every standard shipped agent has a JSON rubric; `evals/*-expected.md` files remain as human-readable contracts and as the fallback for custom evals without a JSON rubric.
 
 ## Format
 
@@ -28,7 +28,13 @@ Each file is JSON at `evals/rubrics/<agent>.json`:
 - `id` values must be unique within each section.
 - `version` must be `1`.
 - `keywords` are for cheap structural validation only; the LLM judge evaluates semantic compliance.
+- **`must_not` keywords are behavioral indicators, not criterion prose.** Each keyword must be text a *violating* transcript would actually contain — vendor commands (`gh pr merge --admin`, `kubectl`), verbatim violator phrasing ("skipped RED", "pushed the tag right away"), code-fence or flag markers — and must not appear unnegated in the agent's committed good baseline. A keyword derived from the criterion's own wording ("Skip research and") is unfalsifiable: no violator ever writes it, so the prohibition can never fire. Falsifiability is enforced by calibration: every negative control in `evals/samples/negative/` declares the `must_not` ids it trips, and `calibrate` fails if a declared id stops firing.
+- Some prohibitions (skipping a step, missing a finding, naming an individual) have no reliable textual indicator. Give those items the best available praise-markers or tell-phrases anyway, and say so in the item's `evidence` string ("Structural keywords are best-effort here; the LLM judge is the enforcement layer") — the semantic judge is the backstop for them.
 - Keep `evidence` concrete so judge prompts ask for behavior, not rubric echoes.
+
+## Judge artifact provenance
+
+Every `judge` run prints a provenance header before its verdicts — the judge model id and a sha256 of the rubric source file. The eval-drift workflow tees judge stdout into `judge-output/*.txt` artifacts, so the header makes verdicts comparable across runs: if two runs disagree, the hashes tell you whether the rubric changed, the judge rotated, or the baseline actually drifted.
 
 ## Updating the Judge Model
 

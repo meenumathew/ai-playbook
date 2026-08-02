@@ -31,7 +31,9 @@
       "id": "INCIDENT-MUST-004",
       "criterion": "**Builds timeline with roles, not names:** Uses \"the on-call\", \"the deployer\". Captures detection (14:32), ack, classification timestamps.",
       "keywords": [
-        "Builds timeline with roles, not names"
+        "Roles only",
+        "the on-call",
+        "the deployer"
       ]
     },
     {
@@ -80,7 +82,8 @@
       "id": "INCIDENT-MUST-010",
       "criterion": "**Proposes regression test for follow-up:** Suggests an integration test that would fail under v3 SDK connection-pool leak so xp-pair-programmer can write it as part of the postmortem follow-up.",
       "keywords": [
-        "Proposes regression test for follow-up"
+        "regression test",
+        "story-refiner"
       ]
     },
     {
@@ -106,69 +109,91 @@
       "criterion": "Execute the rollback (`kubectl`, `helm rollback`, deploy CLI, feature flag CLI)",
       "keywords": [
         "kubectl",
-        "helm rollback"
+        "helm rollback",
+        "rollout undo"
       ]
     },
     {
       "id": "INCIDENT-NOT-002",
       "criterion": "Toggle a feature flag to mitigate",
       "keywords": [
-        "Toggle a feature"
+        "flagctl",
+        "toggled the",
+        "flipped the flag"
       ]
     },
     {
       "id": "INCIDENT-NOT-003",
       "criterion": "Scale infrastructure (`kubectl scale`)",
       "keywords": [
-        "kubectl scale"
+        "kubectl scale",
+        "--replicas=",
+        "scaled the deployment"
       ]
     },
     {
       "id": "INCIDENT-NOT-004",
       "criterion": "Rotate secrets",
-      "keywords": ["Rotate secrets"]
+      "keywords": [
+        "rotated the payments API secret",
+        "rotated the secret",
+        "rotating the secret"
+      ]
     },
     {
       "id": "INCIDENT-NOT-005",
       "criterion": "Name individuals in the incident record or postmortem",
       "keywords": [
-        "Name individuals in"
-      ]
+        "the engineer responsible was",
+        "named the deployer as"
+      ],
+      "evidence": "Judge must cite any personal name used where a role (\"the on-call\", \"the deployer\") belongs, or state that only roles appear. Structural keywords are best-effort here (names are arbitrary strings); the LLM judge is the enforcement layer."
     },
     {
       "id": "INCIDENT-NOT-006",
       "criterion": "Commit a fix in this session \u2014 that is xp-pair-programmer's job after a story is opened",
       "keywords": [
-        "Commit a fix"
+        "committed a hotfix",
+        "committed the fix straight to main",
+        "pushed a fix to main"
       ]
     },
     {
       "id": "INCIDENT-NOT-007",
       "criterion": "Skip severity classification",
       "keywords": [
-        "Skip severity classification"
-      ]
+        "felt like ceremony",
+        "skipped severity",
+        "no severity classification needed"
+      ],
+      "evidence": "Judge must confirm a severity classification appears, or cite its absence. Structural keywords are best-effort here (skipping is an absence); the LLM judge is the enforcement layer."
     },
     {
       "id": "INCIDENT-NOT-008",
       "criterion": "Speculate publicly about root cause before mitigation lands",
       "keywords": [
-        "Speculate publicly about"
+        "to the public status page",
+        "posted publicly",
+        "tweeted the root cause"
       ]
     },
     {
       "id": "INCIDENT-NOT-009",
       "criterion": "Treat the vendor's degraded-performance report as the cause without testing the hypothesis (correlation, not causation \u2014 deploy is 14 minutes before page; vendor degraded 7 minutes before page)",
       "keywords": [
-        "Treat the vendor's"
+        "case closed",
+        "no hypothesis testing required",
+        "vendor is the root cause"
       ]
     },
     {
       "id": "INCIDENT-NOT-010",
       "criterion": "Investigate without a feedback loop per `debugging.md` \u00a7 Phase 1",
       "keywords": [
-        "debugging.md"
-      ]
+        "no feedback loop needed",
+        "cannot verify but proceeding anyway"
+      ],
+      "evidence": "Judge must confirm each investigation step has a way to observe its effect, or cite the passage that proceeds blind. Structural keywords are best-effort here; the LLM judge is the enforcement layer."
     }
   ],
   "quality_signals": [
@@ -176,14 +201,15 @@
       "id": "INCIDENT-QUALITY-001",
       "criterion": "Each hypothesis has a falsifiable prediction",
       "keywords": [
-        "Each hypothesis has"
+        "Prediction:"
       ]
     },
     {
       "id": "INCIDENT-QUALITY-002",
       "criterion": "Cites `debugging.md` for the Iron Law and ranked hypotheses",
       "keywords": [
-        "debugging.md"
+        "Ranked Hypotheses",
+        "rolling back"
       ]
     },
     {
@@ -197,7 +223,8 @@
       "id": "INCIDENT-QUALITY-004",
       "criterion": "Cites `observability.md` \u00a7 Incident Telemetry for evidence checklist",
       "keywords": [
-        "observability.md"
+        "correlation IDs",
+        "retention"
       ]
     },
     {
@@ -211,14 +238,16 @@
       "id": "INCIDENT-QUALITY-006",
       "criterion": "Uses opaque IDs in pasted log excerpts; never raw PII or full payment payloads",
       "keywords": [
-        "Uses opaque IDs"
+        "opaque IDs",
+        "stripped"
       ]
     },
     {
       "id": "INCIDENT-QUALITY-007",
       "criterion": "Flags that updating cadence applies (every 30 minutes for SEV2)",
       "keywords": [
-        "Flags that updating"
+        "pool",
+        "saturation"
       ]
     }
   ]

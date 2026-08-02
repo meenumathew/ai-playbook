@@ -4,22 +4,20 @@ import json
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
 
 from deploy_ai_playbook.cli import DISABLED_SUFFIX, app
 from tests import ALL_AGENTS
+from tests.acceptance._dsl import disable, enable, runner, status
 
-runner = CliRunner()
 
-
-def test_ac_list_shows_all_shipped_agents():
+def test_list_shows_all_shipped_agents():
     result = runner.invoke(app, ["list"])
     assert result.exit_code == 0
     for name in ALL_AGENTS:
         assert name in result.output
 
 
-def test_ac_list_json_outputs_agent_inventory(tmp_path):
+def test_list_json_outputs_agent_inventory(tmp_path):
     """`list --json` emits a machine-readable agent inventory."""
     result = runner.invoke(app, ["list", "--json", "-t", str(tmp_path)])
 
@@ -32,7 +30,7 @@ def test_ac_list_json_outputs_agent_inventory(tmp_path):
         assert agents[name]["origin"] == "core"
 
 
-def test_ac_list_json_includes_pack_agent_with_origin(tmp_path):
+def test_list_json_includes_pack_agent_with_origin(tmp_path):
     """Pack agents appear in the JSON inventory with pack origin."""
     pack_root = tmp_path / ".ai-playbook" / "packs" / "django"
     (pack_root / "agents").mkdir(parents=True)
@@ -47,7 +45,7 @@ def test_ac_list_json_includes_pack_agent_with_origin(tmp_path):
     assert agents["django-model-reviewer"]["origin"] == "pack:django"
 
 
-def test_ac_list_default_table_output_unchanged(tmp_path):
+def test_list_default_table_output_unchanged(tmp_path):
     """without `--json` the table renders as before."""
     result = runner.invoke(app, ["list", "-t", str(tmp_path)])
 
@@ -57,45 +55,37 @@ def test_ac_list_default_table_output_unchanged(tmp_path):
         json.loads(result.output)
 
 
-def test_ac_status_disable_enable_round_trip(deployed_claude: Path):
-    disable_result = runner.invoke(
-        app,
-        ["disable", "xp-pair-programmer", "--tool", "claude", "-t", str(deployed_claude)],
-    )
+def test_status_disable_enable_round_trip(deployed_claude: Path):
+    disable_result = disable("xp-pair-programmer", deployed_claude)
     assert disable_result.exit_code == 0
     assert (
         deployed_claude / ".claude" / "agents" / f"xp-pair-programmer.agent.md{DISABLED_SUFFIX}"
     ).exists()
 
-    status_result = runner.invoke(app, ["status", "--tool", "claude", "-t", str(deployed_claude)])
+    status_result = status(deployed_claude)
     assert status_result.exit_code == 0
     assert "disabled" in status_result.output
 
-    enable_result = runner.invoke(
-        app,
-        ["enable", "xp-pair-programmer", "--tool", "claude", "-t", str(deployed_claude)],
-    )
+    enable_result = enable("xp-pair-programmer", deployed_claude)
     assert enable_result.exit_code == 0
     assert (deployed_claude / ".claude" / "agents" / "xp-pair-programmer.agent.md").exists()
 
 
-def test_ac_enable_not_deployed_reports_hint(tmp_path: Path):
-    result = runner.invoke(
-        app, ["enable", "xp-pair-programmer", "--tool", "claude", "-t", str(tmp_path)]
-    )
+def test_enable_not_deployed_reports_hint(tmp_path: Path):
+    result = enable("xp-pair-programmer", tmp_path)
     assert result.exit_code == 0
     assert "not deployed" in result.output
 
 
-def test_ac_status_reports_nothing_deployed(tmp_path: Path):
-    result = runner.invoke(app, ["status", "--tool", "claude", "-t", str(tmp_path)])
+def test_status_reports_nothing_deployed(tmp_path: Path):
+    result = status(tmp_path)
 
     assert result.exit_code == 0
     assert "Nothing deployed" in result.output
 
 
 def test_status_json_reports_not_deployed(tmp_path: Path):
-    result = runner.invoke(app, ["status", "--tool", "claude", "-t", str(tmp_path), "--json"])
+    result = status(tmp_path, as_json=True)
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
@@ -104,21 +94,21 @@ def test_status_json_reports_not_deployed(tmp_path: Path):
     assert payload["agents"] == []
 
 
-def test_ac_status_shows_default_quality_tier(deployed_claude: Path):
-    result = runner.invoke(app, ["status", "--tool", "claude", "-t", str(deployed_claude)])
+def test_status_shows_default_quality_tier(deployed_claude: Path):
+    result = status(deployed_claude)
 
     assert result.exit_code == 0
     assert "Quality tier" in result.output
     assert "production" in result.output
 
 
-def test_ac_status_shows_per_agent_quality_tier_override(deployed_claude: Path):
+def test_status_shows_per_agent_quality_tier_override(deployed_claude: Path):
     (deployed_claude / ".ai-playbook.toml").write_text(
         '[model_tiers]\nadvisor = "claude-opus"\nexecutor = "claude-sonnet"\n\n'
         '[quality_tiers.agents]\nxp-pair-programmer = "prototype"\n'
     )
 
-    result = runner.invoke(app, ["status", "--tool", "claude", "-t", str(deployed_claude)])
+    result = status(deployed_claude)
 
     assert result.exit_code == 0
     assert "xp-pair-programmer" in result.output
@@ -130,14 +120,9 @@ def test_status_json_reports_agent_state_and_quality_tier(deployed_claude: Path)
     (deployed_claude / ".ai-playbook.toml").write_text(
         '[quality_tiers.agents]\nxp-pair-programmer = "prototype"\n'
     )
-    runner.invoke(
-        app,
-        ["disable", "xp-pair-programmer", "--tool", "claude", "-t", str(deployed_claude)],
-    )
+    disable("xp-pair-programmer", deployed_claude)
 
-    result = runner.invoke(
-        app, ["status", "--tool", "claude", "-t", str(deployed_claude), "--json"]
-    )
+    result = status(deployed_claude, as_json=True)
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
@@ -147,7 +132,7 @@ def test_status_json_reports_agent_state_and_quality_tier(deployed_claude: Path)
     assert xp_pair["quality_tier_source"] == "override"
 
 
-def test_ac_artifacts_lists_resume_files_with_status(tmp_path: Path):
+def test_artifacts_lists_resume_files_with_status(tmp_path: Path):
     story_dir = tmp_path / "stories"
     plan_dir = tmp_path / "plans"
     story_dir.mkdir()
@@ -179,7 +164,7 @@ def test_artifacts_json_lists_resume_files_with_status(tmp_path: Path):
     ]
 
 
-def test_ac_artifacts_reads_table_status(tmp_path: Path):
+def test_artifacts_reads_table_status(tmp_path: Path):
     incident_dir = tmp_path / "incidents"
     incident_dir.mkdir()
     (incident_dir / "INC-2026-05-22-checkout.md").write_text(
@@ -193,7 +178,7 @@ def test_ac_artifacts_reads_table_status(tmp_path: Path):
     assert "Closed" in result.output
 
 
-def test_ac_artifacts_filters_by_content(tmp_path: Path):
+def test_artifacts_filters_by_content(tmp_path: Path):
     story_dir = tmp_path / "stories"
     story_dir.mkdir()
     (story_dir / "STORY-001-checkout.md").write_text("status: ready\nPayment retry\n")
@@ -206,14 +191,14 @@ def test_ac_artifacts_filters_by_content(tmp_path: Path):
     assert "STORY-002-profile" not in result.output
 
 
-def test_ac_artifacts_reports_empty_project(tmp_path: Path):
+def test_artifacts_reports_empty_project(tmp_path: Path):
     result = runner.invoke(app, ["artifacts", "-t", str(tmp_path)])
 
     assert result.exit_code == 0
     assert "No artifacts found" in result.output
 
 
-def test_ac_artifact_policy_local_adds_managed_gitignore_block(tmp_path: Path):
+def test_artifact_policy_local_adds_managed_gitignore_block(tmp_path: Path):
     result = runner.invoke(app, ["artifact-policy", "local", "-t", str(tmp_path)])
 
     assert result.exit_code == 0
@@ -226,9 +211,10 @@ def test_ac_artifact_policy_local_adds_managed_gitignore_block(tmp_path: Path):
     # archives) is machine-local and belongs in the managed block too.
     assert ".claude/read-budget/" in content
     assert ".claude/usage*.jsonl*" in content
+    assert ".codex/usage*.jsonl*" in content
 
 
-def test_ac_artifact_policy_local_uses_guarded_gitignore_write(tmp_path: Path, monkeypatch) -> None:
+def test_artifact_policy_local_uses_guarded_gitignore_write(tmp_path: Path, monkeypatch) -> None:
     original_write_text = Path.write_text
 
     def reject_direct_gitignore_write(self: Path, *args, **kwargs):
@@ -244,7 +230,7 @@ def test_ac_artifact_policy_local_uses_guarded_gitignore_write(tmp_path: Path, m
     assert "stories/" in (tmp_path / ".gitignore").read_text(encoding="utf-8")
 
 
-def test_ac_artifact_policy_shared_removes_only_managed_block(tmp_path: Path):
+def test_artifact_policy_shared_removes_only_managed_block(tmp_path: Path):
     gitignore = tmp_path / ".gitignore"
     gitignore.write_text(
         ".env\n\n# ai-playbook artifacts (managed)\nstories/\nplans/\n# end ai-playbook artifacts\n"
@@ -259,9 +245,9 @@ def test_ac_artifact_policy_shared_removes_only_managed_block(tmp_path: Path):
     assert "stories/" not in content
 
 
-def test_ac_artifact_policy_shared_warns_about_unmanaged_ignore_lines(tmp_path: Path):
+def test_artifact_policy_shared_warns_about_unmanaged_ignore_lines(tmp_path: Path):
     """`shared` never edits hand-written lines, but silence would be misleading
-    when those lines still hide artifacts — it must warn instead."""
+    when those lines still hide artifacts: it must warn instead."""
     (tmp_path / ".gitignore").write_text(".env\nstories/\nplans/\n")
 
     result = runner.invoke(app, ["artifact-policy", "shared", "-t", str(tmp_path)])
@@ -273,7 +259,7 @@ def test_ac_artifact_policy_shared_warns_about_unmanaged_ignore_lines(tmp_path: 
     assert "stories/" in (tmp_path / ".gitignore").read_text()
 
 
-def test_ac_artifact_policy_dry_run_does_not_write_gitignore(tmp_path: Path):
+def test_artifact_policy_dry_run_does_not_write_gitignore(tmp_path: Path):
     result = runner.invoke(app, ["artifact-policy", "local", "-t", str(tmp_path), "--dry-run"])
 
     assert result.exit_code == 0
@@ -281,7 +267,7 @@ def test_ac_artifact_policy_dry_run_does_not_write_gitignore(tmp_path: Path):
     assert not (tmp_path / ".gitignore").exists()
 
 
-def test_ac_artifact_policy_status_reports_managed_policy(tmp_path: Path):
+def test_artifact_policy_status_reports_managed_policy(tmp_path: Path):
     runner.invoke(app, ["artifact-policy", "local", "-t", str(tmp_path)])
 
     result = runner.invoke(app, ["artifact-policy", "status", "-t", str(tmp_path)])
@@ -290,14 +276,14 @@ def test_ac_artifact_policy_status_reports_managed_policy(tmp_path: Path):
     assert "Artifact policy: local" in result.output
 
 
-def test_ac_artifact_policy_status_reports_shared_without_gitignore(tmp_path: Path):
+def test_artifact_policy_status_reports_shared_without_gitignore(tmp_path: Path):
     result = runner.invoke(app, ["artifact-policy", "status", "-t", str(tmp_path)])
 
     assert result.exit_code == 0
     assert "Artifact policy: shared" in result.output
 
 
-def test_ac_artifact_policy_status_reports_custom_policy(tmp_path: Path):
+def test_artifact_policy_status_reports_custom_policy(tmp_path: Path):
     (tmp_path / ".gitignore").write_text("stories/\n")
 
     result = runner.invoke(app, ["artifact-policy", "status", "-t", str(tmp_path)])
@@ -306,7 +292,7 @@ def test_ac_artifact_policy_status_reports_custom_policy(tmp_path: Path):
     assert "Artifact policy: custom" in result.output
 
 
-def test_ac_artifact_policy_shared_is_noop_without_managed_block(tmp_path: Path):
+def test_artifact_policy_shared_is_noop_without_managed_block(tmp_path: Path):
     gitignore = tmp_path / ".gitignore"
     gitignore.write_text(".env\n")
 
@@ -317,7 +303,7 @@ def test_ac_artifact_policy_shared_is_noop_without_managed_block(tmp_path: Path)
     assert gitignore.read_text() == ".env\n"
 
 
-def test_ac_artifact_policy_local_is_noop_when_managed_block_exists(tmp_path: Path):
+def test_artifact_policy_local_is_noop_when_managed_block_exists(tmp_path: Path):
     runner.invoke(app, ["artifact-policy", "local", "-t", str(tmp_path)])
 
     result = runner.invoke(app, ["artifact-policy", "local", "-t", str(tmp_path)])
@@ -328,9 +314,7 @@ def test_ac_artifact_policy_local_is_noop_when_managed_block_exists(tmp_path: Pa
 
 def test_disable_not_deployed_agent(tmp_path: Path):
     """Disabling an agent that isn't deployed shows 'not deployed'."""
-    result = runner.invoke(
-        app, ["disable", "xp-pair-programmer", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = disable("xp-pair-programmer", tmp_path)
 
     assert result.exit_code == 0
     assert "not deployed" in result.output
@@ -338,14 +322,8 @@ def test_disable_not_deployed_agent(tmp_path: Path):
 
 def test_disable_already_disabled_agent(deployed_claude: Path):
     """Disabling an already disabled agent shows 'already disabled'."""
-    runner.invoke(
-        app,
-        ["disable", "xp-pair-programmer", "--tool", "claude", "-t", str(deployed_claude)],
-    )
-    result = runner.invoke(
-        app,
-        ["disable", "xp-pair-programmer", "--tool", "claude", "-t", str(deployed_claude)],
-    )
+    disable("xp-pair-programmer", deployed_claude)
+    result = disable("xp-pair-programmer", deployed_claude)
 
     assert result.exit_code == 0
     assert "already disabled" in result.output
@@ -353,9 +331,7 @@ def test_disable_already_disabled_agent(deployed_claude: Path):
 
 def test_enable_already_active_agent(deployed_claude: Path):
     """Enabling an agent that's already active shows 'already active'."""
-    result = runner.invoke(
-        app, ["enable", "xp-pair-programmer", "--tool", "claude", "-t", str(deployed_claude)]
-    )
+    result = enable("xp-pair-programmer", deployed_claude)
 
     assert result.exit_code == 0
     assert "already active" in result.output
@@ -393,3 +369,49 @@ def test_telemetry_enable_warns_when_harness_script_missing(tmp_path: Path):
 
     assert result.exit_code == 0
     assert "harness/telemetry.sh not deployed" in result.output
+
+
+@pytest.mark.parametrize("command", ["enable", "disable"])
+def test_telemetry_mutation_fails_when_config_is_malformed(
+    tmp_path: Path,
+    command: str,
+) -> None:
+    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text("not json {{{", encoding="utf-8")
+
+    result = runner.invoke(app, ["telemetry", command, "-t", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "malformed JSON" in result.output
+    assert "Traceback" not in result.output
+    assert settings_path.read_text(encoding="utf-8") == "not json {{{"
+
+
+def test_codex_telemetry_enable_status_disable_round_trip(tmp_path: Path):
+    enable_result = runner.invoke(
+        app, ["telemetry", "enable", "--tool", "codex", "-t", str(tmp_path)]
+    )
+    assert enable_result.exit_code == 0, enable_result.output
+    assert (tmp_path / ".codex" / "hooks.json").exists()
+    assert "review and trust" in enable_result.output
+
+    status_result = runner.invoke(
+        app, ["telemetry", "status", "--tool", "codex", "-t", str(tmp_path)]
+    )
+    assert status_result.exit_code == 0
+    assert "configured" in status_result.output
+    assert ".codex/usage.jsonl" in status_result.output
+
+    disable_result = runner.invoke(
+        app, ["telemetry", "disable", "--tool", "codex", "-t", str(tmp_path)]
+    )
+    assert disable_result.exit_code == 0
+    assert "disabled" in disable_result.output
+
+
+def test_telemetry_rejects_tool_without_lifecycle_hook(tmp_path: Path):
+    result = runner.invoke(app, ["telemetry", "status", "--tool", "copilot", "-t", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "Invalid value for --tool" in result.output

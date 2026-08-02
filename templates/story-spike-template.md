@@ -1,6 +1,6 @@
 ---
 issue-ref:
-type: spike            # story | spike | bug | chore
+type: spike            # story | spike | bug | chore | test-story
 status: refining       # refining | ready | in-progress | blocked | done
 workspace:             # optional: name of the workspace this spike belongs to (e.g. apps/api). Empty = repo default.
 depends-on: []         # [STORY-003]: spikes rarely depend on other work; usually empty

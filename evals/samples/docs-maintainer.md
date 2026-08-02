@@ -1,61 +1,55 @@
 ---
-provenance: curated
+provenance: captured
+model: claude-fable-5
+tool: claude-code
+captured_at: 2026-07-26
 ---
 
 # Baseline Sample: docs-maintainer
 
-## Clarifying Questions First
+Checked existing ADRs: 4 in docs/adr/ (Bitbucket support, CLI layering, pack overlays, backup/restore), no duplicate or related email-provider decision. Next number is 0005. Template loaded. Reads used: 3 of 15.
 
-I need three facts before saving the ADR:
+Required ADR questions, extracted from your request rather than re-asked:
 
-1. Situation: what decision is being made and what user/business problem triggered it?
-2. Decision: is SendGrid definitely chosen, or are we still comparing providers?
-3. Alternatives: why were Mailgun and AWS SES rejected?
+- **Situation that forced the decision:** the product needs transactional email and the team evaluated providers last sprint under delivery-timeline pressure.
+- **What was decided:** SendGrid as the transactional email provider.
+- **Alternatives rejected and why:** Mailgun (cheaper, but weaker documentation and zero team experience) and AWS SES (too much infrastructure setup for the timeline).
 
-Given the provided answers, I can draft the ADR.
+Assumption recorded: this is a hard-to-reverse provider choice with a real trade-off (cost vs deliverability and velocity), which meets the ADR bar. Date set to today; status Active since the evaluation concluded and the choice is made. Say so if it should start as Proposed.
 
-## ADR Preview
+Draft below.
 
-## 0007-use-sendgrid-for-transactional-email
+---
 
-## Status
+# ADR-0005: SendGrid for transactional email
 
-Accepted, 2026-05-22.
+| Field | Value |
+|-------|-------|
+| **Status** | Active |
+| **Date** | 2026-07-26 |
+| **Supersedes** | N/A |
 
 ## Context
 
-The team needs transactional shipment email. The decision is time-sensitive because support tickets show email-only customers missing shipment updates. The team evaluated SendGrid, Mailgun, and AWS SES.
+The product needs a transactional email provider (account, notification, and workflow emails) and the team had a hard delivery timeline that ruled out lengthy infrastructure work. Last sprint we evaluated SendGrid and Mailgun hands-on, and assessed AWS SES on paper.
 
 ## Decision
 
-Use SendGrid for transactional shipment email.
+We use SendGrid as the transactional email provider, integrated through its official Python SDK, which fits our Python stack.
 
 ## Business Reason
 
-SendGrid gives the best fit for the current release window: stronger deliverability tooling, team familiarity from previous projects, and an SDK that fits the existing service boundary with less onboarding time.
-
-## Alternatives Considered
-
-### SendGrid
-
-Chosen. Best balance of deliverability visibility, SDK fit, and team familiarity.
-
-### Mailgun
-
-Rejected. Lower projected cost, but the team has less operational experience with it and would need more setup time during a constrained release.
-
-### AWS SES
-
-Rejected. Good long-term infrastructure fit, but configuration and deliverability warm-up add complexity that does not fit the current timeline.
+Transactional emails must actually reach inboxes: SendGrid showed the better deliverability rates in our evaluation, and existing team familiarity means we ship within the sprint timeline instead of paying a learning curve.
 
 ## Consequences
 
-Positive: faster onboarding, better deliverability diagnostics, and lower release risk for the first shipment-email slice.
+Easier: onboarding (the team already knows SendGrid), integration (mature Python SDK), and inbox placement (better deliverability out of the box). Harder: cost, since Mailgun was cheaper for our projected volume, so provider spend should be revisited if email volume grows significantly. We now depend on a single external vendor for all transactional email; email sending should stay behind our own service boundary so a future provider swap touches one module.
 
-Negative: higher cost than Mailgun and vendor lock-in around SendGrid-specific features. A future migration should keep provider-specific code behind an adapter.
+## Alternatives Considered
 
-## Notes
+- **Mailgun**: rejected. Cheaper at our projected volume, but documentation quality was worse and no one on the team had used it, making both the initial build and future maintenance slower and riskier within our timeline.
+- **AWS SES**: rejected. Attractive on price, but required too much infrastructure setup (domain identity verification, reputation warm-up, bounce and complaint handling plumbing) for our delivery timeline.
 
-No API keys, SDK setup, or code examples belong in this ADR; those are implementation docs.
+---
 
-ADR preview above. Reply 'approved' (or 'looks good' / 'go ahead') to save to docs/adr/0007-use-sendgrid-for-transactional-email.md and update docs/adr/README.md. Anything else and I'll revise.
+Document preview above. Reply 'approved' (or 'looks good' / 'go ahead') to save to docs/adr/0005-sendgrid-for-transactional-email.md. Anything else and I'll revise.

@@ -127,4 +127,4 @@ Static review (the checklist above) catches algorithmic and query problems in th
 
 **Tools are a detail, not the point.** k6, Locust, JMeter, or Gatling all work; pick whatever the team already runs. State the tool in the plan; keep the scenario in the repo so it reruns.
 
-**Where it fits.** slice-planner adds a load-test task when the performance gate fires; release-captain confirms the target was met before cutover on performance-sensitive changes. A failing load test is a release blocker, not a nice-to-have.
+**Where it fits.** slice-planner adds a load-test task when the performance gate fires, with the target in the plan. Wire the scenario into CI so a failing load test fails the build: that is what makes it a release blocker (release-captain's existing green-CI gate enforces it without a separate duty).

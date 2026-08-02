@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,8 +23,8 @@ from deploy_ai_playbook.fs import (
     expected_deployed_files,
 )
 from deploy_ai_playbook.paths import (
+    AGENT_FILE_SUFFIX,
     HARNESS_FILES,
-    LANGUAGE_FILES,
     RULES_SOURCE_FILE,
     VERSION_FILE,
     Tool,
@@ -36,7 +37,7 @@ from deploy_ai_playbook.services.deploy import (
 from deploy_ai_playbook.services.pack_validation import validate_pack_content
 from deploy_ai_playbook.targets import get_target_adapter
 from deploy_ai_playbook.telemetry import telemetry_hook_configured
-from deploy_ai_playbook.upgrade import read_version_file
+from deploy_ai_playbook.upgrade import deployed_language_filter, read_version_file
 
 
 class DeploymentNotFoundError(AIPlaybookError):
@@ -67,6 +68,8 @@ class DoctorService:
             raise DeploymentNotFoundError(agents_dir)
 
         rewrite = path_rewrite(destinations)
+        record = read_version_file(project_root / VERSION_FILE)
+        scope = record.scope if record is not None else None
         language_filter = _deployed_language_filter(project_root)
         skip_files = language_skip_files(language_filter)
 
@@ -74,22 +77,33 @@ class DoctorService:
         discovered = discover_layered(source_root, packs)
         layered_files = discovered.files
         all_agents: dict[str, Path] = {
-            entry.relative.name.removesuffix(".agent.md"): entry.src_path
+            entry.relative.name.removesuffix(AGENT_FILE_SUFFIX): entry.src_path
             for entry in layered_files
             if entry.relative.parts[0] == "agents"
         }
+        scoped_agents = all_agents
+        if scope is not None and scope.is_partial:
+            scoped_agents = {
+                name: path for name, path in all_agents.items() if name in scope.agents
+            }
 
         agent_transform, _notes = agent_model_tier_transform(tool, project_root)
-        issues, warnings = _check_agents_health(all_agents, agents_dir, rewrite, agent_transform)
+        agent_suffix = get_target_adapter(tool).agent_output_suffix
+        issues, warnings = _check_agents_health(
+            scoped_agents, agents_dir, rewrite, agent_transform, agent_suffix
+        )
         warnings.extend(
             _orphan_warnings(project_root, source_root, tool, skip_files, layered_files)
         )
-        rule_issues, rule_warnings = _check_rules_health(
-            source_root,
-            project_root,
-            destinations,
-            rewrite,
-        )
+        rule_issues: list[str] = []
+        rule_warnings: list[str] = []
+        if scope is None or scope.rules:
+            rule_issues, rule_warnings = _check_rules_health(
+                source_root,
+                project_root,
+                destinations,
+                rewrite,
+            )
         directory_issues, directory_warnings = _check_deployed_directories(
             project_root,
             destinations,
@@ -99,11 +113,24 @@ class DoctorService:
         )
         issues.extend(rule_issues + directory_issues)
         warnings.extend(rule_warnings + directory_warnings)
-        warnings.extend(_command_warnings(source_root, project_root, tool, rewrite))
+        if scope is None or scope.commands:
+            warnings.extend(
+                _command_warnings(
+                    source_root,
+                    project_root,
+                    tool,
+                    rewrite,
+                    set(scope.agents) if scope is not None and scope.is_partial else None,
+                    set(all_agents),
+                )
+            )
         warnings.extend(_version_warnings(source_root, project_root, skip_files, layered_files))
         warnings.extend(_tool_mismatch_warnings(project_root, tool))
-        warnings.extend(_harness_warnings(project_root))
-        warnings.extend(_telemetry_hook_warnings(project_root, tool))
+        if tool is Tool.codex:
+            issues.extend(_codex_agent_toml_issues(agents_dir))
+        if scope is None or scope.harness:
+            warnings.extend(_harness_warnings(project_root))
+            warnings.extend(_telemetry_hook_warnings(project_root, tool))
         warnings.extend(_runtime_directory_warnings(project_root))
         warnings.extend(_model_tier_warnings(project_root))
         warnings.extend(_quality_tier_override_warnings(project_root, all_agents.keys()))
@@ -119,15 +146,8 @@ class DoctorService:
         return DoctorReport(project_root=project_root, tool=tool, issues=issues, warnings=warnings)
 
 
-def _deployed_language_filter(project_root: Path) -> str | None:
-    """Read the language filter recorded by the last deploy, if any."""
-    parsed = read_version_file(project_root / VERSION_FILE)
-    if parsed is None or parsed.language is None:
-        return None
-    value = parsed.language.lower()
-    if value in ("", "all"):
-        return None
-    return value if value in LANGUAGE_FILES else None
+# Canonical implementation lives in upgrade.deployed_language_filter.
+_deployed_language_filter = deployed_language_filter
 
 
 def _check_agents_health(
@@ -135,11 +155,12 @@ def _check_agents_health(
     agents_dir: Path,
     rewrite: dict[str, str],
     agent_transform: Callable[[str], str] | None = None,
+    agent_suffix: str = AGENT_FILE_SUFFIX,
 ) -> tuple[list[str], list[str]]:
     issues: list[str] = []
     warnings: list[str] = []
     for name, src_file in all_agents.items():
-        path, is_disabled = find_deployed_agent(agents_dir, name)
+        path, is_disabled = find_deployed_agent(agents_dir, name, agent_suffix)
         if path is None:
             issues.append(f"Agent [cyan]{name}[/cyan] is not deployed")
         elif is_disabled:
@@ -267,6 +288,8 @@ def _command_warnings(
     project_root: Path,
     tool: Tool,
     rewrite: dict[str, str],
+    agent_names: set[str] | None = None,
+    known_agent_names: set[str] | None = None,
 ) -> list[str]:
     target = get_target_adapter(tool)
     commands_destination = target.optional_destination("commands")
@@ -276,6 +299,13 @@ def _command_warnings(
     commands_dir = project_root / commands_destination
     stale_count = 0
     for src_file in sorted(commands_src.glob("*.md")):
+        if (
+            agent_names is not None
+            and known_agent_names is not None
+            and src_file.stem in known_agent_names
+            and src_file.stem not in agent_names
+        ):
+            continue
         dst_name, content = target.transform_command(
             src_file.name, src_file.read_text(encoding="utf-8")
         )
@@ -328,7 +358,13 @@ def _version_warnings(
     if parsed is None:
         return [f"[cyan]{VERSION_FILE}[/cyan] missing — redeploy to add version tracking"]
     current_fingerprint = compute_source_fingerprint(
-        source_root, discovered_files, skip_files=skip_files
+        source_root,
+        discovered_files,
+        skip_files=skip_files,
+        agent_names=parsed.scope.fingerprint_agent_names,
+        include_commands=parsed.scope.commands,
+        include_harness=parsed.scope.harness,
+        include_rules=parsed.scope.rules,
     )
     deployed_fingerprint = parsed.fingerprint
     if not deployed_fingerprint:
@@ -352,7 +388,7 @@ def _tool_mismatch_warnings(project_root: Path, tool: Tool) -> list[str]:
     another (e.g. copilot). The two destinations don't share files, so doctor
     happily reports "healthy" against an empty .github/agents tree while the
     real deployment lives under .claude/. Surfacing this as a warning makes
-    the mismatch visible without blocking — adopters who genuinely run
+    the mismatch visible without blocking: adopters who genuinely run
     multi-tool deployments can ignore it.
     """
     parsed = read_version_file(project_root / VERSION_FILE)
@@ -405,16 +441,43 @@ def _is_user_executable(path: Path) -> bool:
 
 
 def _telemetry_hook_warnings(project_root: Path, tool: Tool) -> list[str]:
-    if tool is not Tool.claude:
+    if tool not in {Tool.claude, Tool.codex}:
         return []
     if not (project_root / "harness" / "telemetry.sh").exists():
         return []
-    if telemetry_hook_configured(project_root):
+    if telemetry_hook_configured(project_root, tool):
         return []
+    config_path = ".codex/hooks.json" if tool is Tool.codex else ".claude/settings.json"
+    event = "SessionEnd" if tool is Tool.codex else "Stop"
     return [
-        "Telemetry Stop hook is not configured in [cyan].claude/settings.json[/cyan] "
-        "— run [bold]ai-playbook deploy --tool claude[/bold] to enable usage logging."
+        f"Telemetry {event} hook is not configured in [cyan]{config_path}[/cyan] "
+        f"— run [bold]ai-playbook deploy --tool {tool.value}[/bold] to enable "
+        "privacy-minimal local usage logging."
     ]
+
+
+def _codex_agent_toml_issues(agents_dir: Path) -> list[str]:
+    """Report deployed Codex agent files that are not parseable TOML.
+
+    Codex reads these natively; a syntax error silently drops the agent, so
+    surface it as an issue rather than waiting for the adopter to notice a
+    missing custom agent.
+    """
+    issues: list[str] = []
+    for path in sorted(agents_dir.glob("*.toml")):
+        try:
+            tomllib.loads(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+            # UnicodeDecodeError included: TOML requires UTF-8, so a
+            # non-UTF-8 agent file is equally unloadable by Codex.
+            issues.append(
+                f"Codex agent [cyan]{path.name}[/cyan] is not valid TOML ({exc}) — "
+                "Codex will not load it; redeploy with "
+                "[bold]ai-playbook deploy --tool codex[/bold]."
+            )
+    return issues
 
 
 def _commit_msg_hook_warnings(project_root: Path) -> list[str]:
@@ -509,7 +572,7 @@ _RUNTIME_DIRS: tuple[str, ...] = (
 
 
 def _runtime_directory_warnings(project_root: Path) -> list[str]:
-    """Warn for missing artifact directories — but not on a fresh deploy.
+    """Warn for missing artifact directories: but not on a fresh deploy.
 
     Agents create these on first use (`agents/<name>.agent.md` does
     `Write` into `stories/`, `plans/`, etc.). On a brand-new project
@@ -518,7 +581,7 @@ def _runtime_directory_warnings(project_root: Path) -> list[str]:
     diagnostics that actually matter (stale agents, missing rules).
 
     Heuristic: only warn when *some* runtime dirs exist and others
-    don't — that's the partial-state worth flagging. If none exist,
+    don't: that's the partial-state worth flagging. If none exist,
     the project hasn't started working yet; if all exist, nothing to
     warn about.
     """

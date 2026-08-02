@@ -1,4 +1,4 @@
-"""Unit tests for deploy_ai_playbook.cli — pure functions and helpers in isolation.
+"""Unit tests for deploy_ai_playbook.cli: pure functions and helpers in isolation.
 
 Filesystem use is limited to `tmp_path` and exercises a single helper with no
 CLI-runner invocation. CLI-boundary tests live in `tests/acceptance/`.
@@ -8,14 +8,20 @@ from pathlib import Path
 
 import pytest
 import typer
+from typer.testing import CliRunner
 
+from deploy_ai_playbook import __version__
 from deploy_ai_playbook.cli import (
     DISABLED_SUFFIX,
     ORIGINAL_PWD,
     VERSION_FILE,
     Tool,
+    _deployed_language_after_update,
     _deployed_quality_tier,
+    _resolve_agent_names_or_exit,
     _resolve_project_root,
+    app,
+    backup_deployed_files,
     compute_source_fingerprint,
     copy_directory,
     copy_file,
@@ -27,23 +33,24 @@ from deploy_ai_playbook.cli import (
     resolve_agent_names,
     write_version_file,
 )
+from deploy_ai_playbook.deployment_record import DeploymentRecord
+from deploy_ai_playbook.discovery import UnknownAgentError, discover_layered
+from deploy_ai_playbook.paths import ATLASSIAN_MCP_URL
+from deploy_ai_playbook.safety import UnsafeDestinationError
+from deploy_ai_playbook.upgrade import deployed_language_filter
 from tests import ALL_AGENTS
 
 
 def test_tool_enum_values():
     assert Tool.claude.value == "claude"
     assert Tool.copilot.value == "copilot"
+    assert Tool.codex.value == "codex"
     assert Tool.cursor.value == "cursor"
     assert Tool.kiro.value == "kiro"
 
 
 def test_version_flag_prints_package_version():
-    """Standard CLI convention — `--version` returns the package version + exit 0."""
-    from typer.testing import CliRunner
-
-    from deploy_ai_playbook import __version__
-    from deploy_ai_playbook.cli import app
-
+    """Standard CLI convention: `--version` returns the package version + exit 0."""
     result = CliRunner().invoke(app, ["--version"])
     assert result.exit_code == 0
     assert __version__ in result.output
@@ -51,11 +58,6 @@ def test_version_flag_prints_package_version():
 
 def test_version_short_flag_works():
     """`-V` is the documented short alias for `--version`."""
-    from typer.testing import CliRunner
-
-    from deploy_ai_playbook import __version__
-    from deploy_ai_playbook.cli import app
-
     result = CliRunner().invoke(app, ["-V"])
     assert result.exit_code == 0
     assert __version__ in result.output
@@ -76,8 +78,6 @@ def test_resolve_agent_names_csv_returns_subset():
 
 def test_resolve_agent_names_unknown_raises_typed_error():
     """Library raises a structured ValueError; presentation lives in cli.py."""
-    from deploy_ai_playbook.discovery import UnknownAgentError
-
     with pytest.raises(UnknownAgentError) as exc:
         resolve_agent_names("nonexistent", {"story-refiner": Path("story-refiner")})
     assert exc.value.unknown == ["nonexistent"]
@@ -86,9 +86,7 @@ def test_resolve_agent_names_unknown_raises_typed_error():
 
 
 def test_resolve_agent_names_or_exit_translates_to_typer_exit():
-    """CLI wrapper renders the error and exits 1 — thin presentation layer."""
-    from deploy_ai_playbook.cli import _resolve_agent_names_or_exit
-
+    """CLI wrapper renders the error and exits 1: thin presentation layer."""
     with pytest.raises(typer.Exit) as exc:
         _resolve_agent_names_or_exit("nonexistent", {"story-refiner": Path("story-refiner")})
     assert exc.value.exit_code == 1
@@ -106,17 +104,13 @@ def test_get_source_root_returns_path_with_agents_dir():
 
 def test_get_source_root_prefers_bundled_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """When a 'data' dir exists next to discovery.py, it's used as source root."""
-    import deploy_ai_playbook.discovery as discovery_module
-
     fake_module = tmp_path / "discovery.py"
     fake_module.write_text("")
     bundled = tmp_path / "data"
     bundled.mkdir()
 
-    monkeypatch.setattr(discovery_module, "__file__", str(fake_module))
-    from deploy_ai_playbook.cli import get_source_root as _get_source_root
-
-    assert _get_source_root() == bundled
+    monkeypatch.setattr("deploy_ai_playbook.discovery.__file__", str(fake_module))
+    assert get_source_root() == bundled
 
 
 def test_discover_agents_returns_all_shipped_agents(sample_source_root: Path):
@@ -308,8 +302,6 @@ def test_diff_file_compares_binary_files_without_utf8_decode(tmp_path: Path):
 
 
 def _discover(root: Path) -> list:
-    from deploy_ai_playbook.discovery import discover_layered
-
     return discover_layered(root, packs=[]).files
 
 
@@ -394,6 +386,23 @@ def test_write_version_file_records_language_filter(tmp_path: Path):
     assert "language: python" in (tmp_path / VERSION_FILE).read_text()
 
 
+def test_version_write_rejects_symlink_destination(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    source_root = tmp_path / "source"
+    agents = source_root / "agents"
+    agents.mkdir(parents=True)
+    (agents / "a.agent.md").write_text("agent")
+    outside = tmp_path / "outside-version"
+    outside.write_text("keep")
+    (project_root / VERSION_FILE).symlink_to(outside)
+
+    with pytest.raises(UnsafeDestinationError, match="refuses to write through symlink"):
+        write_version_file(project_root, source_root, Tool.claude, dry_run=False)
+
+    assert outside.read_text() == "keep"
+
+
 # ---------------------------------------------------------------------------
 # _resolve_project_root
 # ---------------------------------------------------------------------------
@@ -426,7 +435,7 @@ def test_deploy_mcp_config_preserves_malformed_json_and_reports_error(tmp_path: 
     status = deploy_mcp_config(tmp_path, Tool.claude, dry_run=False)
 
     assert "malformed JSON" in status
-    # Original file is NOT overwritten with {} — user data preserved.
+    # Original file is NOT overwritten with {}: user data preserved.
     assert config_path.read_text() == original
     # A timestamped backup copy was written alongside it.
     backups = list(config_path.parent.glob("settings.json.broken-*"))
@@ -437,7 +446,7 @@ def test_deploy_mcp_config_preserves_malformed_json_and_reports_error(tmp_path: 
 def test_deploy_mcp_config_preserves_non_object_top_level_json(tmp_path: Path):
     """Valid-but-non-object JSON (e.g. `[]`) gets the same protection as
     malformed JSON: preserve the file, save a `.broken-*` copy, report an
-    actionable error — never crash, never silently rewrite."""
+    actionable error: never crash, never silently rewrite."""
     config_path = tmp_path / ".claude" / "settings.json"
     config_path.parent.mkdir(parents=True)
     original = "[]"
@@ -471,8 +480,6 @@ def test_deploy_mcp_config_overwrites_existing_atlassian_with_different_url(tmp_
     """
     import json
 
-    from deploy_ai_playbook.paths import ATLASSIAN_MCP_URL
-
     config_path = tmp_path / ".claude" / "settings.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(
@@ -495,7 +502,7 @@ def test_deploy_mcp_config_overwrites_existing_atlassian_with_different_url(tmp_
     assert config["mcpServers"]["atlassian"]["url"] == ATLASSIAN_MCP_URL, (
         "atlassian URL must be standardised to the canonical URL"
     )
-    # Other servers must survive — the conflict resolution is per-key, not whole-file.
+    # Other servers must survive: the conflict resolution is per-key, not whole-file.
     assert config["mcpServers"]["custom"] == {"url": "http://other.example.com"}, (
         "other MCP servers must be preserved when atlassian is updated"
     )
@@ -517,8 +524,6 @@ def test_deploy_mcp_config_recovers_from_non_dict_server_collection(tmp_path: Pa
 
 def test_deploy_mcp_config_rapid_redeploy_does_not_collide(tmp_path: Path):
     """Calling backup_deployed_files twice in tight succession must not raise."""
-    from deploy_ai_playbook.cli import backup_deployed_files
-
     # Set up a deployed tree to back up.
     agents_dir = tmp_path / ".claude" / "agents"
     agents_dir.mkdir(parents=True)
@@ -541,9 +546,6 @@ def test_deploy_mcp_config_rapid_redeploy_does_not_collide(tmp_path: Path):
 def test_root_help_includes_quickstart_epilog():
     """`ai-playbook --help` must orient new users with a quick-start hint."""
     import click
-    from typer.testing import CliRunner
-
-    from deploy_ai_playbook.cli import app
 
     result = CliRunner().invoke(app, ["--help"])
     assert result.exit_code == 0
@@ -551,7 +553,7 @@ def test_root_help_includes_quickstart_epilog():
     flat = " ".join(click.unstyle(result.output).split())
     assert "Quick start:" in flat
     assert "ai-playbook deploy --tool claude --dry-run" in flat
-    assert "Claude, Copilot, Cursor, or Kiro" in flat
+    assert "Claude, Copilot, Codex, Cursor, or Kiro" in flat
 
 
 def test_errors_route_to_stderr_not_stdout():
@@ -563,17 +565,13 @@ def test_errors_route_to_stderr_not_stdout():
     text without corrupting the JSON pipeline. CliRunner exposes `mix_stderr=
     False` to keep the streams separate.
     """
-    from typer.testing import CliRunner
-
-    from deploy_ai_playbook.cli import app
-
     runner = CliRunner()
     result = runner.invoke(
         app, ["deploy", "--agent", "no-such-agent", "--tool", "claude", "--dry-run"]
     )
 
     assert result.exit_code == 1
-    # Whitespace-collapse — Rich wraps long lines to terminal width.
+    # Whitespace-collapse: Rich wraps long lines to terminal width.
     out_flat = " ".join(result.stdout.split())
     err_flat = " ".join(result.stderr.split())
     # The error text is in stderr.
@@ -583,26 +581,97 @@ def test_errors_route_to_stderr_not_stdout():
     assert "Unknown" not in out_flat
 
 
-def test_no_agents_error_suggests_list_command():
+def test_no_agents_error_suggests_list_command(monkeypatch: pytest.MonkeyPatch):
     """When deploy can't find agents, the error must point at `ai-playbook list`.
 
     Ensures first-time users get a recovery hint instead of a low-level path.
     """
-    from typer.testing import CliRunner
-
-    import deploy_ai_playbook.cli as cli_module
-    from deploy_ai_playbook.cli import app
-
     runner = CliRunner()
     fake_source = Path("/nonexistent-source-for-cli-test")
-    monkey_target = lambda: fake_source  # noqa: E731 — one-line CLI source patch
-    original = cli_module.get_source_root
-    try:
-        cli_module.get_source_root = monkey_target
-        result = runner.invoke(app, ["deploy", "--agent", "all", "--tool", "claude", "--dry-run"])
-    finally:
-        cli_module.get_source_root = original
+    monkey_target = lambda: fake_source  # noqa: E731 - one-line CLI source patch
+    monkeypatch.setattr("deploy_ai_playbook.cli.get_source_root", monkey_target)
+    result = runner.invoke(app, ["deploy", "--agent", "all", "--tool", "claude", "--dry-run"])
 
     assert result.exit_code == 1
     flat = " ".join(result.stderr.split())
     assert "ai-playbook list" in flat
+
+
+# ---------------------------------------------------------------------------
+# deployed_language_filter
+# ---------------------------------------------------------------------------
+
+
+def _write_version_record(project_root: Path, language: str) -> None:
+    from deploy_ai_playbook.deployment_record import deployment_record_text
+
+    (project_root / VERSION_FILE).write_text(
+        deployment_record_text(
+            DeploymentRecord(fingerprint="abc123", tool="claude", language=language)
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_deployed_language_filter_returns_recorded_known_language(tmp_path: Path) -> None:
+    _write_version_record(tmp_path, "python")
+
+    assert deployed_language_filter(tmp_path) == "python"
+
+
+def test_deployed_language_filter_lowercases_recorded_value(tmp_path: Path) -> None:
+    _write_version_record(tmp_path, "PYTHON")
+
+    assert deployed_language_filter(tmp_path) == "python"
+
+
+def test_deployed_language_filter_treats_all_as_no_filter(tmp_path: Path) -> None:
+    _write_version_record(tmp_path, "all")
+
+    assert deployed_language_filter(tmp_path) is None
+
+
+def test_deployed_language_filter_rejects_unknown_language(tmp_path: Path) -> None:
+    _write_version_record(tmp_path, "klingon")
+
+    assert deployed_language_filter(tmp_path) is None
+
+
+def test_deployed_language_filter_none_without_version_file(tmp_path: Path) -> None:
+    assert deployed_language_filter(tmp_path) is None
+
+
+# ---------------------------------------------------------------------------
+# _deployed_language_after_update
+# ---------------------------------------------------------------------------
+
+
+def _previous_deployment(language: str | None, tool: str = "claude") -> DeploymentRecord:
+    return DeploymentRecord(fingerprint="abc123", tool=tool, language=language)
+
+
+def test_language_after_update_records_the_selection_when_it_is_unchanged() -> None:
+    result = _deployed_language_after_update(
+        _previous_deployment("python"),
+        tool=Tool.claude,
+        selected_language="python",
+    )
+
+    assert result == "python"
+
+
+def test_language_after_update_drops_the_filter_when_the_language_changed() -> None:
+    """Switching language widens the record to no filter, because update is additive.
+
+    A non-destructive update leaves the previously deployed language files in
+    place, so the deployment now spans both. Recording only the newly selected
+    language would understate what is on disk and make prune treat the older
+    language's files as orphans.
+    """
+    result = _deployed_language_after_update(
+        _previous_deployment("python"),
+        tool=Tool.claude,
+        selected_language="typescript",
+    )
+
+    assert result is None

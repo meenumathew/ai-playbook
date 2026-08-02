@@ -6,7 +6,7 @@ load_when: auth, secrets, permissions, PII, payments, public API, dependency upd
 audience: all
 canonical_for: secrets management, error response pattern, AI safety, prompt injection, model drift, str(e) logging rule
 cross_refs: design-patterns.md, observability.md, testing.md, working-agreement.md, philosophy.md
-verified: 2026-07-17
+verified: 2026-07-27
 ---
 
 # Security Conventions
@@ -26,7 +26,7 @@ verified: 2026-07-17
 | `.env` files: local dev only, always in `.gitignore` | Flag `.env` files not in `.gitignore`. Flag `.env` committed to repo. |
 | Accidentally committed secret | Rotate immediately: assume compromised |
 
-**Mechanical scanning ships with the playbook.** Deployed `.pre-commit-config.yaml` runs `gitleaks` and `detect-private-key` on every commit (see [docs/how-to/enforce-quality.md](../docs/how-to/enforce-quality.md) § What gets caught). Run `pre-commit install` after `ai-playbook deploy`; this repo's CI also runs those same secret-scan hooks so local hook bypasses do not create a false green build. Real secret flagged → rotate first, fix history second. Never silence the hook to "land it now and clean up later": by then the credential is already in someone's clone.
+**Mechanical scanning ships with the playbook.** Deployed `.pre-commit-config.yaml` runs `gitleaks` and `detect-private-key` on every commit (see [docs/how-to/enforce-quality.md](../docs/how-to/enforce-quality.md) § Install Local Hooks). Run `pre-commit install` after `ai-playbook deploy`; this repo's CI also runs those same secret-scan hooks so local hook bypasses do not create a false green build. Real secret flagged → rotate first, fix history second. Never silence the hook to "land it now and clean up later": by then the credential is already in someone's clone.
 
 ---
 
@@ -42,12 +42,12 @@ Allowlist (accept known-good) over blocklist (reject known-bad). Validate types,
 | **Command injection** | Never pass user input to shell commands: use library APIs, not `subprocess` with `shell=True` |
 | **XSS** | Escape all user content rendered in HTML; require Content-Security-Policy headers |
 | **CSRF** | Require CSRF tokens on all state-changing requests; set session cookies `SameSite=Lax` (or `Strict`); verify `Origin`/`Referer` headers |
-| **Path traversal** | Reject `../` sequences; resolve to a known safe base directory |
+| **Path traversal** | Treat the input as a relative identifier, not a path. Decode once, resolve/canonicalise it against a known safe base, reject absolute paths and symlink escapes, then require the resolved result to remain inside that base. Rejecting literal `../` alone is insufficient because alternate encodings and platform separators bypass string checks. |
 | **Mass assignment** | Never bind raw request bodies to domain objects: use explicit allow-listed DTOs |
 | **Content-Type confusion** | Validate `Content-Type` on JSON endpoints: reject unexpected types |
-| **SSRF** | Never fetch user-supplied URLs without allowlisting target hosts. Allowlist beats blocklist; if you must block, cover all private ranges: `127.0.0.0/8`, `169.254.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, and IPv6 `::1`, `fe80::/10`, `fd00::/8` |
+| **SSRF** | Never fetch user-supplied URLs without allowlisting schemes, hosts, and ports. Resolve every hostname, reject loopback/link-local/private/reserved/non-global addresses for IPv4 and IPv6, repeat validation after redirects, and constrain outbound traffic at the network layer. Do not rely on a hardcoded range list alone: DNS rebinding, alternate IP forms, and new special-use ranges bypass incomplete blocklists. |
 | **Insecure deserialization** | Never deserialize untrusted input with unsafe loaders: Python: no `pickle.loads` / `yaml.load`; use `json` or `yaml.safe_load`. Sign payloads with HMAC if round-tripping requires it. |
-| **Password storage** | Never store plaintext or fast-hash (MD5/SHA) passwords: use a memory-hard KDF: argon2id preferred, bcrypt acceptable (NIST 800-63B) |
+| **Password storage** | Never store plaintext or fast-hash (MD5/SHA) passwords. Use Argon2id with reviewed parameters; use scrypt when Argon2id is unavailable. Treat bcrypt as a compatibility fallback for existing systems, with an adequate work factor and a migration plan, not the default for new systems. |
 
 ---
 
@@ -137,12 +137,12 @@ Maps to OWASP LLM Top 10 § LLM10 (Unbounded Consumption). Defends against runaw
 
 | Layer | Default control | Override |
 |-------|-----------------|----------|
-| Per-agent read budget | Already enforced: `CLAUDE.md` § Shared Rules (read budget) | Agent frontmatter `read_budget:` |
+| Per-agent read budget | Already enforced: `CLAUDE.md` § Shared Rules (read budget) | Agent frontmatter `read-budget:` |
 | Per-session token cap | Soft-warn at 80% of model context window; hard stop at 100%: surface remaining budget to user | AI platform or team runbook |
 | Per-session cost ceiling | Default team policy should set a budget; warn at 80%, stop at 100% with summary of work done | AI platform or team runbook |
 | Tool-call circuit breaker | After 3 consecutive failed tool calls (same target, same error class), stop and ask the user before retrying | Not configurable: hard rule |
 | Recursive agent invocation | Depth-limited to 2 (an agent may spawn one sub-agent; that sub-agent may not spawn further) | Not configurable: hard rule |
-| Externally triggered runs | When agents run unattended (CI, cron), a wall-clock timeout MUST be set; default 20 minutes per job: see `eval-drift.yml` for an example | Workflow `timeout-minutes:` |
+| Externally triggered runs | When agents run unattended (CI, cron), a wall-clock timeout MUST be set; default 20 minutes per job: see `.github/workflows/eval-drift.yml` for an example | Workflow `timeout-minutes:` |
 
 When a limit triggers, the agent reports state (work done, remaining, why stopped) and waits: never silently degrades quality to fit under the cap.
 
@@ -169,7 +169,7 @@ Rationale: verbatim chat disclosure normalises prompt-extraction requests, creat
 | **CORS** | Allowlist specific origins. Never `Access-Control-Allow-Origin: *` on authenticated endpoints. |
 | **Rate limiting** | Apply on all public endpoints. Use 429 + `Retry-After`. Rate limit by user, not just IP. |
 | **API keys** | Treat as secrets (env vars, never in code). Scoped with minimum permissions. |
-| **Response headers** | Set `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, and CSP `frame-ancestors 'none'` (supersedes `X-Frame-Options: DENY`; keep the legacy header only for old clients) |
+| **Response headers** | Set `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, and CSP `frame-ancestors 'none'` (supersedes `X-Frame-Options: DENY`; keep the older header only for old clients) |
 | **Error responses** | Never expose stack traces, internal paths, or DB details. Log internally, return generic messages. Enforce via the error response pattern below and `design-patterns.md` § Error Handling. |
 
 ---

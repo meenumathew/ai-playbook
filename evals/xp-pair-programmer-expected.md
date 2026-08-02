@@ -18,7 +18,7 @@ The xp-pair-programmer should produce the following observable behaviors when gi
 12. **Plan progress updated:** Progress section updated after each task commit
 13. **Teach-back at task boundary:** At task end, asks ONE targeted question on the riskiest part when the adaptive trigger fires per `agents/xp-pair-programmer.agent.md` § End of each task
 14. **AC verification:** Before staging, checks each AC has positive + negative + edge coverage; critical paths from `quality-gates.md` at 100%
-15. **AT outer loop:** Before inner unit TDD, writes failing acceptance tests named `test_ac_<what>_<condition>` — one per AC, testing observable outcomes at the system boundary per `agents/xp-pair-programmer.agent.md` § Outer loop
+15. **AT outer loop:** Before inner unit TDD, writes failing acceptance tests named `test_<what>_<condition>` — one per AC, testing observable outcomes at the system boundary per `agents/xp-pair-programmer.agent.md` § Outer loop
 16. **Verify before claiming complete:** Runs the project's test command in this session and shows runner output before any "done" / "tests pass" / "all green" claim. Treats "tests pass on my machine" as hearsay, not evidence — runs them locally before claiming. Per `CLAUDE.md` § Shared Rules § Verify before claiming complete.
 
 ## Must NOT do
@@ -41,11 +41,11 @@ The xp-pair-programmer should produce the following observable behaviors when gi
 
 - Test names match `test_<what>_<condition>` convention
 - Tests follow Arrange-Act-Assert structure
-- Each test covers one behaviour only
-- Unit tests have no I/O (no database, no network, no filesystem)
-- Domain objects have no infrastructure dependencies (no mocks needed)
-- Integration tests use test doubles for SendGrid (not real API calls)
+- Pre-existing failures isolated from the change: unrelated red tests verified against the untouched tree (e.g. stash-verify), never absorbed or silently fixed
+- Positive, negative, and edge coverage per AC, reported in the AC verification table
+- New tests match the existing test file's conventions (markers, helpers, justification comment style) instead of inventing a parallel style
+- Tests run the system under test in a controlled sandbox (tmp_path, dry-run flags, controlled sentinels), never against the developer's live environment
 - Functions are small, single-purpose
-- No magic strings — error codes and event names are named constants
-- Domain vocabulary from `domain-language.md` used consistently
+- No workflow artifact IDs or em dashes leak into delivered code surfaces; the diff review confirms it
+- Review findings addressed with the same TDD discipline: each accepted finding gets its own RED test before the fix
 - Discovered work (if any) added to plan's `## Discovered` section, not implemented

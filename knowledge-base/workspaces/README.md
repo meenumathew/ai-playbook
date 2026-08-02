@@ -77,7 +77,7 @@ When an agent loads the story, it resolves the workspace path and layers the ove
 A workspace's `quality-tier.md` contains a single fenced block:
 
 ```markdown
-quality-tier: prototype (gates skipped, save-and-summarize, lean artifacts).
+quality-tier: prototype (approval gates skipped, save-and-summarize, lean artifacts).
 ```
 
 Where this sits in the tier resolution order (below per-agent overrides, above the repo root) and the announcement wording: `quality-tier-resolution.md`.

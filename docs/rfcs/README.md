@@ -112,7 +112,10 @@ The list below is kept fresh by hand. When you accept, reject, withdraw, or supe
 
 | RFC | Title | Status | Date |
 |---|---|---|---|
+| 0001 | Reserved (never published) | Reserved | n/a |
 | [0002](0002-lessons-log.md) | A seeded, adopter-owned lessons log for negative results | Proposed | 2026-07-17 |
+
+Number 0001 was allocated but no RFC file was ever published under it; the number stays retired because numbers are monotonic and never reused.
 
 ---
 

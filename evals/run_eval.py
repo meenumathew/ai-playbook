@@ -1,4 +1,4 @@
-"""Eval harness for ai-playbook agents — structural + LLM-as-judge.
+"""Eval harness for ai-playbook agents: structural + LLM-as-judge.
 
 Two validation modes:
 
@@ -15,10 +15,10 @@ Two validation modes:
    Requires ANTHROPIC_API_KEY environment variable.
 
 Usage:
-    # Structural validation (keyword matching — fast, no API key needed):
+    # Structural validation (keyword matching: fast, no API key needed):
     python evals/run_eval.py validate <agent-name> <output-file>
 
-    # LLM-as-judge validation (semantic — requires ANTHROPIC_API_KEY):
+    # LLM-as-judge validation (semantic: requires ANTHROPIC_API_KEY):
     python evals/run_eval.py judge <agent-name> <output-file>
 
     # Parse and display the rubric for an agent:
@@ -27,15 +27,22 @@ Usage:
     # Run all structural checks (no agent output needed):
     python evals/run_eval.py check-structure
 
-    # Calibrate the structural validator with generated pass/fail cases:
+    # Calibrate the structural validator: synthetic pass/echo cases plus the
+    # committed negative-control corpus (each control must structurally trip
+    # the must_not ids it declares in `violates:` front-matter):
     python evals/run_eval.py calibrate
 
     # Validate committed sample baselines with structural checks:
     python evals/run_eval.py validate-samples
+
+    # After a judge run, assert each negative control's declared `violates:`
+    # ids were marked violated in the judge verdicts (offline; reads files):
+    python evals/run_eval.py verify-negative-controls <judge-output-dir>
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -51,12 +58,15 @@ ADVERSARIAL_SAMPLES_DIR = SAMPLES_DIR / "adversarial"
 NEGATIVE_SAMPLES_DIR = SAMPLES_DIR / "negative"
 REPO_ROOT = EVALS_DIR.parent
 
-sys.path.insert(0, str(REPO_ROOT / "src"))
+# Append (not insert at 0) so an installed deploy_ai_playbook wins over src/:
+# the CI wheel-AT run imports this module at collection time and must keep
+# resolving the package from the wheel it is validating.
+sys.path.append(str(REPO_ROOT / "src"))
 from deploy_ai_playbook.discovery import standard_agent_names  # noqa: E402
 
 AGENTS = standard_agent_names()
 
-# Adversarial eval pairs — test agent resilience to malformed/hostile input
+# Adversarial eval pairs: test agent resilience to malformed/hostile input
 ADVERSARIAL_EVALS = [
     "story-refiner-adversarial",
     "xp-pair-programmer-adversarial",
@@ -86,7 +96,7 @@ class RubricItem:
         """
         output_lower = output.lower()
         if not self.keywords:
-            # No explicit keywords on this rubric item — fall back to
+            # No explicit keywords on this rubric item: fall back to
             # distinctive words (>6 chars) from the rubric text itself.
             # Require at least half of them to appear; this avoids common
             # English words from matching almost any document.
@@ -110,7 +120,7 @@ class RubricItem:
         to be a semantic judge.
         """
         output_lower = output.lower()
-        # ANY single unnegated concrete keyword hit is a violation — a
+        # ANY single unnegated concrete keyword hit is a violation: a
         # fractional threshold would let an output perform one forbidden
         # action and still pass because it avoided the others.
         return any(_keyword_occurs_unnegated(output_lower, keyword) for keyword in self.keywords)
@@ -118,7 +128,7 @@ class RubricItem:
 
 # Explicit refusal phrasings only. Bare "no"/"not" scanned in a wide window
 # suppressed real violations such as "tests are not green yet, running git
-# push" — the negation belonged to a different clause entirely.
+# push": the negation belonged to a different clause entirely.
 NEGATION_MARKERS = (
     "avoid",
     "avoids",
@@ -230,7 +240,7 @@ def parse_rubric(agent: str) -> Rubric:
     """Parse an eval rubric.
 
     Prefer schema-backed rubrics from `evals/rubrics/<agent>.json`; fall back
-    to legacy markdown rubrics for custom or older evals.
+    to markdown rubrics for custom evals without a JSON rubric.
     """
     schema_path = RUBRICS_DIR / f"{agent}.json"
     if schema_path.exists():
@@ -240,7 +250,7 @@ def parse_rubric(agent: str) -> Rubric:
 
 
 def _parse_markdown_rubric(agent: str) -> Rubric:
-    """Parse a legacy markdown eval expected file into a structured rubric."""
+    """Parse a markdown eval expected file into a structured rubric."""
     expected_path = EVALS_DIR / f"{agent}-expected.md"
     if not expected_path.exists():
         raise FileNotFoundError(f"No expected file for {agent}: {expected_path}")
@@ -262,7 +272,7 @@ def _parse_markdown_rubric(agent: str) -> Rubric:
         #   - quality_signals:  non-blocker items (Quality signals / Should Fix / Suggestions)
         #
         # Trailing parenthetical qualifiers like "## Should Fix (continued)" are
-        # matched by `re.match` because it anchors to the start, not the end —
+        # matched by `re.match` because it anchors to the start, not the end -
         # so a section can be split across multiple headings without dropping items.
         if re.match(r"## Must (demonstrate|identify|Fix)", line):
             current_items = rubric.must_demonstrate
@@ -317,7 +327,7 @@ def _parse_schema_rubric(agent: str, schema_path: Path) -> Rubric:
         must_not=_schema_items(raw_data, "must_not", schema_path),
         quality_signals=_schema_items(raw_data, "quality_signals", schema_path),
     )
-    # Cross-section ID uniqueness — protects judge prompts from ambiguous IDs.
+    # Cross-section ID uniqueness: protects judge prompts from ambiguous IDs.
     # Per-section uniqueness is already enforced inside `_schema_items`.
     seen: dict[str, str] = {}
     for section_name, section_items in (
@@ -485,7 +495,7 @@ class ValidationResult:
     def score(self) -> float:
         """Keyword-presence rate as a percentage of must-demonstrate items.
 
-        Not a quality score. See module docstring — echo output may still have
+        Not a quality score. See module docstring: echo output may still have
         a high keyword score while `ok` is false. Use `judge_with_llm` for
         semantic evaluation.
         """
@@ -539,7 +549,7 @@ def validate(agent: str, output: str) -> ValidationResult:
         else:
             result.failed.append(_item_result_text(item))
 
-    # Check must-not items (these are anti-patterns — finding keywords is BAD)
+    # Check must-not items (these are anti-patterns: finding keywords is BAD)
     for item in rubric.must_not:
         if item.violates(output):
             result.violations.append(_item_result_text(item))
@@ -618,7 +628,7 @@ def print_rubric(agent: str) -> None:
         for item in rubric.must_demonstrate:
             kw = ", ".join(item.keywords[:5]) if item.keywords else "(no keywords)"
             prefix = f"[{item.item_id}] " if item.item_id else ""
-            print(f"  ✓ {prefix}{item.text[:80]}...")
+            print(f"  REQUIRE: {prefix}{item.text[:80]}...")
             print(f"    Keywords: {kw}")
             if item.evidence:
                 print(f"    Evidence: {item.evidence}")
@@ -627,7 +637,7 @@ def print_rubric(agent: str) -> None:
         print(f"\nMust NOT ({len(rubric.must_not)}):")
         for item in rubric.must_not:
             prefix = f"[{item.item_id}] " if item.item_id else ""
-            print(f"  ✗ {prefix}{item.text[:80]}")
+            print(f"  FORBID: {prefix}{item.text[:80]}")
             if item.evidence:
                 print(f"    Evidence: {item.evidence}")
 
@@ -635,7 +645,7 @@ def print_rubric(agent: str) -> None:
         print(f"\nQuality signals ({len(rubric.quality_signals)}):")
         for item in rubric.quality_signals:
             prefix = f"[{item.item_id}] " if item.item_id else ""
-            print(f"  ◇ {prefix}{item.text[:80]}")
+            print(f"  QUALITY: {prefix}{item.text[:80]}")
             if item.evidence:
                 print(f"    Evidence: {item.evidence}")
 
@@ -648,12 +658,12 @@ def print_validation(result: ValidationResult) -> None:
     print("(structural check only — run `judge` for semantic evaluation)")
     print(f"{'=' * 60}")
 
-    _print_result_items("✓ Passed", result.passed, "✓")
-    _print_result_items("✗ Failed", result.failed, "✗")
-    _print_result_items("⚠ Violations", result.violations, "⚠")
-    _print_result_items("⚠ Rubric echo", result.rubric_echoes, "⚠")
-    _print_result_items("◇ Quality signals present", result.quality_hits, "◇")
-    _print_result_items("◇ Quality signals missing", result.quality_misses, "○")
+    _print_result_items("Passed", result.passed, "PASS:")
+    _print_result_items("Failed", result.failed, "FAIL:")
+    _print_result_items("Violations", result.violations, "VIOLATION:")
+    _print_result_items("Rubric echo", result.rubric_echoes, "ECHO:")
+    _print_result_items("Quality signals present", result.quality_hits, "QUALITY:")
+    _print_result_items("Quality signals missing", result.quality_misses, "MISSING:")
 
 
 def _print_result_items(title: str, items: list[str], marker: str) -> None:
@@ -675,11 +685,11 @@ def check_structure() -> bool:
         expected_path = EVALS_DIR / f"{agent}-expected.md"
 
         if not input_path.exists():
-            print(f"  ✗ {agent}: missing input file")
+            print(f"  FAIL: {agent}: missing input file")
             all_ok = False
             continue
         if not expected_path.exists():
-            print(f"  ✗ {agent}: missing expected file")
+            print(f"  FAIL: {agent}: missing expected file")
             all_ok = False
             continue
 
@@ -689,12 +699,12 @@ def check_structure() -> bool:
                 len(rubric.must_demonstrate) + len(rubric.must_not) + len(rubric.quality_signals)
             )
             print(
-                f"  ✓ {agent}: {len(rubric.must_demonstrate)} must-do, "
+                f"  OK: {agent}: {len(rubric.must_demonstrate)} must-do, "
                 f"{len(rubric.must_not)} must-not, "
                 f"{len(rubric.quality_signals)} quality ({total} total)"
             )
         except Exception as e:
-            print(f"  ✗ {agent}: parse error — {e}")
+            print(f"  FAIL: {agent}: parse error — {e}")
             all_ok = False
 
     # Check adversarial evals
@@ -703,11 +713,11 @@ def check_structure() -> bool:
         expected_path = EVALS_DIR / f"{name}-expected.md"
 
         if not input_path.exists():
-            print(f"  ✗ {name}: missing adversarial input file")
+            print(f"  FAIL: {name}: missing adversarial input file")
             all_ok = False
             continue
         if not expected_path.exists():
-            print(f"  ✗ {name}: missing adversarial expected file")
+            print(f"  FAIL: {name}: missing adversarial expected file")
             all_ok = False
             continue
 
@@ -717,12 +727,12 @@ def check_structure() -> bool:
                 len(rubric.must_demonstrate) + len(rubric.must_not) + len(rubric.quality_signals)
             )
             print(
-                f"  ✓ {name} (adversarial): {len(rubric.must_demonstrate)} must-do, "
+                f"  OK: {name} (adversarial): {len(rubric.must_demonstrate)} must-do, "
                 f"{len(rubric.must_not)} must-not, "
                 f"{len(rubric.quality_signals)} quality ({total} total)"
             )
         except Exception as e:
-            print(f"  ✗ {name}: parse error — {e}")
+            print(f"  FAIL: {name}: parse error — {e}")
             all_ok = False
 
     return all_ok
@@ -731,11 +741,22 @@ def check_structure() -> bool:
 def calibrate() -> bool:
     """Verify the structural validator can pass good cases and fail bad cases.
 
-    This is calibration for the cheap structural pre-check, not proof of agent
-    reasoning quality. The cases are synthesised from each rubric's own keywords
-    (good = keywords embedded as independent evidence; bad = a raw keyword echo),
-    so a green run proves the validator's two code paths work — not that any real
-    agent output is good. The LLM judge remains the semantic quality gate.
+    Two layers, both cheap and offline:
+
+    1. **Synthetic echo cases** (per rubric): good = keywords embedded as
+       independent evidence must pass; bad = a raw or diluted keyword echo
+       must fail. These prove the check()/echo-guard code paths work.
+    2. **Negative-control corpus** (per committed control): each deliberately
+       flawed output in `evals/samples/negative/` declares, in `violates:`
+       front-matter, the must_not ids whose keywords genuinely appear in its
+       text. `validate()` must flag every declared id. Unlike the retired
+       synthetic must-not case: which injected a rubric keyword into a
+       generated string and so only proved violates() matched its own input -
+       this calibrates the must_not layer against independently written
+       violating transcripts.
+
+    This calibrates the structural pre-check only; the LLM judge remains the
+    semantic quality gate.
     """
     print("\nStructural calibration:")
     all_ok = True
@@ -743,20 +764,93 @@ def calibrate() -> bool:
         try:
             failures = _run_calibration_cases(agent)
         except Exception as exc:
-            print(f"  ✗ {agent}: calibration error — {exc}")
+            print(f"  FAIL: {agent}: calibration error — {exc}")
             all_ok = False
             continue
 
         if not failures:
-            print(
-                f"  ✓ {agent}: good case passed; echo, near-echo, "
-                "and must-not cases failed as expected"
-            )
+            print(f"  OK: {agent}: good case passed; echo and near-echo cases failed as expected")
             continue
 
         all_ok = False
-        print(f"  ✗ {agent}: " + "; ".join(failures))
+        print(f"  FAIL: {agent}: " + "; ".join(failures))
+    negative_ok = calibrate_negative_controls()
+    return all_ok and negative_ok
+
+
+def calibrate_negative_controls() -> bool:
+    """Corpus-based must_not calibration against committed negative controls.
+
+    Each control must declare `violates:` front-matter naming the must_not ids
+    it was built to trip, and `validate()` must flag every declared id. A miss
+    means a must_not keyword regressed to something no violating transcript
+    contains: the unfalsifiable-prohibition failure mode this guards against.
+    """
+    print("\nNegative-control calibration (corpus-based):")
+    all_ok = True
+    controls = _negative_control_paths()
+    if not controls:
+        print("  FAIL: no negative controls found under evals/samples/negative/")
+        return False
+    for path in controls:
+        name = path.stem
+        failures = _negative_control_failures(name, path)
+        if failures:
+            all_ok = False
+            print(f"  FAIL: {name}: " + "; ".join(failures))
+        else:
+            declared = _declared_violation_ids(path)
+            print(f"  OK: {name}: structurally trips {', '.join(declared)}")
     return all_ok
+
+
+def _negative_control_paths() -> list[Path]:
+    return sorted(path for path in NEGATIVE_SAMPLES_DIR.glob("*.md") if path.name != "README.md")
+
+
+def _declared_violation_ids(path: Path) -> list[str]:
+    """Parse the `violates:` front-matter list from a negative control."""
+    meta, _body = _split_front_matter(path.read_text())
+    raw = meta.get("violates", "")
+    raw = raw.strip().removeprefix("[").removesuffix("]")
+    return [token.strip() for token in raw.split(",") if token.strip()]
+
+
+def _negative_control_failures(name: str, path: Path) -> list[str]:
+    declared = _declared_violation_ids(path)
+    if not declared:
+        return [
+            "missing `violates:` front-matter — declare the must_not ids "
+            "this control was built to trip"
+        ]
+
+    rubric = parse_rubric(name)
+    known_must_not_ids = {item.item_id for item in rubric.must_not if item.item_id}
+    unknown = [item_id for item_id in declared if item_id not in known_must_not_ids]
+    if unknown:
+        return [f"declares unknown must_not ids: {', '.join(unknown)}"]
+
+    result = validate(name, path.read_text())
+    flagged = _violation_ids_from_texts(result.violations)
+    missed = [item_id for item_id in declared if item_id not in flagged]
+    if missed:
+        return [
+            f"declared must_not ids not structurally flagged: {', '.join(missed)} "
+            "(keyword no longer matches the control text?)"
+        ]
+    return []
+
+
+_VIOLATION_ID_RE = re.compile(r"\[([A-Z][A-Z0-9-]+-NOT-\d{3,4})\]")
+
+
+def _violation_ids_from_texts(violations: list[str]) -> set[str]:
+    ids: set[str] = set()
+    for text in violations:
+        match = _VIOLATION_ID_RE.search(text)
+        if match:
+            ids.add(match.group(1))
+    return ids
 
 
 def validate_samples() -> bool:
@@ -769,11 +863,11 @@ def validate_samples() -> bool:
 
     for agent in AGENTS:
         if agent not in found_agents:
-            print(f"  ✗ {agent}: missing sample evals/samples/{agent}.md")
+            print(f"  FAIL: {agent}: missing sample evals/samples/{agent}.md")
             all_ok = False
 
     for agent in sorted(found_agents - expected_agents):
-        print(f"  ✗ {agent}: sample has no matching standard agent")
+        print(f"  FAIL: {agent}: sample has no matching standard agent")
         all_ok = False
 
     for agent in AGENTS:
@@ -786,10 +880,11 @@ def validate_samples() -> bool:
         if result.ok:
             label = provenance or "unmarked"
             print(
-                f"  ✓ {agent}: sample passes structural validation ({result.score:.0f}%) [{label}]"
+                f"  OK: {agent}: sample passes structural validation "
+                f"({result.score:.0f}%) [{label}]"
             )
             # Provenance is honesty metadata, not a gate. A `curated` or unmarked
-            # baseline is a hand-written placeholder, not captured agent output —
+            # baseline is a hand-written placeholder, not captured agent output -
             # so a green structural run on it proves rubric/baseline agreement,
             # not that the live agent behaves this way. Warn, do not fail.
             if provenance != "captured":
@@ -800,7 +895,7 @@ def validate_samples() -> bool:
             continue
 
         all_ok = False
-        print(f"  ✗ {agent}: sample fails structural validation ({result.score:.0f}%)")
+        print(f"  FAIL: {agent}: sample fails structural validation ({result.score:.0f}%)")
         _print_sample_failures(result)
 
     adversarial_ok = _validate_adversarial_samples()
@@ -821,17 +916,18 @@ def _validate_adversarial_samples() -> bool:
             continue
         name = path.stem
         if name not in ADVERSARIAL_EVALS:
-            print(f"  ✗ {name}: adversarial sample has no matching adversarial eval pair")
+            print(f"  FAIL: {name}: adversarial sample has no matching adversarial eval pair")
             ok = False
             continue
         result = validate(name, path.read_text())
         if result.ok:
             print(
-                f"  ✓ {name}: adversarial sample passes structural validation ({result.score:.0f}%)"
+                f"  OK: {name}: adversarial sample passes structural validation "
+                f"({result.score:.0f}%)"
             )
         else:
             ok = False
-            print(f"  ✗ {name}: adversarial sample fails structural validation")
+            print(f"  FAIL: {name}: adversarial sample fails structural validation")
             _print_sample_failures(result)
     return ok
 
@@ -839,11 +935,12 @@ def _validate_adversarial_samples() -> bool:
 def _validate_negative_samples() -> bool:
     """Negative controls are deliberately-flawed outputs the judge must FAIL.
 
-    Structural validation is NOT a gate here — the controls are semantically
-    bad, not necessarily keyword-poor. This check only catches orphans: a
-    control whose stem matches no rubric would crash the eval-drift loop.
-    The LLM judge asserts these files FAIL; a pass there means judge
-    leniency drift or rubric erosion.
+    A full structural pass is NOT a gate here: the controls also miss
+    must_demonstrate items, which is expected. This check catches orphans
+    (a control whose stem matches no rubric would crash the eval-drift loop);
+    `calibrate` separately requires each control to structurally trip the
+    must_not ids declared in its `violates:` front-matter, and the drift
+    workflow's `verify-negative-controls` requires the judge to flag them.
     """
     ok = True
     for path in sorted(NEGATIVE_SAMPLES_DIR.glob("*.md")):
@@ -851,10 +948,10 @@ def _validate_negative_samples() -> bool:
             continue
         name = path.stem
         if name not in AGENTS and name not in ADVERSARIAL_EVALS:
-            print(f"  ✗ {name}: negative control has no matching rubric")
+            print(f"  FAIL: {name}: negative control has no matching rubric")
             ok = False
             continue
-        print(f"  ✓ {name}: negative control present (the LLM judge must FAIL it)")
+        print(f"  OK: {name}: negative control present (the LLM judge must FAIL it)")
     return ok
 
 
@@ -880,8 +977,12 @@ def _run_calibration_cases(agent: str) -> list[str]:
     Returns human-readable failure messages (empty list = calibrated):
       - good case must pass,
       - the raw keyword echo must fail,
-      - a near-echo (keyword join + filler words) must still fail,
-      - an output performing a forbidden action must fail via violates().
+      - a near-echo (keyword join + filler words) must still fail.
+
+    The must_not layer is deliberately NOT calibrated here: a synthetic case
+    built by injecting a rubric keyword into a generated string only proves
+    violates() matches its own input. The must_not calibration corpus is the
+    committed negative controls: see `calibrate_negative_controls`.
     """
     rubric = parse_rubric(agent)
     failures: list[str] = []
@@ -897,11 +998,6 @@ def _run_calibration_cases(agent: str) -> list[str]:
     near_echo_result = validate(agent, _calibration_near_echo_output(rubric))
     if near_echo_result.ok:
         failures.append(f"near-echo bad case passed ({near_echo_result.score:.0f}%)")
-
-    if rubric.must_not:
-        violation_result = validate(agent, _calibration_violation_output(rubric))
-        if not violation_result.violations:
-            failures.append("must-not violation case did not trigger violates()")
 
     return failures
 
@@ -966,7 +1062,7 @@ _NEAR_ECHO_FILLERS = (
 
 
 def _calibration_near_echo_output(rubric: Rubric) -> str:
-    """Keyword join diluted with filler words — must still fail the echo guard.
+    """Keyword join diluted with filler words: must still fail the echo guard.
 
     Filler volume scales with the rubric's keyword token count so the case
     stays a near-echo (mostly keyword tokens) for small and large rubrics
@@ -979,20 +1075,33 @@ def _calibration_near_echo_output(rubric: Rubric) -> str:
     return f"{echo} {' '.join(_NEAR_ECHO_FILLERS[:filler_count])}"
 
 
-def _calibration_violation_output(rubric: Rubric) -> str:
-    """Output that concretely performs the rubric's first forbidden behaviour.
+def _judge_model_id() -> str:
+    """The pinned judge model id (see the comment at the create() call)."""
+    return os.environ.get("EVAL_JUDGE_MODEL", "claude-sonnet-4-6")
 
-    Must fail structural validation via `RubricItem.violates()` — this keeps
-    the must-not code path exercised by calibration instead of only the echo
-    guard.
+
+def _rubric_source_path(agent: str) -> Path:
+    """The file whose content defines the rubric the judge scores against."""
+    schema_path = RUBRICS_DIR / f"{agent}.json"
+    if schema_path.exists():
+        return schema_path
+    return EVALS_DIR / f"{agent}-expected.md"
+
+
+def _judge_provenance_lines(agent: str) -> list[str]:
+    """Provenance header for judge artifacts.
+
+    The eval-drift workflow tees judge stdout into `judge-output/*.txt` and
+    uploads them as artifacts. Without the judge model id and a rubric-content
+    hash, verdicts from different runs are not comparable: a delta could be a
+    judge rotation or a rubric edit rather than agent drift.
     """
-    item = rubric.must_not[0]
-    keyword = item.keywords[0] if item.keywords else item.text
-    return (
-        "# Structural Calibration Violation Case\n"
-        "Proceeding right away, no questions asked. Here is what I did:\n"
-        f"Action taken: {keyword} (executed exactly as described)."
-    )
+    rubric_path = _rubric_source_path(agent)
+    rubric_sha = hashlib.sha256(rubric_path.read_bytes()).hexdigest()
+    return [
+        f"Judge model: {_judge_model_id()}",
+        f"Rubric: {rubric_path.relative_to(REPO_ROOT)} (sha256: {rubric_sha})",
+    ]
 
 
 def judge_with_llm(agent: str, output: str) -> ValidationResult:
@@ -1037,7 +1146,7 @@ Be strict but fair. Judge semantic compliance, not literal keyword presence.
 If the agent adapted the rubric criteria to the actual codebase (different file
 names), that counts as passing if the intent is met."""
 
-    # Tool-use forces structured output — Claude must populate this schema or
+    # Tool-use forces structured output: Claude must populate this schema or
     # the API rejects the call. Replaces fragile regex JSON extraction.
     judgement_tool: ToolParam = {
         "name": "record_judgement",
@@ -1090,17 +1199,17 @@ names), that counts as passing if the intent is met."""
     }
 
     client = anthropic.Anthropic(api_key=api_key)
-    # temperature=0 — deterministic scoring; same input must produce same verdict.
+    # temperature=0: deterministic scoring; same input must produce same verdict.
     # Without this, the same rubric/output pair flickers between pass/fail across runs
     # because of judge sampling.
     #
     # The judge model is pinned to the most specific stable id Anthropic
-    # publishes for it. Sonnet 4.6 ships as the alias `claude-sonnet-4-6` only —
-    # it has no date-suffixed release id — so the alias IS the most specific
+    # publishes for it. Sonnet 4.6 ships as the alias `claude-sonnet-4-6` only -
+    # it has no date-suffixed release id: so the alias IS the most specific
     # stable identifier available and is what we pin. (The date 20250514 belongs
     # to Sonnet 4.0, not 4.6; the previous `claude-sonnet-4-6-20250514` default
-    # did not exist and returned 404.) Models that do carry a dated id — e.g.
-    # Sonnet 4.5, `claude-sonnet-4-5-20250929` — should pin the dated form.
+    # did not exist and returned 404.) Models that do carry a dated id: e.g.
+    # Sonnet 4.5, `claude-sonnet-4-5-20250929`: should pin the dated form.
     # A version-pinned id keeps the eval-drift run honest: a verdict
     # change is signal (the agent regressed), not noise from a judge rotating.
     #
@@ -1108,7 +1217,7 @@ names), that counts as passing if the intent is met."""
     # judge; rotation cadence and acceptance criteria are documented in
     # `evals/rubrics/README.md` § Updating the Judge Model.
     response = client.messages.create(
-        model=os.environ.get("EVAL_JUDGE_MODEL", "claude-sonnet-4-6"),
+        model=_judge_model_id(),
         max_tokens=4096,
         temperature=0,
         tools=[judgement_tool],
@@ -1265,6 +1374,7 @@ def main() -> None:
         "rubric": _handle_rubric,
         "validate": _handle_validate,
         "judge": _handle_judge,
+        "verify-negative-controls": _handle_verify_negative_controls,
     }
     handler = handlers.get(command)
     if handler is None:
@@ -1284,6 +1394,17 @@ def _handle_calibrate(_args: list[str]) -> int:
 
 def _handle_validate_samples(_args: list[str]) -> int:
     return 0 if validate_samples() else 1
+
+
+def _handle_verify_negative_controls(args: list[str]) -> int:
+    if len(args) < 1:
+        print("Usage: run_eval.py verify-negative-controls <judge-output-dir>")
+        return 1
+    judge_output_dir = Path(args[0])
+    if not judge_output_dir.is_dir():
+        print(f"Judge output directory not found: {judge_output_dir}")
+        return 1
+    return 0 if verify_negative_controls(judge_output_dir) else 1
 
 
 def _handle_list_agents(_args: list[str]) -> int:
@@ -1318,9 +1439,73 @@ def _handle_judge(args: list[str]) -> int:
     )
     if agent is None or output is None:
         return 1
+    # Provenance first, so teed judge-output artifacts are self-describing.
+    for line in _judge_provenance_lines(agent):
+        print(line)
     result = judge_with_llm(agent, output)
     print_validation(result)
     return 0 if result.ok else 1
+
+
+def verify_negative_controls(judge_output_dir: Path) -> bool:
+    """Assert judge verdicts flagged each negative control's declared ids.
+
+    The eval-drift workflow already inverts the judge exit code for negative
+    controls, but exit-code-only checking cannot see WHICH items failed: a
+    control can exit non-zero purely on must_demonstrate misses while every
+    must_not prohibition slips through (judge leniency on the one axis the
+    controls exist to test). This reads the per-item verdicts teed into
+    `judge-output/negative-<name>.txt` and requires every id in the control's
+    `violates:` front-matter to appear as a flagged violation.
+    """
+    print("\nNegative-control verdict verification:")
+    all_ok = True
+    controls = _negative_control_paths()
+    if not controls:
+        print("  FAIL: no negative controls found under evals/samples/negative/")
+        return False
+    for path in controls:
+        name = path.stem
+        declared = _declared_violation_ids(path)
+        if not declared:
+            print(f"  FAIL: {name}: missing `violates:` front-matter")
+            all_ok = False
+            continue
+        verdict_path = judge_output_dir / f"negative-{name}.txt"
+        if not verdict_path.exists():
+            print(f"  FAIL: {name}: no judge verdict at {verdict_path}")
+            all_ok = False
+            continue
+        flagged = _violated_ids_from_verdict(verdict_path.read_text())
+        missed = [item_id for item_id in declared if item_id not in flagged]
+        if missed:
+            all_ok = False
+            print(
+                f"  FAIL: {name}: judge did not mark {', '.join(missed)} as violated — "
+                "leniency drift on a prohibition this control was built to trip"
+            )
+        else:
+            print(f"  OK: {name}: judge flagged {', '.join(declared)}")
+    return all_ok
+
+
+def _violated_ids_from_verdict(verdict_text: str) -> set[str]:
+    """Extract must_not ids marked violated in a printed judge verdict.
+
+    `print_validation` renders violations as `  VIOLATION: [<ID>] <criterion: reason>`
+    under a `Violations (n):` header; the id prefix survives the 80-char
+    truncation. Only `VIOLATION:` lines carry violation verdicts (the header has
+    no bracketed id, and rubric-echo lines have no id at all).
+    """
+    ids: set[str] = set()
+    for line in verdict_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("VIOLATION:"):
+            continue
+        match = _VIOLATION_ID_RE.search(stripped)
+        if match:
+            ids.add(match.group(1))
+    return ids
 
 
 def _read_agent_output(

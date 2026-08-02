@@ -10,7 +10,12 @@ SHELL := /bin/sh
 
 .PHONY: quality format format-check lint typecheck test help
 
-# Stack detection (first match wins)
+# Stack detection (first match wins). An unrecognised stack is not an
+# error here: the check happens AFTER the Makefile.local include below,
+# so an override file can rescue a stack detection does not know. This
+# keeps plain single-include semantics for everything else: `?=` stays
+# a no-op on recognised stacks, `+=` applies once, and targets defined
+# in Makefile.local are parsed once.
 
 ifneq (,$(wildcard pyproject.toml))
   STACK := python
@@ -56,6 +61,14 @@ else ifneq (,$(or $(wildcard build.gradle),$(wildcard build.gradle.kts)))
   TEST_CMD         := ./gradlew test
 else
   STACK := unknown
+endif
+
+# Optional project override: any STACK or *_CMD assignment here wins.
+# Because the unknown-stack error below runs after this include, the
+# override file is the documented rescue path for unrecognised stacks.
+-include Makefile.local
+
+ifeq ($(STACK),unknown)
   $(info )
   $(info ERROR: No recognised stack detected.)
   $(info   Looked for: pyproject.toml, go.mod, Cargo.toml, package.json, pom.xml, build.gradle[.kts])
@@ -63,9 +76,6 @@ else
   $(info )
   $(error Cannot continue without a known stack)
 endif
-
-# Optional project override.
--include Makefile.local
 
 # Helpers
 define require_cmd

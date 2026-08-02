@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use the AI Playbook with locally-hosted, open-source models (Ollama, LM Studio, or any OpenAI-compatible endpoint) instead of a paid Claude / OpenAI / Gemini subscription. The playbook is model-agnostic: agents declare tier names (`advisor` / `executor`), not model IDs: so a config change is enough.
+Use the AI Playbook with locally hosted, open-source models (Ollama, LM Studio, or any OpenAI-compatible endpoint) instead of a paid Claude, OpenAI, or Gemini subscription. The playbook is model-agnostic: agents declare tier names (`advisor` / `executor`), not model IDs, so a configuration change is enough.
 
 ## Prerequisites
 

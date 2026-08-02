@@ -14,6 +14,8 @@ Adopters need to customize agents, knowledge-base files, skills, and templates w
 
 Resolve collisions **last-wins**: a pack file overrides core, and a later pack overrides an earlier pack, across the four overlay directories (`agents`, `knowledge-base`, `skills`, `templates`). Every override emits an `Override` record so `deploy`/`doctor` can report exactly which file won and which was shadowed. Layer order is fixed: `core` first, then packs in declared order.
 
+**Text equivalent:** merge core first, then each pack in declared order. For the same relative path, the latest layer supplies the winning file and the merge records which earlier file it shadowed.
+
 ```mermaid
 flowchart LR
     core[core source] --> merge{discover_layered<br/>last-wins on<br/>relative path}

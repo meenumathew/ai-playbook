@@ -82,7 +82,7 @@ Core rule (always in context): `CLAUDE.md` § Code Quality. The full surface lis
 | `TODO(1)` | High | Architectural issue: fix this sprint |
 | `TODO(2)` | Medium | Minor bug or improvement: schedule it |
 | `TODO(3)` | Low | Polish, docs, nice-to-have |
-| `PERF` |: | Performance opportunity: profile before optimising |
+| `PERF` | N/A | Performance opportunity: profile before optimising |
 
 Format: `TODO(N): description: TICKET-ID if tracked`. No priority = TODO(3). Ticket reference is optional; use only if the TODO *cannot be resolved without tracking*. Prefer describing the issue itself (`TODO(1): handle timeout on payment retry`) over ticket coupling (`TODO(1): TICKET-567`). When ticket reference is needed, include a line explaining why (e.g., `TODO(0): blocked on external API stable. See TICKET-567 for schedule`).
 

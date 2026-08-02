@@ -2,14 +2,14 @@
 
 Three layers of contract pinning:
 
-1. **Structural** — frontmatter is the machine-readable contract. We assert
+1. **Structural**: frontmatter is the machine-readable contract. We assert
    shape (required keys, valid model tier, command shim parity) so a
    regression breaks loudly without depending on prose wording.
-2. **Behavioural (positive)** — `AGENT_CONTRACTS` in `contract_data.py`
+2. **Behavioural (positive)**: `AGENT_CONTRACTS` in `contract_data.py`
    pins the *terms / references / headings* that must be present, not
    exact sentences. `contract_failures()` does case-insensitive matching
    so legitimate copy-edits don't fail tests.
-3. **Anti-regression (negative)** — `AGENT_FORBIDDEN_PHRASES` records
+3. **Anti-regression (negative)**: `AGENT_FORBIDDEN_PHRASES` records
    phrases we deliberately removed. Each row carries a `reason` so a
    future contributor can decide whether to revert or update the rule.
 
@@ -62,7 +62,7 @@ def _parse_frontmatter(content: str) -> dict[str, object]:
 
 
 def test_every_agent_declares_required_frontmatter_keys():
-    """Frontmatter is the machine-readable agent contract — pin its shape."""
+    """Frontmatter is the machine-readable agent contract: pin its shape."""
     failures: list[str] = []
     for agent_name, agent_path in discover_agents(get_source_root()).items():
         content = agent_path.read_text(encoding="utf-8")
@@ -84,7 +84,7 @@ def test_every_agent_declares_machine_readable_read_budget():
 
     Every agent declares either an integer cap or the literal `self-tracked`
     (xp-pair-programmer). The hook reads this key from the deployed agent
-    file, so a missing or malformed value silently disables enforcement —
+    file, so a missing or malformed value silently disables enforcement:
     hence the pin.
     """
     failures: list[str] = []
@@ -96,6 +96,68 @@ def test_every_agent_declares_machine_readable_read_budget():
         elif str(value) != "self-tracked" and not str(value).isdigit():
             failures.append(f"{agent_name}: `read-budget: {value}` is neither int nor self-tracked")
     assert not failures, "read-budget contract failures:\n  " + "\n  ".join(failures)
+
+
+def test_claude_md_advisor_agent_list_matches_frontmatter_model_tiers():
+    """CLAUDE.md § Model Tier enumerates the advisor-tier agents in prose.
+
+    STRUCTURE-MARKER: the parenthesised list in the "Advisor-tier agents
+    (...) escalate to **humans**" sentence must equal the set of agents
+    whose frontmatter declares `model: advisor`. Wording around the list
+    may change; the list itself is a copy of frontmatter data and rots
+    silently when an agent's tier flips or an agent is added/removed.
+    """
+    rules = (get_source_root() / "CLAUDE.md").read_text(encoding="utf-8")
+    match = re.search(r"Advisor-tier agents \(([^)]+)\) escalate to \*\*humans\*\*", rules)
+    assert match, (
+        "CLAUDE.md § Model Tier lost its parseable 'Advisor-tier agents (...) "
+        "escalate to **humans**' sentence"
+    )
+    listed = {name.strip() for name in match.group(1).split(",")}
+
+    advisors = {
+        agent_name
+        for agent_name, agent_path in discover_agents(get_source_root()).items()
+        if _parse_frontmatter(agent_path.read_text(encoding="utf-8")).get("model") == "advisor"
+    }
+    assert listed == advisors, (
+        f"CLAUDE.md advisor list drifted from agent frontmatter: "
+        f"listed but not `model: advisor`: {sorted(listed - advisors)}; "
+        f"`model: advisor` but not listed: {sorted(advisors - listed)}"
+    )
+
+
+def test_elevated_read_cap_prose_matches_frontmatter_read_budget():
+    """Agent bodies cite their elevated cap as "... may extend to N, the
+    frontmatter cap the read-budget hook enforces". N is a prose copy of the
+    `read-budget:` frontmatter integer; if they diverge, the hook enforces a
+    different cap than the agent's prose promises.
+
+    STRUCTURE-MARKER: on every line containing "the frontmatter cap", the
+    number immediately before the phrase must equal `read-budget:`.
+    """
+    phrase = "the frontmatter cap"
+    failures: list[str] = []
+    checked = 0
+    for agent_name, agent_path in discover_agents(get_source_root()).items():
+        content = agent_path.read_text(encoding="utf-8")
+        if phrase not in content:
+            continue
+        declared = str(_parse_frontmatter(content).get("read-budget"))
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            if phrase not in line:
+                continue
+            checked += 1
+            numbers = re.findall(r"\d+", line.split(phrase)[0])
+            if not numbers:
+                failures.append(f"{agent_name}:{line_number}: no cap number precedes {phrase!r}")
+            elif numbers[-1] != declared:
+                failures.append(
+                    f"{agent_name}:{line_number}: prose cap {numbers[-1]} does not match "
+                    f"frontmatter `read-budget: {declared}`"
+                )
+    assert checked, f"no agent body cites {phrase!r} — update or retire this test"
+    assert not failures, "Elevated read-cap drift:\n  " + "\n  ".join(failures)
 
 
 def test_agents_with_read_budgets_state_a_per_session_cap():
@@ -134,7 +196,7 @@ def test_agent_contracts_are_structured_not_raw_phrase_pins():
 
 
 # ---------------------------------------------------------------------------
-# CLAUDE.md global-rule presence — anchored on stable tokens only
+# CLAUDE.md global-rule presence: anchored on stable tokens only
 # ---------------------------------------------------------------------------
 
 
@@ -264,7 +326,7 @@ def test_all_reference_paths_in_agents_resolve():
 
 
 # ---------------------------------------------------------------------------
-# Approval-gate citation — structural, not phrase-exact
+# Approval-gate citation: structural, not phrase-exact
 # ---------------------------------------------------------------------------
 
 
@@ -358,7 +420,7 @@ def test_diff_reviewer_supports_direct_review_without_story():
         "diff-reviewer must label coverage as 'no story supplied' in direct mode"
     )
     # CONTRACT-PHRASE (negative): the retired no-story stop gate must not
-    # reappear verbatim — direct-review mode replaced it.
+    # reappear verbatim: direct-review mode replaced it.
     assert "No story? — STOP" not in content, (
         "diff-reviewer must not contradict direct review mode with a no-story stop gate"
     )
@@ -404,6 +466,31 @@ def test_docs_maintainer_mermaid_diagrams_do_not_require_packages():
     assert "static syntax review" in content
 
 
+def test_docs_maintainer_profiles_audience_and_layers_long_documents():
+    content = read_agent("docs-maintainer")
+    for concept in (
+        "Audience contract",
+        "expertise",
+        "reader goal",
+        "reading context",
+        "Progressive disclosure",
+        "summary",
+        "deep detail",
+    ):
+        assert concept in content, f"docs-maintainer must define {concept!r}"
+
+
+def test_docs_maintainer_diagrams_are_optional_and_accessible():
+    content = read_agent("docs-maintainer")
+    for concept in (
+        "materially easier",
+        "text equivalent",
+        "screen reader",
+        "source of truth",
+    ):
+        assert concept in content, f"docs-maintainer diagram guidance must define {concept!r}"
+
+
 def test_xp_pair_programmer_distinguishes_teachback_checkpoint_from_trailer():
     content = read_agent("xp-pair-programmer")
     assert re.search(r"interactive[^.\n]*teach-back[^.\n]*checkpoint", content)
@@ -414,7 +501,7 @@ def test_xp_pair_programmer_distinguishes_teachback_checkpoint_from_trailer():
 def test_release_captain_defers_to_release_gates_kb():
     """release-captain must point at the canonical KB section, not redefine gates."""
     content = read_agent("release-captain")
-    # Structural pointer — `test_pointer_contracts.py` validates that the
+    # Structural pointer: `test_pointer_contracts.py` validates that the
     # heading exists. Pinning the pointer (not a phrase) survives prose edits.
     assert "knowledge-base/release.md` § Release Gates" in content or (
         "`knowledge-base/release.md`" in content and "Release Gates" in content

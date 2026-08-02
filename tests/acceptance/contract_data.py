@@ -61,6 +61,11 @@ AGENT_CONTRACTS = {
             "names with domain language",
             terms=("domain-language.md", "before naming"),
         ),
+        contract(
+            "gates architecture-impacting slices",
+            terms=("Architecture-impact gate", "operational complexity"),
+            references=("knowledge-base/architecture-decisions.md",),
+        ),
     ],
     "xp-pair-programmer": [
         contract("requires TDD", terms=("production code", "failing test", "One test at a time")),
@@ -70,7 +75,7 @@ AGENT_CONTRACTS = {
         ),
         contract(
             "covers acceptance and test stories",
-            terms=("Test-story", "Outer loop", TEST_NAME_PATTERN, "test_ac_<what>_<condition>"),
+            terms=("Test-story", "Outer loop", TEST_NAME_PATTERN, "test_<what>_<condition>"),
             references=("knowledge-base/testing.md",),
         ),
         contract(
@@ -87,6 +92,7 @@ AGENT_CONTRACTS = {
                 "knowledge-base/security.md",
                 "knowledge-base/observability.md",
                 "knowledge-base/performance.md",
+                "knowledge-base/architecture-decisions.md",
             ),
         ),
         contract(
@@ -104,6 +110,7 @@ AGENT_CONTRACTS = {
                 "knowledge-base/security.md",
                 "knowledge-base/performance.md",
                 "knowledge-base/testing.md",
+                "knowledge-base/architecture-decisions.md",
             ),
         ),
     ],
@@ -149,10 +156,34 @@ AGENT_CONTRACTS = {
 }
 
 KB_CONTRACTS = {
+    "architecture-decisions.md": [
+        contract(
+            "evidence-based architecture decisions",
+            headings=(
+                "Architecture-Impact Trigger",
+                "Start With the Data",
+                "Workload Quality Attributes",
+                "Evidence for Operational Complexity",
+                "Record the Decision",
+            ),
+            terms=(
+                "simplest deployable architecture",
+                "failure modes",
+                "rejected alternatives",
+                "ADR candidate",
+            ),
+            references=(
+                "design-patterns.md",
+                "security.md",
+                "performance.md",
+                "observability.md",
+            ),
+        ),
+    ],
     "testing.md": [
         contract(
             "testing discipline",
-            headings=("Acceptance Test (AT) Standards", "When Tests Are Hard to Write"),
+            headings=("Acceptance Test Standards", "When Tests Are Hard to Write"),
             terms=("FIRST", "Arrange-Act-Assert", TEST_NAME_PATTERN, "70%"),
         ),
     ],
@@ -223,6 +254,18 @@ KB_CONTRACTS = {
             terms=("N+1", "O(n^2)", "Profile First"),
         ),
     ],
+    "working-agreement.md": [
+        contract(
+            "review feedback is verified before implementation",
+            headings=("Responding to Review Feedback",),
+            terms=(
+                "current code",
+                "requirements",
+                "evidence",
+                "one independent item at a time",
+            ),
+        ),
+    ],
 }
 
 SKILL_CONTRACTS = {
@@ -236,6 +279,16 @@ SKILL_CONTRACTS = {
             "merge safety",
             headings=("Squashing Commits", "Merge Conflict Resolution"),
             terms=("Run tests before and after", "Wait for user direction", "git merge --abort"),
+        ),
+        contract(
+            "worktrees are created and removed safely",
+            headings=("Worktree Safety",),
+            terms=(
+                "git check-ignore",
+                "clean baseline",
+                "Do not use `--force`",
+                "overlapping writes",
+            ),
         ),
     ],
     "story-writing": [
@@ -331,7 +384,7 @@ class NegativeContract:
 
 
 # Anti-regression list. Each entry encodes a behavioural decision that was
-# made and recorded — not editorial preference. Add a row only when removing
+# made and recorded: not editorial preference. Add a row only when removing
 # behaviour from an agent; remove a row only when the underlying decision is
 # explicitly reversed.
 AGENT_FORBIDDEN_PHRASES: tuple[NegativeContract, ...] = (

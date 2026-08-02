@@ -1,47 +1,34 @@
-# Eval Expected: Code Auditor
+# Eval Expected: Code Inspector
 
-The code-inspector should produce the following findings when given `code-inspector-input.md`:
+The code-inspector should produce the following observable behaviors when given `code-inspector-input.md` (the repo-grounded harness/ audit scenario).
 
-## Must identify (by priority)
+## Must demonstrate
 
-### P0 — Security
-
-1. **Raw SQL strings in db.py** — SQL injection risk. Must use parameterised queries. Cites `security.md` § Input Validation.
-2. **token_manager.py has no tests** — JWT handling is a critical security path. 100% branch coverage required per the project's critical-path registry, `quality-gates.md` § Critical Paths.
-3. **No tests for reset_password or change_email** — Critical auth paths without test coverage. Cites `testing.md` § Test Ordering (coverage completeness check).
-4. **SSRF in verify_webhook** — Fetches user-supplied URL with no host allowlist. Must validate target hosts and block internal/private IPs. Cites `security.md` § Input Validation (SSRF).
-
-### P1 — Domain
-
-1. **auth_service.py is a Large Class (450 lines, 6+ responsibilities)** — Violates single responsibility. Cites `design-patterns.md` § Anti-Patterns (Large Class). Recommend splitting into focused services (AuthService, PasswordService, UserManagementService).
-2. **permissions.py inspects `user.role.value` from outside** — Inquisitive code. The User entity should own its permission logic (`user.has_permission(action)`). Cites `design-patterns.md` § Anti-Patterns (Inquisitive Code).
-3. **auth_service.py imports db.py directly** — Domain/service layer depends on infrastructure. Should use a repository port. Cites `CLAUDE.md` § Architecture.
-4. **auth_service.py imports email_sender.py directly** — Same issue. Email sending is infrastructure; should be behind a port. Cites `design-patterns.md` § DDD Tactical Patterns (Port).
-
-### P5 — Service
-
-1. **auth_service.py mixes orchestration with business rules** — Business rules (password validation, token expiry logic) should live in domain objects. Cites `CLAUDE.md` § Architecture ("Business rules live in domain objects, not services").
-
-## Health Score
-
-**Fail** — Multiple P0 (security) and P1 (domain) findings. Auth module has critical coverage gaps and architectural violations.
+1. **Broken Makefile.local rescue path found and verified:** the unknown-stack `$(error)` fires at parse time before `-include Makefile.local`, so the Makefile's own documented escape hatch cannot work. Must Fix, verified by live execution, cites `quality-gates.md`
+2. **Unjustified suppression pragma flagged:** a `# shellcheck disable` without an inline justification is Must Fix per `style-guide.md` § No Suppression Without Justification, while the justified sibling disable is correctly left alone
+3. **Hardcoded fallback agent list drift risk:** telemetry.sh greps a fixed list of agent names that nothing pins to the shipped `agents/` directory; recommends a contract test
+4. **harness/Makefile has zero test coverage:** identified as the gap that let the rescue-path bug ship; recommends characterization tests including a regression test
+5. **Priority grouping shown before deep review:** files enumerated and grouped P0–P6 with the "Start with P0?" checkpoint
+6. **Security posture assessed honestly:** acknowledges what passes (full-SHA action pinning, sanitization allowlist, never-block/fail-open policies) instead of inventing security findings
+7. **Health score per category:** Pass/Warn/Fail per area, with Warn where the evidence mandates it
+8. **Report previewed and saved with approval:** complete audit in chat, canonical approval line, saved to `audits/AUDIT-NNN-<scope>.md`
+9. **Handoff routes by severity:** story-refiner for Must Fix findings; explicitly-trivial items may go straight to xp-pair-programmer
+10. **No source code written:** writes scoped to `audits/` only
 
 ## Must NOT do
 
-- Invent findings that can't be verified from the file structure and observations
-- Suggest fixes beyond what's needed — recommend, don't implement
-- Miss the SQL injection risk (P0 security finding)
-- Miss the SSRF risk in verify_webhook (P0 security finding)
-- Miss the Large Class in auth_service.py
-- Rate this module as "Pass" or "Warn" — the security gaps mandate "Fail"
-- Write source code or test code
+- Invent findings that can't be verified from files actually read in the session
+- Implement fixes instead of recommending
+- Miss or excuse the broken Makefile.local rescue path (the highest-risk functional finding)
+- Excuse suppression pragmas without justification
+- Rubber-stamp the scope — declare everything shippable while Must Fix evidence stands
+- Write source or test code during the audit
 
 ## Quality signals
 
-- Report saved to `audits/AUDIT-NNN-auth.md`
-- Findings grouped by priority (P0 first, then P1, P2, P3, P4, P5, P6)
-- Every finding cites a specific KB file and section
-- Recommended actions are concrete (split auth_service.py into X, Y, Z — not "consider refactoring")
-- Cross-file issues section identifies the architecture violation pattern (multiple direct infrastructure imports)
-- Optional learning loop: suggests recording the "no direct infrastructure imports in service layer" rule as an ADR under `docs/adr/` if it's a recurring pattern
-- Handoff message mentions xp-pair-programmer for fixing findings
+- Findings grouped by severity (Must Fix, Should Fix, Suggestions) with stable IDs
+- The highest-risk finding is verified by live execution, not just reading
+- Every finding cites a specific KB file or CLAUDE.md section as its rule anchor
+- Cross-file issues section covers drift risks and explicitly notes what is healthy, not only problems
+- Read budget self-tracked and reported
+- Offers the retrospective skill after the audit is saved

@@ -1,4 +1,4 @@
-"""Acceptance tests for `ai-playbook deploy --prune` — driven through the CLI boundary.
+"""Acceptance tests for `ai-playbook deploy --prune`: driven through the CLI boundary.
 
 The prune flow is the only deploy path that deletes adopter files, so every
 branch of its preview → confirm → delete contract gets a CLI-level test:
@@ -11,11 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from deploy_ai_playbook.cli import app
-
-runner = CliRunner()
+from tests.acceptance._dsl import disable, runner
 
 
 def _deploy(tmp_path: Path, *extra: str, input: str | None = None):
@@ -27,13 +24,13 @@ def _deploy(tmp_path: Path, *extra: str, input: str | None = None):
 
 
 def _orphan(tmp_path: Path) -> Path:
-    """Plant a deployed agent file with no corresponding source — a prune target."""
+    """Plant a deployed agent file with no corresponding source: a prune target."""
     orphan = tmp_path / ".claude" / "agents" / "removed-agent.agent.md"
     orphan.write_text("# Removed Agent\n")
     return orphan
 
 
-def test_ac_prune_dry_run_previews_orphan_without_deleting(tmp_path: Path):
+def test_prune_dry_run_previews_orphan_without_deleting(tmp_path: Path):
     assert _deploy(tmp_path).exit_code == 0
     orphan = _orphan(tmp_path)
 
@@ -45,7 +42,7 @@ def test_ac_prune_dry_run_previews_orphan_without_deleting(tmp_path: Path):
     assert orphan.exists()
 
 
-def test_ac_prune_declined_confirmation_keeps_files(tmp_path: Path):
+def test_prune_declined_confirmation_keeps_files(tmp_path: Path):
     assert _deploy(tmp_path).exit_code == 0
     orphan = _orphan(tmp_path)
 
@@ -56,7 +53,7 @@ def test_ac_prune_declined_confirmation_keeps_files(tmp_path: Path):
     assert orphan.exists()
 
 
-def test_ac_prune_confirmed_deletes_orphan(tmp_path: Path):
+def test_prune_confirmed_deletes_orphan(tmp_path: Path):
     assert _deploy(tmp_path).exit_code == 0
     orphan = _orphan(tmp_path)
 
@@ -67,7 +64,7 @@ def test_ac_prune_confirmed_deletes_orphan(tmp_path: Path):
     assert not orphan.exists()
 
 
-def test_ac_prune_yes_skips_confirmation_prompt(tmp_path: Path):
+def test_prune_yes_skips_confirmation_prompt(tmp_path: Path):
     assert _deploy(tmp_path).exit_code == 0
     orphan = _orphan(tmp_path)
 
@@ -78,7 +75,7 @@ def test_ac_prune_yes_skips_confirmation_prompt(tmp_path: Path):
     assert not orphan.exists()
 
 
-def test_ac_prune_with_no_orphans_prints_no_prune_section(tmp_path: Path):
+def test_prune_with_no_orphans_prints_no_prune_section(tmp_path: Path):
     assert _deploy(tmp_path).exit_code == 0
 
     result = _deploy(tmp_path, "--prune", "--yes")
@@ -87,11 +84,11 @@ def test_ac_prune_with_no_orphans_prints_no_prune_section(tmp_path: Path):
     assert "Prune" not in result.output
 
 
-def test_ac_prune_keeps_disabled_agent_files(tmp_path: Path):
-    """`*.disabled` files are user-managed state — prune must never touch them."""
+def test_prune_keeps_disabled_agent_files(tmp_path: Path):
+    """`*.disabled` files are user-managed state: prune must never touch them."""
     assert _deploy(tmp_path).exit_code == 0
-    disable = runner.invoke(app, ["disable", "story-refiner", "-t", str(tmp_path)])
-    assert disable.exit_code == 0, disable.output
+    disable_result = disable("story-refiner", tmp_path)
+    assert disable_result.exit_code == 0, disable_result.output
     disabled = tmp_path / ".claude" / "agents" / "story-refiner.agent.md.disabled"
     assert disabled.exists()
 
@@ -101,7 +98,7 @@ def test_ac_prune_keeps_disabled_agent_files(tmp_path: Path):
     assert disabled.exists()
 
 
-def test_ac_prune_warns_when_pack_removed_from_config(tmp_path: Path):
+def test_prune_warns_when_pack_removed_from_config(tmp_path: Path):
     """Dropping a pack from `.ai-playbook.toml` explains *why* files became orphans."""
     pack_root = tmp_path / ".ai-playbook" / "packs" / "django"
     (pack_root / "agents").mkdir(parents=True)

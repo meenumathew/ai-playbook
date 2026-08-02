@@ -9,7 +9,7 @@ SHELL_SCRIPTS := harness/check-teachback.sh harness/telemetry.sh harness/read-bu
 SHELLCHECK := uvx --from shellcheck-py==0.11.0.1 shellcheck
 PRE_COMMIT := uvx pre-commit==4.3.0
 
-.PHONY: quality quality-no-docs format format-check lint typecheck test test-fast eval-structure eval-calibrate eval-validate shellcheck docs-lint kb-frontmatter claude-md-size agent-size security help
+.PHONY: quality quality-no-docs format format-check lint typecheck test test-fast mutation eval-structure eval-calibrate eval-validate shellcheck docs-lint kb-frontmatter claude-md-size agent-size security help
 
 quality: format-check lint typecheck shellcheck docs-lint kb-frontmatter claude-md-size agent-size eval-structure eval-calibrate eval-validate test
 
@@ -29,10 +29,20 @@ typecheck:
 	uv run pyright
 
 test:
-	uv run pytest tests/ -q --cov=src --cov-fail-under=95
+	uv run pytest tests/ -q -n auto --cov=src --cov-fail-under=95
 
 test-fast:
-	uv run pytest tests/ -q --no-cov
+	uv run pytest tests/ -q -n auto --no-cov
+
+mutation:
+	@case "$$(uname -s)" in \
+		Darwin) echo "Mutation testing requires Linux: run the mutation workflow or use a Linux container/VM." >&2; exit 2 ;; \
+		esac
+	# mutmut sandboxes contain platform-specific trampolines and result state.
+	rm -rf mutants
+	uv run mutmut run --max-children 4
+	uv run mutmut export-cicd-stats
+	uv run python tools/check-mutation-baseline.py mutants/mutmut-cicd-stats.json mutation-baseline.json
 
 eval-structure:
 	uv run python evals/run_eval.py check-structure
@@ -66,7 +76,7 @@ security:
 	$(PRE_COMMIT) run detect-private-key --all-files
 	$(PRE_COMMIT) run gitleaks --all-files
 	uv export --no-hashes --no-dev --no-emit-project > /tmp/runtime-requirements.txt
-	uvx pip-audit==2.10.0 --strict --requirement /tmp/runtime-requirements.txt
+	uvx --python 3.12 pip-audit==2.10.0 --strict --requirement /tmp/runtime-requirements.txt
 	uvx bandit==1.9.4 -r src/ -ll -ii
 	uvx bandit==1.9.4 -r tests/ evals/ -ll -ii --skip B101
 
@@ -80,10 +90,11 @@ help:
 	@echo "  typecheck       run Pyright"
 	@echo "  test            run pytest with coverage gate"
 	@echo "  test-fast       run pytest without coverage"
+	@echo "  mutation        run Linux mutation testing and enforce mutation-baseline.json"
 	@echo "  shellcheck      lint shipped shell harness scripts"
 	@echo "  docs-lint       run markdownlint and Vale over docs"
 	@echo "  kb-frontmatter  validate KB and skill frontmatter contract"
-	@echo "  claude-md-size  enforce CLAUDE.md size budget (RFC-0001)"
+	@echo "  claude-md-size  enforce CLAUDE.md size budget (always-loaded context)"
 	@echo "  agent-size      enforce per-agent-file size budgets (token ratchet)"
 	@echo "  security        secret scan + pip-audit + bandit (mirrors CI; needs network)"
 	@echo "  eval-structure  verify eval files parse"

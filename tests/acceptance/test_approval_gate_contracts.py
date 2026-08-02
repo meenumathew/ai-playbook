@@ -7,7 +7,7 @@ references stay correct as long as the canonical rule does.
 
 Two structural pins, one classified phrase, no exact-prose-matching:
 
-1. CONTRACT-PHRASE — the literal commit-prompt sentence
+1. CONTRACT-PHRASE: the literal commit-prompt sentence
    `Changes staged. Say 'commit' to proceed.` is the contract Claude says
    to the user. It is allowed in:
    - `CLAUDE.md` (canonical)
@@ -15,11 +15,11 @@ Two structural pins, one classified phrase, no exact-prose-matching:
    - `docs/` (walkthrough/example output)
    - `README.md` (Quick Start walkthrough)
    - `docs/rfcs/` (quoted examples)
-   It is NOT allowed in `agents/*.agent.md` or `skills/*/SKILL.md` —
+   is NOT allowed in `agents/*.agent.md` or `skills/*/SKILL.md`:
    those must cite by reference. This rule keeps the prompt definition
    in exactly one editable place.
 
-2. STRUCTURE-MARKER — every agent or skill that mentions the approval
+2. STRUCTURE-MARKER: every agent or skill that mentions the approval
    gate must cite `CLAUDE.md` § Shared Rules § Approval gate (the
    canonical pointer), not invent a private wording. The pointer
    resolver in `test_pointer_contracts.py` checks the citation lands on
@@ -34,12 +34,12 @@ from pathlib import Path
 from deploy_ai_playbook.cli import get_source_root
 
 # CONTRACT-PHRASE: this is the literal user-facing approval prompt.
-# If this string changes, every consumer changes — that's the point.
+# If this string changes, every consumer changes: that's the point.
 COMMIT_PROMPT = "Changes staged. Say"
 
 # Files where the literal prompt is allowed to live verbatim.
 # CLAUDE.md is the canonical rule. README.md and CHANGELOG.md cite the
-# prompt in walkthroughs / release notes — those are documenting the
+# prompt in walkthroughs / release notes: those are documenting the
 # contract, not duplicating it.
 ALLOWED_PROMPT_LOCATIONS: tuple[str, ...] = (
     "CLAUDE.md",
@@ -159,7 +159,7 @@ def test_approval_gate_canonical_citation_resolves():
     # The approval-gate paragraph is bolded inline rather than a heading;
     # the canonical citation reads "§ Shared Rules § Approval gate" because
     # callers cite the bolded sub-rule by name. This test pins the bolded
-    # phrase as the third-tier anchor — change either side and the test
+    # phrase as the third-tier anchor: change either side and the test
     # surfaces the breakage.
     assert "**Approval gate.**" in claude_md, (
         "CLAUDE.md must contain `**Approval gate.**` as a bolded sub-rule "

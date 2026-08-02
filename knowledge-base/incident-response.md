@@ -66,6 +66,7 @@ If unsure, classify one level higher. Down-classifying mid-incident requires exp
 - Update on the preceding cadence whether or not there is news. *"No change since last update; still investigating"* is a valid update.
 - Never speculate publicly about root cause during an active incident. Wait for the postmortem.
 - Never name individuals in public comms: postmortems are blameless and so are status updates.
+- Automated notifications are sized for humans, not bots: only SEV1/SEV2 auto-notify via `skills/notifier/SKILL.md` (SEV1 approval-gated); SEV3/SEV4 stay on the human cadence above.
 
 ---
 

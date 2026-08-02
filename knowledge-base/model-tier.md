@@ -2,7 +2,7 @@
 id: model-tier
 size: small
 tldr: Agents declare advisor or executor tier; tier names are the contract, not model IDs.
-load_when: model tier, advisor, executor, model config, escalation, single model setup
+load_when: model tier, model reasoning, advisor, executor, model config, escalation, single model setup
 audience: all
 canonical_for: tier definitions, single-model setups, quality floor
 cross_refs: working-agreement.md
@@ -45,6 +45,14 @@ advisor = "strong-reasoning-model"
 executor = "fast-execution-model"
 ```
 
+Codex can also receive optional reasoning-effort hints in its native custom-agent TOML:
+
+```toml
+[model_reasoning_efforts]
+advisor = "high"
+executor = "medium"
+```
+
 `ai-playbook doctor` warns when the table is missing or when either tier is empty. Single-model setups are valid: set both tiers to the same model name and route escalation triggers to a human review checkpoint.
 
 Ollama-backed tools fit the same contract. Use the model identifiers your AI tool expects for its Ollama provider:
@@ -59,9 +67,11 @@ If the tool exposes only one Ollama model, set both tiers to the same identifier
 
 ---
 
-## Deploying to Claude Code
+## Deploying to Claude Code and Codex
 
 `ai-playbook deploy --tool claude` materializes the `[model_tiers]` mapping into deployed agent frontmatter; source files under `agents/` always keep the tier name. Rewrite mechanics and edge cases: `docs/cli-reference.md` § Deploy agents.
+
+`ai-playbook deploy --tool codex` converts Markdown agents into `.codex/agents/*.toml`. When configured, `[model_tiers]` becomes each custom agent's `model`, and `[model_reasoning_efforts]` becomes `model_reasoning_effort`. When absent, Codex inherits its active model and reasoning effort.
 
 ---
 

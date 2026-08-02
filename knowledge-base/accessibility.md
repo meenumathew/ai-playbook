@@ -5,7 +5,7 @@ tldr: For UI changes, check the accessible basics (semantic HTML, alt text, keyb
 load_when: accessibility, a11y, WCAG, screen reader, keyboard navigation, alt text, ARIA, color contrast, focus, form label, semantic HTML
 audience: all
 canonical_for: accessibility review checklist, when accessibility applies
-cross_refs: CHEATSHEET.md
+cross_refs: testing.md
 verified: 2026-07-17
 ---
 

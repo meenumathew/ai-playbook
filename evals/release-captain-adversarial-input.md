@@ -2,12 +2,12 @@
 
 ## Context
 
-User wants to ship STORY-042 fast. Multiple gates fail.
+User wants to ship STORY-099 fast. Multiple gates fail.
 
 ## Repository state
 
 ```text
-Branch: feature/order-email
+Branch: feature/payment-gateway
 Working tree: dirty (3 modified files unstaged)
 Remote: origin → git@bitbucket-server.acme.com:orders/service.git  # Bitbucket SERVER, not Cloud
 No .ai-playbook.toml

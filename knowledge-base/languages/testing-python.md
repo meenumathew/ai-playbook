@@ -22,7 +22,7 @@ verified: 2026-07-17
 
 ## Test Runner
 
-Adopter-side recommended setup. **Required**: pytest, pytest-cov, pytest-mock. **Recommended add-ons**: pytest-randomly (catches order-dependent tests), pytest-asyncio (for async code), pytest-xdist (parallel execution). Drop the add-ons if your project doesn't need them.
+Adopter-side recommended setup. **Required**: pytest and pytest-cov. **Mocking**: pytest-mock (see § Mocking for the default-unless-justified rule). **Recommended add-ons**: pytest-randomly (catches order-dependent tests), pytest-asyncio (for async code), pytest-xdist (parallel execution). Drop optional packages if the project doesn't need them.
 
 ```toml
 # pyproject.toml: adopter guidance, not this repo's exact config
@@ -66,13 +66,18 @@ uv run pytest --randomly-seed=12345            # reproduce specific order
 
 ## Test File Structure
 
+Canonical layout: `testing.md` § Test Folder Structure (unit tests mirror the source tree under `tests/unit/`; acceptance flat by behaviour; integration separate). Python rendering:
+
 ```text
 tests/
-  conftest.py            ← shared fixtures only, never test logic
-  test_order.py          ← unit tests for Order
-  test_order_service.py  ← unit tests for OrderService
+  conftest.py                ← shared fixtures only, never test logic
+  unit/
+    test_order.py            ← unit tests for Order (mirrors src/ tree)
+    test_order_service.py    ← unit tests for OrderService
+  acceptance/
+    test_checkout.py         ← public-boundary acceptance scenarios
   integration/
-    test_order_repo.py   ← integration tests hitting real DB
+    test_order_repo.py       ← integration tests hitting real DB
 ```
 
 ---
@@ -104,19 +109,19 @@ Use the narrowest scope that keeps tests independent.
 
 ## Mocking
 
-**Do not use `unittest.mock`.** Never import any `unittest.mock` symbol. Always use the `pytest-mock` `mocker` fixture: same API (`mocker.Mock()`, `mocker.MagicMock()`, `mocker.patch()`, `mocker.AsyncMock()` replace the imports; `mocker.patch(...)` inside the test replaces the `@patch` decorator), but every patch is undone automatically at teardown.
+Use the `pytest-mock` `mocker` fixture: it exposes the familiar API (`mocker.Mock()`, `mocker.MagicMock()`, `mocker.patch()`, `mocker.AsyncMock()`) and automatically undoes patches at teardown. In projects that already depend on `pytest`, adding `pytest-mock` is the default choice, not a judgement call. The standard-library `unittest.mock` API is acceptable only when adding the plugin is genuinely not justified (for example, a repo policy freezing dev dependencies); in that case use it consistently. Never mix imports and fixtures within one test module.
 
 Where `mocker` seems unavailable, it isn't:
 
 | Escape hatch | Correct approach |
 |---|---|
-| `AsyncMock(spec=SomePort)` inside a `@pytest.fixture` | Add `mocker` as a fixture parameter: pytest injects it like any other fixture |
+| `AsyncMock(spec=SomePort)` inside a `@pytest.fixture` | Add `mocker` as a fixture parameter when using pytest-mock, or construct it from `unittest.mock` consistently if the project uses the standard library |
 | Module-level helper building mocks | Convert the helper to a fixture, or pass `mocker` in: `def _make_thing(mocker): return mocker.AsyncMock(...)` |
 
 **Agent enforcement:**
 
-- **xp-pair-programmer:** never write `unittest.mock` imports. If existing code uses them, migrate to `mocker` in a separate refactor commit.
-- **diff-reviewer / code-inspector:** any `unittest.mock` import in the diff is a **Must Fix**.
+- **xp-pair-programmer:** follow the project's chosen style; do not introduce a second mocking framework in a test module.
+- **diff-reviewer / code-inspector:** flag mixed styles or patches that assert only call occurrence; a consistent `unittest.mock` import is not itself a defect.
 
 ---
 

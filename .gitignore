@@ -46,6 +46,7 @@ plans/
 research/
 reviews/
 audits/
+incidents/
 logs/
 .kiro/
 .claude/
@@ -59,6 +60,23 @@ logs/
 .playbook-version
 .playbook-backup/
 .cache/
+
+# Per-developer overrides for the harness Makefile (documented escape
+# hatch for unrecognised stacks); machine-local by design.
+Makefile.local
+
+# Self-deploy surfaces outside a tool's own dot-directory. Codex writes
+# skills under .agents/; Copilot deploys under .github/, which must itself
+# stay tracked for workflows, so its deploy subpaths are ignored
+# individually. AGENTS.md is NOT ignored: this repo tracks a hand-written
+# bridge file there (rules source, like CLAUDE.md).
+.agents/
+.github/agents/
+.github/knowledge-base/
+.github/skills/
+.github/templates/
+.github/prompts/
+.github/copilot-instructions.md
 
 # Mutation testing sandbox
 mutants/

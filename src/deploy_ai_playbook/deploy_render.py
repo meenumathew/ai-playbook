@@ -1,6 +1,6 @@
 """Deploy/prune presentation for the `deploy` command.
 
-Extracted from `cli.py` — this is top-layer presentation code (prints via the
+Extracted from `cli.py`: this is top-layer presentation code (prints via the
 shared consoles, raises `typer.Exit`), not service logic. `cli.py` imports the
 public functions under their old underscore aliases so the call sites and the
 `tests/acceptance/test_deploy.py` monkeypatch seam (`cli._deploy_layered`)
@@ -10,6 +10,7 @@ keep working unchanged.
 from __future__ import annotations
 
 import re
+import stat
 from collections.abc import Callable
 from pathlib import Path
 
@@ -18,6 +19,7 @@ import typer
 from deploy_ai_playbook.backup import backup_deployed_files, write_version_file
 from deploy_ai_playbook.config import load_issue_tracker_provider
 from deploy_ai_playbook.console import console, error_console
+from deploy_ai_playbook.deployment_record import DeploymentScope
 from deploy_ai_playbook.discovery import OVERLAY_DIRS, OVERLAY_TITLES, DeployableFile
 from deploy_ai_playbook.errors import AIPlaybookError
 from deploy_ai_playbook.fs import (
@@ -31,6 +33,7 @@ from deploy_ai_playbook.safety import (
     UnsafeDestinationError,
     WriteAccessError,
     assert_safe_destination,
+    write_text_safely,
 )
 from deploy_ai_playbook.services.deploy import (
     agent_filtered_out,
@@ -71,7 +74,7 @@ def backup_existing_deployment(project_root: Path, tool: Tool, dry_run: bool) ->
 
 
 def print_rollback_hint(backup_path: Path | None, tool: Tool, project_root: Path) -> None:
-    """Point a failed deploy at its backup — the fix is the same whatever broke."""
+    """Point a failed deploy at its backup: the fix is the same whatever broke."""
     if backup_path is None:
         return
     error_console.print(
@@ -100,13 +103,13 @@ def deploy_layered(
     (skip_kb_files for the KB language filter).
 
     Deployed agent frontmatter also gets the model-tier materialization
-    transform (claude only — see `services.deploy.agent_model_tier_transform`);
+    transform (claude only: see `services.deploy.agent_model_tier_transform`);
     notes about skipped/unmapped tiers print once, before the Agents section.
     """
     files_by_overlay = group_deployable_files_by_overlay(discovered_files)
     agent_transform, notes = agent_model_tier_transform(target.tool, project_root)
     for note in notes:
-        console.print(f"[dim]{note}[/dim]")
+        console.print(note, style="dim", markup=False)
 
     for overlay_dir in OVERLAY_DIRS:
         _deploy_overlay_files(
@@ -146,6 +149,7 @@ def _deploy_overlay_files(
             entry=entry,
             overlay_dir=overlay_dir,
             dst_dir=dst_dir,
+            target=target,
             project_root=project_root,
             dry_run=dry_run,
             rewrite=rewrite,
@@ -159,6 +163,7 @@ def _deploy_overlay_file(
     entry: DeployableFile,
     overlay_dir: str,
     dst_dir: Path,
+    target: TargetAdapter,
     project_root: Path,
     dry_run: bool,
     rewrite: dict[str, str],
@@ -172,15 +177,16 @@ def _deploy_overlay_file(
     if overlay_dir == "knowledge-base" and str(relative_inside) in skip_kb_files:
         console.print(f"  [dim]skipped[/dim] {relative_inside}")
         return
+    deployed_relative = target.deployed_overlay_relative(overlay_dir, relative_inside)
     status = copy_file(
         entry.src_path,
-        dst_dir / relative_inside,
+        dst_dir / deployed_relative,
         dry_run,
         rewrite=rewrite,
         safe_root=project_root,
         transform=transform,
     )
-    console.print(f"  {status} {relative_inside}")
+    console.print(f"  {status} {deployed_relative}")
 
 
 def deploy_rules(
@@ -268,7 +274,7 @@ def deploy_harness(
         console.print(
             _deploy_harness_file(src_file, dst_rel, dst_file, project_root, dry_run, force)
         )
-    if target.tool is Tool.claude:
+    if target.tool in {Tool.claude, Tool.codex}:
         telemetry_status = deploy_telemetry_hook_config(project_root, target.tool, dry_run)
         console.print(f"  {telemetry_status}")
         _raise_on_error_status(telemetry_status)
@@ -295,20 +301,39 @@ def _deploy_harness_file(
     """Copy one harness file. Existing files are kept unless `force` is set.
 
     The `kept` message is explicit so adopters can tell whether their local edits
-    survived a redeploy. `--harness-force` overwrites — useful when the upstream
+    survived a redeploy. `--harness-force` overwrites: useful when the upstream
     fixes a bug in `telemetry.sh` or the CI workflow.
     """
     assert_safe_destination(dst_file, project_root)
     exists = dst_file.exists()
     if exists and not force:
+        if dst_file.suffix == ".sh":
+            try:
+                current_mode = stat.S_IMODE(dst_file.stat().st_mode)
+                if not current_mode & stat.S_IXUSR:
+                    if not dry_run:
+                        dst_file.chmod(current_mode | stat.S_IXUSR)
+                    verb = "would repair" if dry_run else "repaired"
+                    return (
+                        f"  [green]{verb} executable bit[/green] {dst_rel} "
+                        "[dim](content kept)[/dim]"
+                    )
+            except OSError as exc:
+                raise WriteAccessError(
+                    f"Cannot repair harness file {dst_file}: "
+                    f"{exc.strerror or exc.__class__.__name__}"
+                ) from exc
         status = "exists, would keep" if dry_run else "exists, kept"
         return f"  [dim]{status}[/dim] {dst_rel} [dim](use --harness-force to overwrite)[/dim]"
     if dry_run:
         verb = "would overwrite" if exists else "would copy"
         return f"  [yellow]{verb}[/yellow] {dst_rel}"
     try:
-        dst_file.parent.mkdir(parents=True, exist_ok=True)
-        dst_file.write_text(src_file.read_text(encoding="utf-8"), encoding="utf-8")
+        write_text_safely(
+            dst_file,
+            src_file.read_text(encoding="utf-8"),
+            project_root,
+        )
         if dst_file.suffix == ".sh":
             dst_file.chmod(0o755)
     except OSError as exc:
@@ -340,7 +365,7 @@ def prune_deployment(
 
     The removed-packs warning compares pack names recorded in `.playbook-version`
     against `current_pack_names` (loaded from `.ai-playbook.toml`). When a pack
-    has been dropped from the config, its files become orphans — adopters
+    has been dropped from the config, its files become orphans: adopters
     should know that's *why* before confirming.
     """
     if not prune:
@@ -349,7 +374,7 @@ def prune_deployment(
         project_root,
         source_root,
         tool,
-        True,  # dry_run preview pass — never delete here
+        True,  # dry_run preview pass: never delete here
         discovered_files,
         skip_files=skip_files,
     )
@@ -377,6 +402,8 @@ def prune_deployment(
             console.print("[yellow]Prune aborted — no files deleted.[/yellow]")
             return
 
+    # Delete exactly the previewed set: files that became orphans between
+    # the preview and the confirmation were never shown to the user.
     pruned = prune_orphaned_files(
         project_root,
         source_root,
@@ -384,6 +411,7 @@ def prune_deployment(
         False,
         discovered_files,
         skip_files=skip_files,
+        allowed={path for path, _status in preview},
     )
     for path, status in pruned:
         console.print(f"  {status} {path}")
@@ -398,6 +426,8 @@ def write_deploy_version(
     skip_files: set[str],
     discovered_files: list | None = None,
     packs: list | None = None,
+    scope: DeploymentScope | None = None,
+    stale_fingerprint: str | None = None,
 ) -> None:
     status = write_version_file(
         project_root,
@@ -408,6 +438,8 @@ def write_deploy_version(
         skip_files=skip_files,
         discovered_files=discovered_files,
         packs=packs,
+        scope=scope,
+        stale_fingerprint=stale_fingerprint,
     )
     console.print(f"\n[bold]Version →[/bold] {project_root / VERSION_FILE}")
     console.print(f"  {status} {VERSION_FILE}")

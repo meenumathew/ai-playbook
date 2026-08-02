@@ -15,22 +15,26 @@ How to cut a new version of ai-playbook.
 ## Steps
 
 ```bash
-# 1. Move unreleased changes to a versioned section
+# 1. Start a release branch from the remote default branch
+git fetch origin main
+git switch -c release/vX.Y.Z origin/main
+
+# 2. Move unreleased changes to a versioned section
 # Edit CHANGELOG.md: rename [Unreleased] contents to [X.Y.Z] - YYYY-MM-DD
 
-# 2. Bump version in pyproject.toml
+# 3. Bump version in pyproject.toml
 # Edit: version = "X.Y.Z"
 
-# 3. Commit the release
+# 4. Commit the release
 git add CHANGELOG.md pyproject.toml
-git commit -m "chore: release vX.Y.Z"
+git commit -m "chore(release): X.Y.Z"   # exact subject auto-release.yml expects (no v prefix)
 
-# 4. Build locally before publishing a tag
+# 5. Build locally before publishing a tag
 rm -rf dist/
 uv build
 uvx twine==6.2.0 check dist/*
 
-# 5. Verify the built wheel installs and deploys cleanly (clean venv)
+# 6. Verify the built wheel installs and deploys cleanly (clean venv)
 venv=$(mktemp -d)/v
 uv venv "$venv"
 uv pip install --python "$venv/bin/python" dist/ai_playbook-X.Y.Z-py3-none-any.whl
@@ -42,13 +46,100 @@ ls "$target/.claude/skills/"   # confirm host-adapter is shipped
 "$venv/bin/ai-playbook" doctor --tool claude -t "$target"
 "$venv/bin/ai-playbook" upgrade-check --tool claude -t "$target"  # exit 0 confirms freshly deployed
 
-# 6. Tag only after local verification
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
+# 7. Push the release branch, open a release PR, and merge it through normal
+# CI, review, and approval gates. Do not push the release commit to main.
+git push -u origin release/vX.Y.Z
 
-# 7. Push main and the tag
-git push origin main
+# 8. Tag only the merged remote default-branch commit
+git fetch origin main
+release_commit=$(git rev-parse origin/main)
+git show "$release_commit:pyproject.toml" | grep 'version = "X.Y.Z"'
+git tag -a vX.Y.Z "$release_commit" -m "Release vX.Y.Z"
+
+# 9. Push only the tag after approval
 git push origin vX.Y.Z
 ```
+
+The release PR must be merged before tagging. The `release_commit` above is the
+verified remote default-branch commit; tagging a local-only release commit can
+publish code that does not exist on `main`.
+
+**Skip steps 8–9 when `auto-release.yml` is configured** (release deploy key
+present): the workflow tags the merged release PR commit automatically. A
+manual tag would race the workflow or fail because the tag already exists.
+Steps 8–9 are the fallback for repos running the release process by hand.
+
+## Automated release PR workflow
+
+`.github/workflows/auto-release.yml` applies the same sequence automatically:
+
+1. A non-release push to `main` runs Python Semantic Release 10.6.1 in
+   no-commit/no-tag/no-push mode.
+2. When releasable conventional commits exist, the workflow commits only the
+   generated version and changelog changes to `release/vX.Y.Z` and opens a
+   release PR.
+3. Normal CI, review, and approval gates run on that PR.
+4. When the release PR is merged, the next workflow run verifies that
+   `origin/main` is the triggering commit, tags that exact commit, and pushes
+   only the tag. The tag starts `release.yml`.
+
+The workflow deliberately does not let semantic-release push a generated
+commit straight to `main`; that would bypass the release-PR contract and fail
+on protected default branches.
+
+### Auto-release credentials
+
+Configure these repository secrets before relying on the workflow:
+
+- `RELEASE_DEPLOY_KEY` (required): an **unencrypted private SSH key**. Add the
+  matching public key at **Settings > Deploy keys** and enable **Allow write
+  access**. The key pushes release/maintenance branches and release tags;
+  checkout continues to use the read-only workflow token.
+- `RELEASE_PR_TOKEN` (optional): a fine-grained personal access token or GitHub
+  App installation token with repository **Pull requests: write** and
+  **Contents: read**. This lets PR-triggered CI start without manual approval.
+  Without it, the workflow uses `GITHUB_TOKEN`; GitHub may put CI for the
+  automation-created PR into an approval-required state.
+
+The workflow validates the private-key format, read authentication, and
+write access before mutating the remote. It uses GitHub's published Ed25519
+host key instead of trusting an unverified `ssh-keyscan` result.
+
+Create a dedicated key pair (do not reuse a personal SSH key):
+
+```bash
+release_key_dir="$(mktemp -d)"
+ssh-keygen -t ed25519 \
+  -C "ai-playbook repository automation" \
+  -f "$release_key_dir/release-key" \
+  -N ""
+gh secret set RELEASE_DEPLOY_KEY \
+  --repo meenumathew/ai-playbook \
+  < "$release_key_dir/release-key"
+ssh-keygen -lf "$release_key_dir/release-key"
+ssh-keygen -lf "$release_key_dir/release-key.pub"
+```
+
+The two fingerprint commands must print the same SHA256 fingerprint. Copy the
+single line from `release-key.pub` into **Settings > Deploy keys > Add deploy
+key**, select **Allow write access**, and save. Keep or securely delete the
+local private key according to the maintainer's credential policy; never add
+either key file to this repository.
+
+### Diagnosing `Permission denied (publickey)`
+
+This error occurs before semantic-release or PyPI:
+
+```text
+git@github.com: Permission denied (publickey).
+```
+
+Replace `RELEASE_DEPLOY_KEY`, derive its public key with
+`ssh-keygen -y -f <private-key-file>`, and register that exact public key under
+**Settings > Deploy keys** with **Allow write access** enabled. A private key
+whose public half is missing, revoked, attached to another repository, or
+read-only cannot create the release branch or tag. Until a `v*` tag is pushed,
+`release.yml` does not run and PyPI Trusted Publishing is never reached.
 
 ## Publish to PyPI
 
@@ -72,14 +163,18 @@ Publishing is automated. The `release.yml` workflow runs on every `v*` tag push 
    - Repository: `ai-playbook`
    - Workflow filename: `release.yml`
    - Environment name: `pypi`
-3. In the GitHub repo, create an environment named `pypi` (Settings → Environments). Optionally restrict it to tag pushes.
+3. In the GitHub repo, create an environment named `pypi` (Settings → Environments). Treat the next two settings as **required**, not optional: a pushed `v*` tag is the sole trigger for a signed, irreversible PyPI publish, so anyone with write access can otherwise release.
+   - On the `pypi` environment: add **required reviewers** and restrict the environment to tag refs (`v*`).
+   - Under Settings → Rules → Rulesets: add a **tag ruleset for `v*`** restricting who can create tags (maintainers only).
 
-After that, the only step to release is pushing a tag: no tokens, no `.pypirc`, no manual `uv publish`.
+After that, the only step to release is pushing a tag: no tokens, no `.pypirc`, no manual `uv publish`. The two settings above are the human gate in front of that tag.
 
 ### Cutting a release
 
 ```bash
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git fetch origin main
+release_commit="$(git rev-parse origin/main)"
+git tag -a vX.Y.Z "$release_commit" -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
@@ -148,7 +243,7 @@ Git tags are not deletable from a publish posture: they are a permanent record o
 ### What you cannot recover
 
 - The wheel that was uploaded. PyPI is append-only by design; the bad bytes are visible to anyone who pins to that version. Yanking hides it from the default resolver but preserves the historical record.
-- The Sigstore signature that was minted at publish time. It stays valid for the wheel even after yanking.
+- The Sigstore signature that was created at publish time. It stays valid for the wheel even after yanking.
 - The SLSA build provenance. Same: historical record, not retractable.
 
 ## OpenSSF Best Practices Badge
@@ -171,4 +266,4 @@ Follows [Semantic Versioning](https://semver.org/):
 ## Post-release
 
 1. Add a fresh `## [Unreleased]` section to `CHANGELOG.md`
-2. Bump `pyproject.toml` to the next planned version (e.g., `1.1.0` for the next minor) so unreleased commits build with a forward-looking version
+2. Leave `pyproject.toml` at the released version. Do **not** pre-bump it to the next planned version: `auto-release.yml` treats any main-branch commit that changes the version (while no matching tag exists) as a merged release PR, tags it, and triggers a real PyPI publish of unreleased code. PyPI is append-only; the only recovery is yank-and-burn the version number. semantic-release computes the next version from commit history when it prepares the next release PR.

@@ -6,7 +6,7 @@ load_when: on CHEATSHEET miss; authoritative routing for exact-topic lookup
 audience: all
 canonical_for: KB routing, topic-to-file map, load-order rule
 cross_refs: all KB files
-verified: 2026-07-17
+verified: 2026-07-30
 ---
 
 # Knowledge Base Index
@@ -15,7 +15,7 @@ Topic → file routing table. Load on demand: do not inline.
 
 ## Loading Rule
 
-Canonical: the KB efficiency rule in `CLAUDE.md` § Knowledge Base (KB): smallest source first, stop when actionable, never weaken gates. What this file adds: on a CHEATSHEET miss, search § Exact Section Routing for the topic, then load the canonical file (or just the cited section when tools support ranges), one at a time.
+Canonical: the KB efficiency rule in `CLAUDE.md` § Knowledge Base (KB): smallest source first, stop when actionable, never weaken gates. What this file adds: on a CHEATSHEET miss, grep § Exact Section Routing for the topic rather than reading this file whole, then load just the section that row cites, one at a time.
 
 ---
 
@@ -31,6 +31,7 @@ The "Load when" column is each file's `load_when:` frontmatter, verbatim (contra
 | `security.md` | Task-core | auth, secrets, permissions, PII, payments, public API, dependency update, untrusted input, JWT, CORS, CSRF, XSS, SQL injection |
 | `design-patterns.md` | Task-core | architecture, domain, service boundary, ports, adapters, hexagonal, DDD, dependency direction, anti-pattern |
 | `style-guide.md` | Task-core | naming, file structure, comments, suppression, lint, format, dead code, refactor commit |
+| `architecture-decisions.md` | Triggered | architecture choice, system structure, deployment model, data ownership, distributed system, cloud architecture, operational complexity, quality attribute, workload profile |
 | `debugging.md` | Triggered | test fail, bug, regression, build failure, deploy failure, fix attempt, flaky test, root cause |
 | `refactoring.md` | Triggered | refactor, smell, structural change, Strangler Fig, Parallel Change, Rule of Three |
 | `performance.md` | Triggered | hot path, performance, N+1, caching, data-heavy, collections, latency, DB loop, API loop, profiling |
@@ -40,6 +41,7 @@ The "Load when" column is each file's `load_when:` frontmatter, verbatim (contra
 | `regression-and-contracts.md` | Triggered | plan changes, scope changes, code generation, OpenAPI, protobuf, GraphQL, migrations, API breaking change, contract change, behavior regression |
 | `incident-response.md` | Triggered | production incident, outage, SEV1, SEV2, postmortem, on-call, triage, war room |
 | `quality-gates.md` | Triggered | quality gate, coverage threshold, critical path, mutation score, make quality, make test, CI gate |
+| `domain-language.md` | Triggered | term definition, glossary, naming, vocabulary, ubiquitous language, what does <term> mean, term drift |
 | `tool-policy.md` | Triggered | tool policy, permission, host adapter, issue fetch, notifier, vendor-neutral, operation ID, agent ↔ skill |
 | `working-agreement.md` | Triggered | collaboration, review size, ownership, disagreement, escalation, agent workflow, operating model |
 | `decision-mapping.md` | Triggered | decision mapping, too big for one session, foggy, unknown decisions, open decisions, decision spike, map the unknowns, multi-session planning, pre-planning decisions |
@@ -47,10 +49,10 @@ The "Load when" column is each file's `load_when:` frontmatter, verbatim (contra
 | `accessibility.md` | Triggered | accessibility, a11y, WCAG, screen reader, keyboard navigation, alt text, ARIA, color contrast, focus, form label, semantic HTML |
 | `philosophy.md` | Reference | design decision, principle, bounded context, cognitive health, context efficiency, teach-back, AI anti-pattern |
 | `design-fundamentals.md` | Reference | cohesion, coupling, abstraction, module property, review finding, design decision, "is this module pulling its weight", LCOM, afferent, efferent, complexity symptom, change amplification, cognitive load, unknown unknowns, software that lasts, strategic vs tactical, design checkpoint |
-| `model-tier.md` | Reference | model tier, advisor, executor, model config, escalation, single model setup |
+| `model-tier.md` | Reference | model tier, model reasoning, advisor, executor, model config, escalation, single model setup |
 | `doc-linting.md` | Reference | docs, vale, markdownlint, lychee, doc lint fail, Diataxis |
 | `testing-techniques.md` | Triggered | property-based, mutation, hypothesis, fast-check, contract test, pact, async test, queue, stream, eventual consistency |
-| `workspaces/README.md` | Triggered | Story declares `workspace:` frontmatter, monorepo per-package overlays, per-workspace quality tier or language conventions |
+| `workspaces/README.md` | Triggered | A story declares `workspace:` frontmatter, or the user mentions a monorepo subpath, or an agent is asked to apply per-workspace settings. |
 
 The system seeds project-specific files from `templates/` on first use and announces the seed. Never skip a missing KB file silently. ADRs: [`docs/adr/`](../docs/adr/) ← [`templates/adr-template.md`](../templates/adr-template.md).
 
@@ -86,7 +88,8 @@ To add a new language: copy `templates/language-conventions-template.md` to `lan
 | `templates/story-spike-template.md` | story-refiner writes a `spike`: timeboxed learning, no code on main, no AC |
 | `templates/research-template.md` | story-refiner writes research |
 | `templates/plan-template.md` | slice-planner writes plan |
-| `templates/review-template.md` | diff-reviewer writes review; code-inspector writes audit |
+| `templates/review-template.md` | diff-reviewer writes a code review |
+| `templates/audit-template.md` | code-inspector writes a repository or module audit |
 | `templates/how-to-template.md` | docs-maintainer writes how-to docs |
 | `templates/runbook-template.md` | docs-maintainer writes runbooks |
 | `templates/domain-language-template.md` | seed `knowledge-base/domain-language.md` on first use |
@@ -156,7 +159,7 @@ To add a new language: copy `templates/language-conventions-template.md` to `lan
 | Test-story cycle | `testing.md` § Test-Story Cycle: When the Deliverable Is Tests |
 | Integration tests (external services) | `testing.md` § Test Types Quick Guide |
 | Post-deploy / post-fix tests (E2E / smoke / sanity) | `testing.md` § Post-Deploy Tests |
-| Acceptance tests (AT) | `testing.md` § Acceptance Test (AT) Standards |
+| Acceptance tests (AT) | `testing.md` § Acceptance Test Standards |
 | 3-layer pyramid | `testing.md` § Test Types Quick Guide |
 | Testability | `testing.md` § When Tests Are Hard to Write (Testability) |
 | Test doubles / mocking | `testing.md` § Test Doubles |
@@ -166,6 +169,9 @@ To add a new language: copy `templates/language-conventions-template.md` to `lan
 | Contract testing | `testing-techniques.md` § Contract Testing |
 | Module depth / shallow modules / deletion test / two-adapter rule for ports | `design-patterns.md` § Module Depth and Seams |
 | When to write an ADR | `docs/adr/README.md` § ADR Decision Criteria + `templates/adr-template.md` |
+| Architecture-impact trigger / workload profile | `architecture-decisions.md` § Architecture-Impact Trigger + § Start With the Data |
+| Architecture quality attributes / trade-offs | `architecture-decisions.md` § Workload Quality Attributes |
+| Evidence before operational complexity | `architecture-decisions.md` § Evidence for Operational Complexity |
 | How-to doc format | `templates/how-to-template.md` |
 | Runbook format | `templates/runbook-template.md` |
 | Bounded contexts | `philosophy.md` § Bounded Contexts + `design-patterns.md` § Strategic DDD Patterns |
@@ -174,25 +180,25 @@ To add a new language: copy `templates/language-conventions-template.md` to `lan
 | Abstraction (deep vs shallow, information hiding) | `design-fundamentals.md` § Abstraction |
 | Building software that lasts / complexity symptoms (change amplification, cognitive load, unknown unknowns) / strategic vs tactical / design it twice / what to hide | `design-fundamentals.md` § Building Software That Lasts |
 | Design checkpoints (new name, new parameter, new import, hard-to-write test, ripple count) + three-question design check | `design-fundamentals.md` § Practical Application |
-| Dual-message exceptions (CWE-209) | `security.md` § Error Response Pattern + `design-patterns.md` § Error Handling |
+| Dual-message exceptions (CWE-209) | `security.md` § Error Response Pattern (design hook: `design-patterns.md` § Error Handling) |
 | Project quality gates | `knowledge-base/quality-gates.md` (seed from `templates/quality-gates-template.md` if missing) |
 | Feature flags | `feature-flags.md` |
 | Flag categories (release / experiment / ops / permission) | `feature-flags.md` § Flag Categories |
 | Flag registry (live flags, owners, cleanup dates) | `feature-flags.md` § Flag Registry → `knowledge-base/feature-flag-registry.md` (seed from `templates/feature-flag-registry-template.md` if missing) |
 | DORA delivery metrics (deploy frequency, lead time, change failure rate, MTTR) | `release.md` § Delivery Metrics (DORA) |
 | Golden signals / RED / USE metric methods | `observability.md` § Metrics |
-| Legacy / diff coverage gate (`diff-cover`) | `quality-gates.md` § Coverage Policy |
+| Low-coverage / diff coverage gate (`diff-cover`) | `quality-gates.md` § Coverage Policy |
 | Python conventions | `languages/python.md` |
 | Python Protocol ports / TypedDict / async patterns | `languages/python.md` § Reference Notes |
 | Python pytest conventions | `languages/testing-python.md` |
 | Python pytest techniques (async / time-dependent / HTTP mocking / testcontainers / parallel xdist) | `languages/testing-python.md` § Python pytest Techniques |
 | Session-end learning | `skills/retrospective/SKILL.md` |
 | Release gates / merge strategies / post-deploy smoke / rollback / hotfix | `release.md` |
-| Validate existing behaviour / regression detection / code-generation completeness / contract preservation (PROJ-2140 pattern) | `regression-and-contracts.md` |
+| Validate existing behaviour / regression detection / code-generation completeness / contract preservation | `regression-and-contracts.md` |
 | Severity matrix / war-room rules / blameless postmortem / follow-up tracking | `incident-response.md` |
 | Deploy-time signals (error rate, latency, saturation thresholds) | `observability.md` § Deploy-Time Signals |
 | Incident telemetry checklist | `observability.md` § Incident Telemetry |
-| Host PR/MR operations (`pr.diff`, `pr.review`, `pr.create`, `pr.merge`, `pr.checks`) | `skills/host-adapter/SKILL.md` |
+| Host PR/MR operations (`host.pr.diff`, `host.pr.review`, `host.pr.create`, `host.pr.merge`, `host.pr.checks`) | `skills/host-adapter/SKILL.md` |
 | `.ai-playbook.toml [host]` config | `skills/host-adapter/SKILL.md` § Configuration |
 | GitLab issue fetch | `skills/issue-fetch/SKILL.md` § GitLab Adapter |
 | Bitbucket Cloud issue fetch | `skills/issue-fetch/SKILL.md` § Bitbucket Adapter |

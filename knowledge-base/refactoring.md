@@ -78,7 +78,7 @@ When you detect a smell, apply the corresponding move.
 
 - Dead code → `style-guide.md` § Dead Code
 - Comments explaining *what* → `style-guide.md` § Comments
-- Primitive Obsession → `design-patterns.md` § Anti-Patterns
+- Primitive Obsession → `design-patterns.md` § Anti-Patterns: Flag in Review
 - Magic Numbers → `style-guide.md` § Naming (use named constants)
 
 ---
@@ -89,7 +89,7 @@ For changes too large for inline refactoring:
 
 | Move | When | Agent action |
 |------|------|-------------|
-| **Strangler Fig** | Replacing a legacy module | Build replacement alongside; route traffic incrementally; retire old when migration complete. Rollback possible at each step. |
+| **Strangler Fig** | Replacing an existing module you cannot rewrite in place | Build replacement alongside; route traffic incrementally; retire old when migration complete. Rollback possible at each step. |
 | **Parallel Change (Expand-Contract)** | Breaking interface change | Add new interface alongside old; migrate all callers; delete old. No flag day needed. |
 | **Branch by Abstraction** | Replacing an implementation behind a stable interface | Introduce an abstraction over the existing implementation; build the new implementation behind the same abstraction; switch callers; remove the old. Lets the change land in trunk-friendly increments without a long-lived branch. |
 

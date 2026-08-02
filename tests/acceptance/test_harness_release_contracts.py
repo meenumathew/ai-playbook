@@ -11,7 +11,10 @@ from pathlib import Path
 import pytest
 
 from deploy_ai_playbook.cli import get_source_root
+from deploy_ai_playbook.paths import HARNESS_FILES
 from tests import ALL_AGENTS
+
+pytestmark = pytest.mark.repo_contract
 
 FULL_SHA_RE = re.compile(r"[a-f0-9]{40}")
 
@@ -118,6 +121,29 @@ def test_scorecard_uses_sarif_upload_with_least_privilege_permissions():
     assert "github/codeql-action/upload-sarif@" in job
 
 
+def test_pre_commit_autoupdate_uses_job_token_not_release_deploy_key():
+    """The monthly hook-bump job is low-trust (it executes third-party
+    pre-commit repos): it must push with the job-scoped GITHUB_TOKEN,
+    whose pushes cannot trigger other workflows, and must never touch
+    the release deploy key that can push v* tags into release.yml."""
+    workflow = _workflow_text("pre-commit-autoupdate.yml")
+    job = _workflow_job(workflow, "autoupdate")
+    ssh_action = _repo_file(".github", "actions", "configure-release-ssh", "action.yml").read_text()
+
+    assert re.search(r"^permissions:\n\s+contents:\s+read", workflow, re.MULTILINE)
+    assert "RELEASE_DEPLOY_KEY" not in workflow
+    assert "configure-release-ssh" not in workflow
+    assert "contents: write" in job
+    assert "pull-requests: write" in job
+    assert "git push --force" not in job
+    assert "git push origin" in job
+    # The composite action stays deploy-key-validating for the release
+    # workflows that legitimately use it.
+    assert "git ls-remote origin HEAD" in ssh_action
+    assert "git push --dry-run" in ssh_action
+    assert "UserKnownHostsFile" in ssh_action
+
+
 def test_release_workflow_generates_sbom_provenance_and_sigstore_signatures():
     workflow = _workflow_text("release.yml")
     build = _workflow_job(workflow, "build")
@@ -180,14 +206,35 @@ def test_ci_and_release_validate_built_wheel_metadata_before_smoke():
             f"{name} must validate wheel/sdist metadata with pinned twine"
         )
 
-    # Every supported deploy target gets smoke coverage — a cursor-specific
+    # Every supported deploy target gets smoke coverage: a cursor-specific
     # regression must not be able to ship unseen.
-    assert "for tool in claude copilot cursor kiro" in ci_workflow
-    assert "for tool in claude copilot cursor kiro" in release_validate
+    assert "for tool in claude copilot codex cursor kiro" in ci_workflow
+    assert "for tool in claude copilot codex cursor kiro" in release_validate
     assert "uv pip install" in ci_workflow
     assert "uv pip install" in release_validate
     assert "ai-playbook doctor --tool" in ci_workflow
     assert '"$venv/bin/ai-playbook" doctor --tool' in release_validate
+
+
+def test_ci_runs_acceptance_suite_against_installed_wheel():
+    """CLI-behaviour ATs must exercise the shipped artifact, not only the source tree.
+
+    The suite splits in two: CLI-behaviour ATs (valid against the installed
+    wheel) and repo-contract tests marked `repo_contract` (need repo-only
+    files like .github/ and evals/ that are correctly not packaged). CI runs
+    the wheel-valid subset inside the clean-venv wheel install, overriding
+    pythonpath so the installed package is imported instead of src/.
+    """
+    ci_workflow = _workflow_text("ci.yml")
+    assert "pytest tests/acceptance" in ci_workflow, (
+        "ci.yml must run the acceptance suite against the installed wheel"
+    )
+    assert '-m "not repo_contract"' in ci_workflow, (
+        "ci.yml wheel AT run must deselect repo-contract tests"
+    )
+    assert "-o pythonpath=" in ci_workflow, (
+        "ci.yml wheel AT run must clear pythonpath so src/ does not shadow the wheel"
+    )
 
 
 def test_adr_index_in_readme_matches_adr_files():
@@ -284,45 +331,48 @@ def test_teachback_trailer_enforced_and_documented():
     assert "check-teachback.sh" in paths_py
 
 
-def test_teachback_hook_enforces_supported_commit_types(tmp_path: Path):
-    source_root = get_source_root()
-    hook = source_root / "harness" / "check-teachback.sh"
-
-    cases = {
-        "missing": ("fix(auth): patch token refresh\n", 1, "Missing final Teach-back trailer"),
-        "present": (
+@pytest.mark.parametrize(
+    ("name", "message", "expected_code", "stderr_fragment"),
+    [
+        ("missing", "fix(auth): patch token refresh\n", 1, "Missing final Teach-back trailer"),
+        (
+            "present",
             "fix(auth): patch token refresh\n\nTeach-back: token refresh lives in auth.\n",
             0,
             "",
         ),
-        "present-not-final": (
+        (
+            "present-not-final",
             "fix(auth): patch token refresh\n\n"
             "Teach-back: token refresh lives in auth.\n\n"
             "More body text.\n",
             1,
             "final Teach-back trailer",
         ),
-        "docs-skip": ("docs(readme): update wording\n", 0, ""),
-        "trailing-coauthor": (
+        ("docs-skip", "docs(readme): update wording\n", 0, ""),
+        (
             # Claude Code appends Co-Authored-By by default; trailers after
             # Teach-back must stay legal (git trailer blocks are ordered-free).
+            "trailing-coauthor",
             "fix(auth): patch token refresh\n\n"
             "Teach-back: token refresh lives in auth.\n"
             "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>\n",
             0,
             "",
         ),
-        "trailing-signoff": (
+        (
             # `git commit -s` (DCO) appends Signed-off-by as the final line.
+            "trailing-signoff",
             "feat(api): add endpoint\n\n"
             "Teach-back: handler lives in api/routes.py.\n"
             "Signed-off-by: Dev <dev@example.com>\n",
             0,
             "",
         ),
-        "verbose-scissors-diff": (
+        (
             # `git commit -v` includes the staged diff below a scissors line;
             # diff lines are not part of the message and must be ignored.
+            "verbose-scissors-diff",
             "fix(auth): patch token refresh\n\n"
             "Teach-back: token refresh lives in auth.\n"
             "# ------------------------ >8 ------------------------\n"
@@ -331,36 +381,41 @@ def test_teachback_hook_enforces_supported_commit_types(tmp_path: Path):
             0,
             "",
         ),
-        "fixup-skip": ("fixup! fix(auth): patch token refresh\n", 0, ""),
-        "squash-skip": ("squash! feat(api): add endpoint\n", 0, ""),
-        "blank-first-line": (
+        ("fixup-skip", "fixup! fix(auth): patch token refresh\n", 0, ""),
+        ("squash-skip", "squash! feat(api): add endpoint\n", 0, ""),
+        (
             # A leading blank line must not bypass validation; git strips it
             # during cleanup, so the landed subject is still checked here.
+            "blank-first-line",
             "\nfix(auth): patch token refresh\n",
             1,
             "Missing final Teach-back",
         ),
-        "breaking-missing": ("feat!: change auth contract\n", 1, "Missing final Teach-back"),
-        "release-type": ("release: cut v1.0.0\n", 1, "Unsupported commit type"),
-        "unknown-type": ("wip: patch token refresh\n", 1, "Unsupported commit type"),
-        "bad-format": ("fix token refresh\n", 1, "Unsupported commit message format"),
-        "generated-merge": ("Merge branch 'main' into feature\n", 0, ""),
-    }
+        ("breaking-missing", "feat!: change auth contract\n", 1, "Missing final Teach-back"),
+        ("release-type", "release: cut v1.0.0\n", 1, "Unsupported commit type"),
+        ("unknown-type", "wip: patch token refresh\n", 1, "Unsupported commit type"),
+        ("bad-format", "fix token refresh\n", 1, "Unsupported commit message format"),
+        ("generated-merge", "Merge branch 'main' into feature\n", 0, ""),
+    ],
+)
+def test_teachback_hook_enforces_supported_commit_types(
+    tmp_path: Path, name: str, message: str, expected_code: int, stderr_fragment: str
+):
+    """One case per commit-message shape: a failing case no longer masks the rest."""
+    hook = get_source_root() / "harness" / "check-teachback.sh"
+    message_file = tmp_path / name
+    message_file.write_text(message)
 
-    for name, (message, expected_code, stderr_fragment) in cases.items():
-        message_file = tmp_path / name
-        message_file.write_text(message)
+    result = subprocess.run(  # noqa: S603 - test executes a repo-owned shell hook.
+        ["/bin/sh", str(hook), str(message_file)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
-        result = subprocess.run(  # noqa: S603 - test executes a repo-owned shell hook.
-            ["/bin/sh", str(hook), str(message_file)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        assert result.returncode == expected_code, f"{name}: {result.stderr}"
-        if stderr_fragment:
-            assert stderr_fragment in result.stderr
+    assert result.returncode == expected_code, f"{name}: {result.stderr}"
+    if stderr_fragment:
+        assert stderr_fragment in result.stderr
 
 
 def test_repo_contributor_hooks_enforce_teach_back_commit_messages():
@@ -425,7 +480,7 @@ def test_security_pre_commit_hooks_share_pinned_sha_across_repo_and_harness():
     to a newer pinned SHA but `harness/` lags, every adopter silently runs
     older rules. This test makes that drift loud.
 
-    Scope is intentionally narrow — only the security-critical repos are pinned
+    Scope is intentionally narrow: only the security-critical repos are pinned
     to identical SHAs:
       - `gitleaks` (secret detection)
       - `pre-commit/pre-commit-hooks` (provides `detect-private-key`)
@@ -498,6 +553,7 @@ def test_repo_quality_contract_has_makefile_entrypoint():
         "test",
         "shellcheck",
         "docs-lint",
+        "security",
         "eval-structure",
         "eval-calibrate",
     ):
@@ -515,6 +571,9 @@ def test_repo_quality_contract_has_makefile_entrypoint():
     assert "evals/run_eval.py check-structure" in makefile
     assert "shellcheck" in makefile
     assert "harness/check-teachback.sh harness/telemetry.sh" in makefile
+    assert (
+        "uvx --python 3.12 pip-audit==2.10.0 --strict --requirement /tmp/runtime-requirements.txt"
+    ) in makefile
 
 
 def test_wheel_force_include_matches_harness_files_contract():
@@ -524,10 +583,6 @@ def test_wheel_force_include_matches_harness_files_contract():
     silently end up in every adopter's wheel. Pinning to the contract keeps
     repo-internal helpers (e.g. tools/) from leaking into shipped data.
     """
-    import tomllib
-
-    from deploy_ai_playbook.paths import HARNESS_FILES
-
     source_root = get_source_root()
     pyproject = tomllib.loads((source_root / "pyproject.toml").read_text())
     force_include = pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
@@ -571,6 +626,7 @@ def test_secrets_scanning_shipped_and_documented():
     assert "pre-commit==" in ci_workflow
     assert "run gitleaks --all-files" in ci_workflow
     assert "run detect-private-key --all-files" in ci_workflow
+    assert "uvx --python 3.12 pip-audit==2.10.0" in ci_workflow
 
     security_md = (source_root / "knowledge-base" / "security.md").read_text()
     assert "gitleaks" in security_md
@@ -664,7 +720,7 @@ def test_changelog_skills_line_matches_shipped_skills():
 
 
 def test_pre_commit_revs_are_pinned_to_full_commit_shas():
-    """pre-commit `rev:` is a git ref — a moved tag swaps the hook silently.
+    """pre-commit `rev:` is a git ref: a moved tag swaps the hook silently.
 
     Pin to 40-char SHAs (use `pre-commit autoupdate --freeze`) so the same
     supply-chain hardening that applies to GitHub Actions also applies to
@@ -694,6 +750,9 @@ def test_release_validate_runs_security_scans():
     validate = _workflow_job(workflow, "validate")
 
     assert "pip-audit==" in validate, "release validate must run pinned pip-audit"
+    assert "uvx --python 3.12 pip-audit==2.10.0" in validate, (
+        "release validate pip-audit must use the supported Python runtime"
+    )
     assert "--strict" in validate, "release validate pip-audit must use --strict"
     assert "bandit==" in validate, "release validate must run pinned bandit"
     assert "run gitleaks --all-files" in validate, (
@@ -705,7 +764,7 @@ def test_release_validate_runs_security_scans():
 
 
 def test_eval_drift_workflow_is_least_privilege_and_scans_dependencies():
-    """eval-drift is opt-in (manual dispatch) and pulls a secret — keep its surface small."""
+    """eval-drift is opt-in (manual dispatch) and pulls a secret: keep its surface small."""
     workflow = _workflow_text("eval-drift.yml")
     judge = _workflow_job(workflow, "judge")
 
@@ -713,14 +772,17 @@ def test_eval_drift_workflow_is_least_privilege_and_scans_dependencies():
     assert re.search(r"^permissions:\n\s+contents:\s+read", workflow, re.MULTILINE), (
         "eval-drift.yml must declare top-level permissions: contents: read"
     )
-    # Job-level reaffirmation is defence-in-depth — the same pattern other
+    # Job-level reaffirmation is defence-in-depth: the same pattern other
     # workflows in this repo use.
     assert re.search(r"^\s+permissions:\n\s+contents:\s+read", judge, re.MULTILINE), (
         "eval-drift.yml judge job must restate permissions: contents: read"
     )
     # The drift run must run pip-audit so a manual drift check also catches new CVEs in deps.
     assert "pip-audit==" in judge, "eval-drift must run pinned pip-audit when the drift job runs"
-    # ANTHROPIC_API_KEY must only be referenced where it is actually used —
+    assert "uvx --python 3.12 pip-audit==2.10.0" in judge, (
+        "eval-drift pip-audit must use the supported Python runtime"
+    )
+    # ANTHROPIC_API_KEY must only be referenced where it is actually used:
     # the detection step must NOT inject it into env (would widen the surface
     # any future change to the detection step has to be reviewed against).
     detection_step_re = re.compile(
@@ -747,16 +809,25 @@ def test_mutation_testing_is_dedicated_baseline_regression_gate():
     assert "paths:" in mutation_workflow
     assert "src/deploy_ai_playbook/**" in mutation_workflow
     assert "schedule:" in mutation_workflow
-    assert "mutmut run --max-children 4" in mutation_workflow
-    assert "mutmut export-cicd-stats" in mutation_workflow
-    assert "tools/check-mutation-baseline.py" in mutation_workflow
+    assert "run: make mutation" in mutation_workflow
+    makefile = _repo_file("Makefile").read_text()
+    assert "mutation:" in makefile
+    assert "rm -rf mutants" in makefile
+    assert "mutmut run --max-children 4" in makefile
+    assert "mutmut export-cicd-stats" in makefile
+    assert "tools/check-mutation-baseline.py" in makefile
 
     baseline = json.loads(_repo_file("mutation-baseline.json").read_text(encoding="utf-8"))
-    # Ratchet snapshot from CI run 29627561298 (4007 mutants, 580 survived,
-    # 436 timeout). Raising the baseline requires editing BOTH files — this
-    # pin is the friction that keeps that deliberate. Lowering is welcome.
-    assert baseline["thresholds"]["max_survived"] == 600
-    assert baseline["thresholds"]["max_timeout"] == 500
+    # Runner speed can reclassify timeouts as survivors, so quality is ratcheted
+    # on their combined rate while timeout retains an infrastructure ceiling.
+    # A rate keeps source growth from becoming an automatic regression.
+    # STRUCTURE-MARKER: pin the schema shape, not the ratchet values: those
+    # legitimately move when the baseline is regenerated (a two-place ratchet
+    # is exactly the drift class this file polices elsewhere).
+    assert baseline["version"] == 3
+    assert isinstance(baseline["thresholds"]["max_unresolved_basis_points"], int)
+    assert "max_survived" not in baseline["thresholds"]
+    assert isinstance(baseline["thresholds"]["max_timeout"], int)
     assert baseline["thresholds"]["max_segfault"] == 0
 
     pyproject = tomllib.loads(_repo_file("pyproject.toml").read_text(encoding="utf-8"))
@@ -779,6 +850,34 @@ def test_generated_wheels_are_not_kept_at_repo_root():
     assert "*.whl" in (source_root / ".gitignore").read_text(encoding="utf-8")
 
 
+def test_repo_gitignore_covers_artifact_dirs_and_deploy_surfaces():
+    """Dogfooding must not leak artifacts: every workflow artifact directory
+    (canonical list: services/artifacts.ARTIFACT_DIRECTORIES) and every
+    root-level deploy surface of every tool must be ignored in this repo."""
+    from deploy_ai_playbook.paths import TOOL_DESTINATIONS
+    from deploy_ai_playbook.services.artifacts import ARTIFACT_DIRECTORIES
+
+    gitignore = (get_source_root() / ".gitignore").read_text(encoding="utf-8")
+    lines = {line.strip().rstrip("/") for line in gitignore.splitlines()}
+
+    for directory in ARTIFACT_DIRECTORIES:
+        assert directory in lines, f".gitignore must ignore workflow artifact dir {directory}/"
+
+    # Surfaces a self-deploy would create. Ignored either at the root
+    # segment (`.codex`) or as a full path (`.github/agents`: `.github`
+    # itself must stay tracked for workflows). Root rules files are the
+    # exception: CLAUDE.md is the canonical source and AGENTS.md is the
+    # tracked hand-written bridge to it, so both stay tracked.
+    for destinations in TOOL_DESTINATIONS.values():
+        for destination in destinations.values():
+            if destination in {"CLAUDE.md", "AGENTS.md"}:
+                continue
+            root_segment = destination.split("/", 1)[0]
+            assert root_segment in lines or destination.rstrip("/") in lines, (
+                f".gitignore must ignore deploy surface {destination} (root segment or full path)"
+            )
+
+
 def test_harness_security_template_is_shipped_and_hardened():
     """harness/security.yml ships to adopters, so it must meet the same bar."""
     source_root = get_source_root()
@@ -790,7 +889,7 @@ def test_harness_security_template_is_shipped_and_hardened():
     assert re.search(r"^permissions:\n\s+contents:\s+read", text, re.MULTILINE), (
         "harness/security.yml must declare top-level permissions: contents: read"
     )
-    # Required job set — CodeQL + Scorecard + secret scan + dependency review.
+    # Required job set: CodeQL + Scorecard + secret scan + dependency review.
     for job_name in ("codeql", "scorecard", "gitleaks", "dependency-review"):
         assert re.search(rf"^  {job_name}:", text, re.MULTILINE), (
             f"harness/security.yml must declare a {job_name!r} job"
@@ -819,7 +918,8 @@ def test_harness_security_template_is_shipped_and_hardened():
         "ship harness/security.yml"
     )
 
-    # security.yml's header claims Dependabot updates the pinned SHAs weekly —
+    # security.yml's header claims Dependabot updates the pinned SHAs weekly:
+
     # the deployed dependabot.yml is what makes that claim true.
     dependabot = source_root / "harness" / "dependabot.yml"
     assert dependabot.exists(), "harness/dependabot.yml must ship alongside security.yml"
@@ -836,7 +936,7 @@ def test_playbook_professional_language_lint_is_enforced():
     """Vale is wired into pre-commit + CI and the Playbook style pack is loaded.
 
     Word-list contents (banned phrases, role labels, contractions) live in the
-    YAML rule files themselves. The test does not duplicate them — that would
+    YAML rule files themselves. The test does not duplicate them: that would
     couple the suite to editorial decisions and force two-place edits whenever
     the style guide changes.
     """
@@ -911,23 +1011,189 @@ def test_eval_drift_has_standard_agent_baselines():
     assert "evals/run_eval.py validate-samples" in workflow
 
 
-def test_telemetry_script_captures_tokens():
+# Variables through which a parent make or shell can leak overrides into
+# the sandboxed runs: STACK itself, plus make's own channels (MAKEFLAGS
+# carries command-line overrides such as `make test STACK=weird`;
+# MAKEFILES injects extra include files).
+_MAKE_LEAK_VARS = ("STACK", "MAKEFLAGS", "MFLAGS", "GNUMAKEFLAGS", "MAKEFILES", "MAKELEVEL")
+
+
+def _run_harness_make(
+    tmp_path: Path, *goals: str, env_overrides: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run the shipped harness Makefile inside a sandbox directory.
+
+    The Makefile is copied into the sandbox so stack-sentinel files
+    (pyproject.toml, go.mod, ...) and Makefile.local are fully controlled
+    by each test. Goals run with -n so no real toolchain executes.
+    Hermetic env: make-override channels are stripped so a developer or
+    CI matrix exporting STACK (directly or via MAKEFLAGS) cannot change
+    what these sandboxes observe; tests opt back in via env_overrides.
+    """
+    make = shutil.which("make")
+    assert make, "make is required to test the harness Makefile"
+    shutil.copy(get_source_root() / "harness" / "Makefile", tmp_path / "Makefile")
+    env = {k: v for k, v in os.environ.items() if k not in _MAKE_LEAK_VARS}
+    env.update(env_overrides or {})
+    return subprocess.run(  # noqa: S603 - test executes make on a repo-owned Makefile.
+        [make, "-f", "Makefile", "-n", *goals],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+
+def test_makefile_local_rescues_unknown_stack(tmp_path: Path):
+    """The documented escape hatch must work: on an unrecognised stack,
+    a Makefile.local defining STACK and the command vars wins over
+    detection, and the unknown-stack parse error must not fire."""
+    (tmp_path / "Makefile.local").write_text(
+        "STACK := custom\n"
+        "FORMAT_CMD := echo format\n"
+        "FORMAT_CHECK_CMD := echo format-check\n"
+        "LINT_CMD := echo lint\n"
+        "TYPECHECK_CMD := echo typecheck\n"
+        "TEST_CMD := echo test\n"
+    )
+
+    result = _run_harness_make(tmp_path, "quality")
+
+    assert "Cannot continue without a known stack" not in result.stderr
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+
+
+def test_stack_detection_still_selects_known_stack(tmp_path: Path):
+    """A recognised sentinel keeps working exactly as before the override
+    reordering: detection picks the stack and wires its commands."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sandbox'\n")
+
+    result = _run_harness_make(tmp_path, "help")
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "Detected stack: python" in result.stdout
+    assert "uv run ruff format" in result.stdout
+
+
+def test_makefile_local_partial_override_wins_on_recognised_stack(tmp_path: Path):
+    """A Makefile.local that overrides only some command vars must win on
+    a recognised stack too: the documented contract is "override any
+    *_CMD in Makefile.local", not "override only with a full set"."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sandbox'\n")
+    (tmp_path / "Makefile.local").write_text("FORMAT_CMD := echo custom-format\n")
+
+    result = _run_harness_make(tmp_path, "format")
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "echo custom-format" in result.stdout
+    assert "ruff format ." not in result.stdout
+
+
+def test_environment_stack_variable_does_not_bypass_detection(tmp_path: Path):
+    """Only a Makefile.local assignment may short-circuit detection: an
+    inherited STACK environment variable (a common CI matrix name) must
+    leave sentinel detection in charge."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sandbox'\n")
+
+    result = _run_harness_make(tmp_path, "help", env_overrides={"STACK": "weird"})
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "Detected stack: python" in result.stdout
+
+
+def test_makefile_local_conditional_stack_stays_inert_on_recognised_stack(tmp_path: Path):
+    """A defensive `STACK ?= custom` in Makefile.local must stay a no-op
+    when detection recognises the stack: detection assigns first, so the
+    conditional never fires and the detected commands stay wired."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sandbox'\n")
+    (tmp_path / "Makefile.local").write_text("STACK ?= custom\n")
+
+    result = _run_harness_make(tmp_path, "help")
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "Detected stack: python" in result.stdout
+    assert "uv run ruff format" in result.stdout
+
+
+def test_makefile_local_append_applies_once(tmp_path: Path):
+    """`TEST_CMD += --verbose` in Makefile.local must append exactly once:
+    the override file is included a single time, so appended values never
+    double."""
+    (tmp_path / "Makefile.local").write_text(
+        "STACK := custom\n"
+        "FORMAT_CMD := echo format\n"
+        "FORMAT_CHECK_CMD := echo format-check\n"
+        "LINT_CMD := echo lint\n"
+        "TYPECHECK_CMD := echo typecheck\n"
+        "TEST_CMD := echo test\n"
+        "TEST_CMD += --verbose\n"
+    )
+
+    result = _run_harness_make(tmp_path, "test")
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "echo test --verbose" in result.stdout
+    assert "--verbose --verbose" not in result.stdout
+
+
+def test_makefile_local_custom_target_parses_without_warnings(tmp_path: Path):
+    """Convenience targets defined in Makefile.local must not produce
+    'overriding commands' warnings: the override file is parsed once."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sandbox'\n")
+    (tmp_path / "Makefile.local").write_text("mytarget:\n\t@echo custom\n")
+
+    result = _run_harness_make(tmp_path, "help")
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "overriding commands" not in result.stderr
+
+
+def test_unknown_stack_without_override_still_fails_with_guidance(tmp_path: Path):
+    """No sentinel and no Makefile.local: the parse-time error must stay,
+    and it must keep pointing adopters at the Makefile.local escape hatch."""
+    result = _run_harness_make(tmp_path, "quality")
+
+    assert result.returncode != 0
+    assert "Cannot continue without a known stack" in result.stderr
+    combined = result.stdout + result.stderr
+    assert "set STACK and *_CMD vars in Makefile.local" in combined
+
+
+def test_shellcheck_disables_carry_justification():
+    """No suppression without justification: every `shellcheck disable`
+    pragma in the harness scripts needs an adjacent comment saying why
+    the rule is safe to silence here."""
+    failures: list[str] = []
+    for script in sorted((get_source_root() / "harness").glob("*.sh")):
+        lines = script.read_text().splitlines()
+        for line_number, line in enumerate(lines, start=1):
+            if "shellcheck disable" not in line:
+                continue
+            preceding = lines[line_number - 2].strip() if line_number >= 2 else ""
+            has_comment_above = preceding.startswith("#") and "shellcheck" not in preceding
+            has_inline_reason = bool(re.search(r"disable=\S+\s+#\s*\S", line))
+            if not (has_comment_above or has_inline_reason):
+                failures.append(f"{script.name}:{line_number}: {line.strip()}")
+
+    assert not failures, "shellcheck disable without justification comment:\n  " + "\n  ".join(
+        failures
+    )
+
+
+def test_telemetry_script_declares_privacy_minimal_schema():
     source_root = get_source_root()
     script = (source_root / "harness" / "telemetry.sh").read_text()
 
-    for field in (
-        "input_tokens",
-        "output_tokens",
-        "cache_creation_input_tokens",
-        "cache_read_input_tokens",
-    ):
-        assert field in script
-    assert "--argjson tokens" in script
-    assert "session_id:$session_id" in script
+    assert "Never stores or transmits session IDs" in script
+    assert "{timestamp:$timestamp,source:$source,turns:$turns,active_agent:$active_agent}" in script
 
     status_cmd = (source_root / "commands" / "status.md").read_text()
-    assert "<model>" in status_cmd
-    assert "in=" in status_cmd and "out=" in status_cmd
+    assert "<timestamp>  <source>  <agent>  turns=<N>" in status_cmd
+    assert ".claude/usage.jsonl" in status_cmd
+    assert ".codex/usage.jsonl" in status_cmd
+    assert "<model>" not in status_cmd
+    assert "cache_r=" not in status_cmd
 
 
 def test_telemetry_script_writes_jsonl_usage_event(tmp_path: Path):
@@ -946,9 +1212,10 @@ def test_telemetry_script_writes_jsonl_usage_event(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     usage_log = tmp_path / ".claude" / "usage.jsonl"
     event = json.loads(usage_log.read_text().strip())
-    assert {"timestamp", "session_id", "turns", "active_agent", "model"}.issubset(event)
-    assert event["session_id"] in {"session-123", "unknown"}
+    assert set(event) == {"timestamp", "source", "turns", "active_agent"}
+    assert event["source"] == "claude"
     assert event["turns"] == 0
+    assert "session-123" not in usage_log.read_text()
 
 
 def test_telemetry_script_prefers_active_agent_marker_over_heuristic(tmp_path: Path):
@@ -982,9 +1249,9 @@ def test_telemetry_script_prefers_active_agent_marker_over_heuristic(tmp_path: P
     assert event["active_agent"] == "diff-reviewer"
 
 
-def test_telemetry_script_rolls_up_tokens_when_jq_available(tmp_path: Path):
+def test_telemetry_script_does_not_persist_sensitive_transcript_fields(tmp_path: Path):
     if shutil.which("jq") is None:
-        pytest.skip("jq is required for telemetry token rollup")
+        pytest.skip("jq is required for transcript field handling")
 
     transcript = tmp_path / "transcript.jsonl"
     transcript.write_text(
@@ -1044,21 +1311,17 @@ def test_telemetry_script_rolls_up_tokens_when_jq_available(tmp_path: Path):
 
     assert result.returncode == 0, result.stderr
     event = json.loads((tmp_path / ".claude" / "usage.jsonl").read_text().strip())
-    assert event["session_id"] == "session-123"
+    assert set(event) == {"timestamp", "source", "turns", "active_agent"}
     assert event["turns"] == 3
     assert event["active_agent"] == "story-refiner"
-    assert event["model"] == "claude-a"
-    assert event["tokens"] == {
-        "input": 8,
-        "output": 11,
-        "cache_creation": 1,
-        "cache_read": 8,
-    }
+    serialized = json.dumps(event)
+    for sensitive in ("session-123", "claude-a", "claude-b", "input_tokens", "output_tokens"):
+        assert sensitive not in serialized
 
 
-def test_telemetry_script_json_escapes_payload_fields(tmp_path: Path):
+def test_telemetry_script_ignores_hostile_sensitive_payload_fields(tmp_path: Path):
     if shutil.which("jq") is None:
-        pytest.skip("jq is required for telemetry JSON escaping")
+        pytest.skip("jq is required for telemetry event writing")
 
     script = get_source_root() / "harness" / "telemetry.sh"
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(tmp_path)}
@@ -1077,7 +1340,8 @@ def test_telemetry_script_json_escapes_payload_fields(tmp_path: Path):
     lines = (tmp_path / ".claude" / "usage.jsonl").read_text().splitlines()
     assert len(lines) == 1
     event = json.loads(lines[0])
-    assert event["session_id"] == 'session-"quoted"\nnext'
+    assert set(event) == {"timestamp", "source", "turns", "active_agent"}
+    assert 'session-"quoted"\nnext' not in lines[0]
 
 
 def test_workspace_overlay_wired_into_story_template_and_kb():
@@ -1108,7 +1372,7 @@ def test_teachback_type_lists_stay_in_sync_between_hook_and_git_skill():
     """The commit-type lists must match between mechanism and canon.
 
     The required/skip type lists were enumerated in three docs
-    plus the hook. Consolidation left exactly two copies — the enforcing hook
+    plus the hook. Consolidation left exactly two copies: the enforcing hook
     (harness/check-teachback.sh) and the canonical doc home
     (skills/git/SKILL.md § Teach-back Trailer). This pin keeps them identical;
     every other file cites the skill section instead of enumerating.
@@ -1153,7 +1417,7 @@ def test_teachback_type_lists_stay_in_sync_between_hook_and_git_skill():
 def test_no_sha_is_pinned_for_two_different_actions():
     """No commit SHA may appear as the pin for two different action repos.
 
-    A commit SHA exists in exactly one repo — two distinct `owner/repo`
+    A commit SHA exists in exactly one repo: two distinct `owner/repo`
     actions pinned to the SAME SHA is a copy-paste mispin that fails at
     runtime with "unable to resolve action". Caught live in an audit:
     `download-artifact` was pinned to `upload-artifact`'s SHA, which broke
@@ -1182,3 +1446,117 @@ def test_no_sha_is_pinned_for_two_different_actions():
         "One SHA pinned for two different actions — at least one is a copy-paste mispin:\n  "
         + "\n  ".join(f"{sha}: {actions}" for sha, actions in collisions.items())
     )
+
+
+def test_harness_templates_pin_same_action_shas_as_repo_workflows():
+    """Harness workflow templates must track the repo's own action pins.
+
+    `harness/ci.yml` and `harness/security.yml` are deployable templates;
+    the repo's `.github/workflows/*.yml` receive monthly Dependabot /
+    autoupdate bumps that the templates do not. For every action pinned on
+    BOTH sides, the SHA must be identical. This test is MEANT to fail after
+    a Dependabot bump until the harness templates are bumped to the same
+    pin: that is the intent: template drift must never ship silently.
+
+    Commented example blocks in the templates count too: adopters uncomment
+    them verbatim, so a stale pin there is as live as an active one.
+    Actions that appear only in a template (e.g. setup-node, gitleaks-action)
+    have no repo counterpart and are not compared.
+    """
+    # STRUCTURE-MARKER: per-action SHA parity is the contract, not specific SHAs.
+    uses_re = re.compile(r"uses:\s*([\w./-]+)@([0-9a-f]{40})\b")
+
+    def _pins(paths: list[Path]) -> dict[str, set[str]]:
+        pins: dict[str, set[str]] = {}
+        for path in paths:
+            for action, sha in uses_re.findall(path.read_text(encoding="utf-8")):
+                pins.setdefault(action, set()).add(sha)
+        return pins
+
+    repo_pins = _pins(sorted(_repo_file(".github", "workflows").glob("*.yml")))
+    harness_pins = _pins([_repo_file("harness", "ci.yml"), _repo_file("harness", "security.yml")])
+    shared = sorted(set(repo_pins) & set(harness_pins))
+    assert "actions/checkout" in shared, (
+        "sanity check failed: actions/checkout should be pinned on both sides"
+    )
+
+    failures = [
+        f"{action}: repo pins {sorted(repo_pins[action])} but harness templates "
+        f"pin {sorted(harness_pins[action])}"
+        for action in shared
+        if repo_pins[action] != harness_pins[action]
+    ]
+    assert not failures, (
+        "Harness template action pins drifted from repo workflows — bump "
+        "harness/ci.yml / harness/security.yml to the repo's pins:\n  " + "\n  ".join(failures)
+    )
+
+
+def test_release_sequence_tags_remote_default_branch_commit():
+    documents = {
+        "release-captain": _repo_file("agents", "release-captain.agent.md").read_text(),
+        "release-kb": _repo_file("knowledge-base", "release.md").read_text(),
+        "releasing": _repo_file("RELEASING.md").read_text(),
+    }
+
+    for name, content in documents.items():
+        normalized = " ".join(content.split())
+        release_pr = normalized.lower().find("release pr")
+        tag = normalized.lower().find("tag", release_pr)
+        assert release_pr >= 0, f"{name} must route version/changelog changes through a release PR"
+        assert tag > release_pr, f"{name} must merge the release PR before tagging"
+        assert "remote default-branch commit" in normalized, (
+            f"{name} must tag the merged remote default-branch commit"
+        )
+
+
+def test_auto_release_uses_a_release_pr_before_tagging():
+    workflow = _repo_file(".github", "workflows", "auto-release.yml").read_text()
+
+    assert "Create release branch commit" in workflow
+    assert "Open release PR" in workflow
+    assert "semantic-release version --no-commit --no-tag --no-push" in workflow
+    assert "Tag merged release PR commit" in workflow
+    assert 'git tag -a "$tag" "$GITHUB_SHA"' in workflow
+    assert 'git push origin "refs/tags/$tag"' in workflow
+    assert "Semantic release (compute version, commit, tag, push)" not in workflow
+
+
+def test_auto_release_refuses_to_tag_non_release_version_bumps():
+    """A bare version bump on main must never be tagged and published.
+
+    mode=tag fires when pyproject's version changed and no matching tag
+    exists. A manual or post-release bump satisfies that too; without the
+    release-PR subject guard the workflow would tag it and publish
+    unreleased code to append-only PyPI (RELEASING.md forbids the pre-bump
+    for the same reason).
+    """
+    workflow = _repo_file(".github", "workflows", "auto-release.yml").read_text()
+
+    # CONTRACT-PHRASE: the subject guard is the gate between "version
+    # changed" and "publish to PyPI"; removing it re-opens the
+    # accidental-release hole.
+    assert '"chore(release): ${version}"*' in workflow
+    assert '"Merge pull request "*"/release/v${version}"*' in workflow
+    assert "Refusing to tag a non-release version bump" in workflow
+
+
+def test_auto_release_pins_tooling_and_preflights_deploy_key():
+    workflow = _repo_file(".github", "workflows", "auto-release.yml").read_text()
+    ssh_action = _repo_file(".github", "actions", "configure-release-ssh", "action.yml").read_text()
+
+    # STRUCTURE-MARKER: require SHA-pinned setup-uv and a version-pinned
+    # semantic-release, not the exact SHA/version: Dependabot bumps those
+    # monthly, and SHA-format plus cross-workflow parity are asserted by
+    # dedicated tests in this file.
+    assert re.search(r"astral-sh/setup-uv@[a-f0-9]{40}", workflow)
+    assert re.search(r"python-semantic-release==\d+\.\d+\.\d+", workflow)
+    assert "persist-credentials: false" in workflow
+    assert "ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}" not in workflow
+    assert "Validate release deploy key" in workflow
+    assert "uses: ./.github/actions/configure-release-ssh" in workflow
+    assert "ssh-keygen -y" in ssh_action
+    assert "git ls-remote origin HEAD" in ssh_action
+    assert "git push --dry-run" in ssh_action
+    assert "Settings > Deploy keys" in ssh_action
+    assert "Allow write access" in ssh_action

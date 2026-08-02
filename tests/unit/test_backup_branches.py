@@ -1,4 +1,4 @@
-"""Branch-coverage tests for backup.py — exercises rotation, timestamp
+"""Branch-coverage tests for backup.py: exercises rotation, timestamp
 collisions, and restore-failure cleanup paths that the integration tests miss.
 """
 
@@ -166,13 +166,14 @@ def test_latest_backup_for_tool_ignores_other_tool_backups(tmp_path: Path) -> No
     assert latest_backup_for_tool(tmp_path, Tool.copilot) == copilot_backup
 
 
-def test_latest_backup_for_tool_uses_version_file_for_legacy_backups(tmp_path: Path) -> None:
+def test_latest_backup_for_tool_ignores_backups_without_metadata(tmp_path: Path) -> None:
+    """A backup dir lacking the metadata file has no owning tool and is never matched."""
     backup_dir = tmp_path / BACKUP_DIR
-    legacy_backup = backup_dir / "20260520-120000-000001"
-    legacy_backup.mkdir(parents=True)
-    (legacy_backup / ".playbook-version").write_text("tool: claude\n")
+    unowned_backup = backup_dir / "20260520-120000-000001"
+    unowned_backup.mkdir(parents=True)
+    (unowned_backup / ".playbook-version").write_text("tool: claude\n")
 
-    assert latest_backup_for_tool(tmp_path, Tool.claude) == legacy_backup
+    assert latest_backup_for_tool(tmp_path, Tool.claude) is None
 
 
 def test_backup_deployed_files_handles_timestamp_collision(tmp_path: Path) -> None:
@@ -344,7 +345,7 @@ def test_restore_backup_preserves_current_file_target_on_swap_failure(
 
 
 def test_restore_backup_round_trip(tmp_path: Path) -> None:
-    """End-to-end: backup, wipe, restore — deployment ends up identical."""
+    """End-to-end: backup, wipe, restore: deployment ends up identical."""
     project_root = tmp_path / "project"
     project_root.mkdir()
     _seed_deployment(project_root, Tool.claude)

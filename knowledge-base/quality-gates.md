@@ -1,12 +1,12 @@
 ---
 id: quality-gates
 size: medium
-tldr: "Project-specific gates: commands, coverage thresholds, critical paths, mutation policy. Seed file; fill in placeholders before relying on it."
+tldr: "Project-specific gates: commands, coverage thresholds, critical paths, mutation policy. Filled in for this repo; adopters re-seed from the template."
 load_when: quality gate, coverage threshold, critical path, mutation score, make quality, make test, CI gate
 audience: all
 canonical_for: project-specific gate commands, coverage policy, critical path registry, mutation testing policy
 cross_refs: testing.md, testing-techniques.md, security.md, style-guide.md
-verified: 2026-07-17
+verified: 2026-07-30
 ---
 
 # Quality Gates
@@ -49,7 +49,9 @@ Detection rule: read project config (`pyproject.toml`, `package.json`, `go.mod`,
 | 3 | Type check | `make typecheck` | Exit 0, zero type errors | Python source changes |
 | 4 | Tests | `make test` or focused `uv run pytest <paths> -q` while iterating | All relevant tests pass | Every behaviour change |
 | 5 | Coverage | `make test` (`--cov=src --cov-fail-under=95`) | >=95% branch coverage for `src/` | Source changes |
-| 6 | Security scan | CI secret scan + `pip-audit` + Bandit in `.github/workflows/ci.yml`; run the same commands locally for security-sensitive changes | No new critical/high findings | Dependency, auth, input, workflow, or release changes |
+| 6 | Security scan | CI secret scan + `pip-audit` + Bandit in `.github/workflows/ci.yml`; locally, `make security` mirrors the same gates | No new critical/high findings | Dependency, auth, input, workflow, or release changes |
+
+Mocking note: this repo's suite uses the standard-library `unittest.mock` consistently rather than `pytest-mock` because the dev-dependency set is deliberately kept small; that is the documented carve-out in `languages/testing-python.md` § Mocking, not a policy violation.
 
 ---
 
@@ -65,7 +67,7 @@ Coverage is a safety signal, not a goal by itself. Prefer branch coverage and be
 
 **Adopter projects:** 95% is this repo's target, not a universal law. Set your own threshold from risk (safety-critical higher, early prototype lower) and state the reasoning here; if you choose 100% line coverage, say why and pair it with behaviour review.
 
-**Legacy codebases:** when the repo-wide number is unreachable, gate on changed lines instead (`diff-cover` over the PR diff, e.g. >=90%) and ratchet the repo-wide threshold up as coverage grows.
+**Low-coverage codebases:** when the repo-wide number is unreachable, gate on changed lines instead (`diff-cover` over the PR diff, e.g. >=90%) and ratchet the repo-wide threshold up as coverage grows.
 
 ---
 
@@ -89,15 +91,15 @@ Mutation testing is a quality signal, not a universal PR blocker. Detail in `tes
 
 | Trigger | Command / Check | Pass condition | Required when |
 |---------|-----------------|----------------|---------------|
-| PR touches `src/`, `tests/`, or mutation config | `.github/workflows/mutation.yml` (`uv run mutmut run --max-children 4` → export stats → `tools/check-mutation-baseline.py`) | Counts do not exceed `mutation-baseline.json` | Critical-path file changes |
+| PR touches `src/`, `tests/`, or mutation config | `.github/workflows/mutation.yml` runs `make mutation` | Unresolved rate and infrastructure counts stay within `mutation-baseline.json` | Critical-path file changes |
 | Scheduled run | Same workflow on weekly schedule | Report produced; baseline check passes | Weekly |
-| Local/on-demand | `uv run mutmut run --max-children 4 && uv run mutmut export-cicd-stats && uv run python tools/check-mutation-baseline.py` | Surviving/no-test mutants do not exceed baseline; infrastructure statuses are zero | Before marking risky source changes Done |
+| Local/on-demand (Linux only) | `make mutation` | Combined survived/timeout rate stays within baseline; no-test and infrastructure counts stay within their ceilings | Before marking risky source changes Done |
 
 Record baseline scores here:
 
 | Area | Baseline mutation score | Last reviewed |
 |------|-------------------------|---------------|
-| `src/deploy_ai_playbook/` | See `mutation-baseline.json` (`survived <= 0`, `no_tests <= 13`, infrastructure statuses `0`) | 2026-05-28 |
+| `src/deploy_ai_playbook/` | See `mutation-baseline.json`: the gate ratchets the combined `survived + timeout` rate because runner speed can reclassify timeouts and source growth changes the mutant population; `no_tests`, `skipped`, `suspicious`, interrupted, and segfault counts have independent ceilings | 2026-07-27 |
 
 ---
 

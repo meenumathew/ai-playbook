@@ -7,7 +7,7 @@ Set up mechanical enforcement so the system checks quality rules automatically o
 ## Prerequisites
 
 - AI Playbook deployed in your project.
-- Starter harness deployed (`Makefile`, `.pre-commit-config.yaml`, CI workflow, security-scan workflow `.github/workflows/security.yml` with weekly secret and dependency scans, teach-back hook, and telemetry files are copied by `ai-playbook deploy` unless `--no-harness` is passed; Claude deploys also merge the telemetry Stop hook into `.claude/settings.json`).
+- Starter harness deployed (`Makefile`, `.pre-commit-config.yaml`, CI workflow, security-scan workflow `.github/workflows/security.yml` with weekly secret and dependency scans, Dependabot config `.github/dependabot.yml`, teach-back hook, read-budget hook `harness/read-budget.sh`, and telemetry files are copied by `ai-playbook deploy` unless `--no-harness` is passed; Claude and Codex deploys also merge their privacy-minimal local telemetry hooks).
 - Project toolchain installed (for example: uv for Python, the Go toolchain, Cargo, npm, Maven, or Gradle).
 
 ## Steps

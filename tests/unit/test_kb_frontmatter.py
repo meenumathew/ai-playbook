@@ -31,7 +31,7 @@ def run_check(
     if env_overrides:
         env.update(env_overrides)
     args = [sys.executable, str(SCRIPT), *(str(p) for p in paths)]
-    return subprocess.run(  # noqa: S603 — args are constructed from trusted constants
+    return subprocess.run(  # noqa: S603 - args are constructed from trusted constants
         args,
         capture_output=True,
         text=True,
@@ -65,7 +65,7 @@ def make_kb_body(**overrides: str) -> str:
 
 
 def test_kb_frontmatter_clean_repo_passes() -> None:
-    """Live KB and skill files must conform — regression guard."""
+    """Live KB and skill files must conform: regression guard."""
     result = run_check()
     assert result.returncode == 0, result.stderr
 
@@ -226,3 +226,24 @@ def test_kb_frontmatter_ignores_unrelated_paths(tmp_path: Path) -> None:
     other.write_text("# unrelated\n", encoding="utf-8")
     result = run_check(other)
     assert result.returncode == 0
+
+
+def test_agent_files_join_the_freshness_pass(tmp_path: Path) -> None:
+    """Agent `verified:` dates get the same non-blocking staleness warning as
+    KB files: a stale agent definition is a review-freshness signal too."""
+    import datetime
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("check_kb_frontmatter", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    agent = tmp_path / "sample.agent.md"
+    agent.write_text("---\nid: sample\nverified: 2020-01-01\n---\n# Sample\n", encoding="utf-8")
+
+    warnings = module.freshness_warnings([agent], today=datetime.date(2026, 7, 25))
+
+    assert warnings and "days old" in warnings[0]
+    # STRUCTURE-MARKER: main() must actually feed agents/ into the pass.
+    assert 'AGENTS_DIR.glob("*.agent.md")' in SCRIPT.read_text(encoding="utf-8")

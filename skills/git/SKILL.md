@@ -31,15 +31,24 @@ Format: `{type}/{short-description}`. With issue tracker: `{type}/PROJ-1234-{sho
 
 ## Worktrees (parallel / isolated sprints)
 
-Use when sessions run in parallel or branch switching is expensive.
+Use one for independent tasks or costly branch switches, never to hide a dirty
+tree.
 
-```bash
-git worktree add ../proj-feature-x feature/feature-x   # new branch, sibling dir
-git worktree list                                       # see all
-git worktree remove ../proj-feature-x                   # clean up after merge
-```
+### Worktree Safety
 
-One worktree per active branch. Tests/deps/env per worktree. Remove after merge.
+| Check | Rule |
+|---|---|
+| Independence | Give concurrent sessions distinct ownership and no overlapping writes; otherwise work sequentially |
+| Existing state | Inspect `git worktree list`; reuse a branch's existing worktree and preserve dirty changes |
+| Location | Follow project convention; for local `.worktrees/`, require `git check-ignore -q .worktrees` to pass or ask before editing `.gitignore` |
+| Start | Branch from an explicit base, install dependencies, and establish a clean baseline with the normal test gate |
+| Finish | Inspect status; remove only after merge or explicit abandonment. Do not use `--force` or manually delete the directory |
+
+Example creation: `git worktree add -b feature/feature-x
+.worktrees/feature-x main`; inspect and remove with `git -C <path> status
+--short` then `git worktree remove <path>`.
+
+Removing a worktree does not authorize deleting its branch.
 
 ## Conventional Commit Format
 
@@ -76,7 +85,7 @@ Optional. Short lowercase token for the affected module (`auth`, `api`, `db-migr
 | Scope | Used for | Example |
 |---|---|---|
 | `kb` | Knowledge-base updates from `skills/retrospective/SKILL.md` | `docs(kb): add retry pattern to design-patterns` |
-| `release` | Version bumps and tag commits from `agents/release-captain.agent.md` | `chore(release): v1.4.0` |
+| `release` | Version bumps and tag commits from `agents/release-captain.agent.md` | `chore(release): 1.4.0` |
 | `adr` | New or superseded ADRs under `docs/adr/` | `docs(adr): record auto-merge policy` |
 
 ### SemVer Correlation

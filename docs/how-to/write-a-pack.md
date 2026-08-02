@@ -34,7 +34,7 @@ your-repo/
 
 Rule of thumb: pack names are kebab-case, descriptive, and stable. The name appears in `doctor` output and override warnings. Names must be unique across the `packs = [...]` list: deploy fails on a duplicate `name` (the directory name when no `pack.toml` declares one).
 
-Packs can ship `agents/`, `knowledge-base/`, `skills/`, and `templates/` content. The `commands/` directory (slash-command shims) is core-only: packs cannot ship custom shim content: but deploy auto-generates a standard shim for every pack agent, so `/your-agent` works out of the box. Need bespoke shim prose? Propose it upstream via RFC.
+Packs can ship `agents/`, `knowledge-base/`, `skills/`, and `templates/` content. The `commands/` directory (slash-command shims) is core-only, so packs cannot ship custom shim content. Deploy auto-generates a standard shim for every pack agent, which makes `/your-agent` available without extra setup. Propose bespoke shim prose upstream through an RFC.
 
 ### 2. Author at least one file
 
@@ -44,7 +44,7 @@ For an agent, copy [`templates/agent-template.md`](../../templates/agent-templat
 
 For a KB page, write a normal markdown file with the 8-key frontmatter that core KB files use (`id`, `size`, `tldr`, `load_when`, `audience`, `canonical_for`, `cross_refs`, `verified`). Adopters routing keywords through `load_when` will land on your page when the keyword matches.
 
-Both contracts are checked mechanically: `ai-playbook config validate` fails (exit 1) on a pack agent or KB file with missing/empty required frontmatter, and `ai-playbook doctor` reports the same finding as a warning: so a typo'd `load_when:` surfaces before it silently breaks routing.
+Both contracts are checked mechanically: `ai-playbook config validate` fails (exit 1) on a pack agent or KB file with missing or empty required frontmatter, and `ai-playbook doctor` reports the same finding as a warning. A misspelled `load_when:` therefore surfaces before it silently breaks routing.
 
 For a skill, create `<pack>/skills/<skill-name>/SKILL.md` and follow the structure in `skills/host-adapter/SKILL.md` (an `## Operations` section is the contract).
 

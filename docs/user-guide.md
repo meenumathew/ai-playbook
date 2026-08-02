@@ -2,6 +2,10 @@
 
 Day-to-day usage of AI Playbook: installation, workflows, agent invocation, and team setup. For a 5-minute walkthrough, see [Getting Started](getting-started.md).
 
+**Audience:** practitioners who have completed initial setup and need a task-oriented operating guide.
+
+**Jump to:** [setup](#2-before-you-start), [the workflow](#3-the-loop), [agent invocation](#4-invoking-agents), [resuming work](#5-resumability), [stack support](#6-works-with-your-stack), [tracker setup](#7-project-management-tool-setup), [quality enforcement](#8-quality-enforcement), or [common tasks](#9-common-tasks).
+
 ---
 
 ## 1. Install
@@ -16,8 +20,8 @@ ai-playbook list   # should list 8 agents
 
 ## 2. Before You Start
 
-1. Deploy the playbook into the target project: `ai-playbook deploy --agent all --tool <claude|copilot|cursor|kiro>`.
-2. Create the runtime artifact directories if they do not exist: `stories/`, `plans/`, `research/`, `audits/`, `reviews/`, and `incidents/`.
+1. Deploy the playbook into the target project: `ai-playbook deploy --agent all --tool <claude|copilot|codex|cursor|kiro>`.
+2. Run `ai-playbook init` to scaffold the runtime artifact directories (`stories/`, `plans/`, `research/`, `audits/`, `reviews/`, and `incidents/`) and a starter `.ai-playbook.toml`. Idempotent: existing directories and config are kept.
 3. Decide whether generated artifacts should be tracked. Use `ai-playbook artifact-policy local` to keep stories, research, plans, audits, reviews, and incidents out of Git, or `ai-playbook artifact-policy shared` when those records should be committed or governed manually.
 
 Then review and edit the project-specific files below. Agents seed any missing template-backed file on first use and announce what they created: the seed is a starting point, not team policy.
@@ -86,7 +90,7 @@ Full reference: [How To Invoke Agents](how-to/invoke-agents.md).
 Use <agent-name>: <input>
 ```
 
-Always name the agent explicitly. Without a name, the AI tool guesses: and may guess wrong.
+Always name the agent explicitly. Without a name, the AI tool guesses and may guess wrong.
 
 **Work item input: four valid formats:** playbook story number (`STORY-001`), file path, inline paste, or external tracker reference. Any of these triggers automatic artifact-chain resolution: matching research and plan files load alongside the internal story artifact.
 
@@ -94,6 +98,7 @@ Always name the agent explicitly. Without a name, the AI tool guesses: and may g
 |------|---------------|------------------|
 | Claude | `/story-refiner <input>` | `Use story-refiner: <input>` |
 | Copilot | `/story-refiner <input>` | `Use story-refiner: <input>` |
+| Codex | Not supported | `Use story-refiner: <input>` |
 | Cursor | `/story-refiner <input>` | `Use story-refiner: <input>` |
 | Kiro | Not supported | `Use story-refiner: <input>` |
 
@@ -113,7 +118,7 @@ AI tools lose context between sessions. The playbook handles this with **file-ba
 | `incidents/` | Triage notes and postmortems | incident-responder | release-captain, follow-up stories |
 | `knowledge-base/` | Team standards, decisions, vocabulary | you (human) | all agents |
 
-These files live in the repo: not in `~/.claude/` or any tool-specific location: so any AI tool can resume from them. Whether they are committed or kept local is a team policy choice.
+These files live in the repository, not in `~/.claude/` or another tool-specific location, so any AI tool can resume from them. Whether they are committed or kept local is a team policy choice.
 
 Find the right file with `ai-playbook artifacts` or search by path/content with `ai-playbook artifacts --query <text>`.
 
@@ -127,8 +132,8 @@ Full reference: [How To Resume a Session](how-to/resume-session.md).
 |---------|-----------|
 | **Languages** | Python is the maintained reference implementation. Agents and the starter harness detect other stacks from project config; team conventions come from `templates/language-conventions-template.md`. |
 | **Methodology** | Scrum, Kanban, Shape Up, or no formal process: methodology-agnostic. For Kanban, skip story points or use T-shirt sizing (S/M/L). |
-| **AI tool** | Claude (full), Copilot (full), Cursor (full), Kiro (agents, KB, skills, templates, rules: slash commands not supported). |
-| **Slash commands** | Claude, Copilot (VS Code), Cursor. Kiro uses natural language only (`Use story-refiner: ...`). |
+| **AI tool** | Claude (full), Copilot (full), Codex (agents converted to native `.toml` custom agents, KB, skills, templates, rules: slash commands not supported), Cursor (full), Kiro (agents, KB, skills, templates, rules: slash commands not supported). |
+| **Slash commands** | Claude, Copilot (VS Code), Cursor. Codex and Kiro use natural language only (`Use story-refiner: ...`). |
 | **Project-management tool / issue tracker** | Jira, GitHub Issues/Projects, GitLab Issues, Bitbucket Cloud Issues, Linear, or manual paste: see § 7. |
 | **Feature flags** | Tool-agnostic. Update `knowledge-base/feature-flags.md` when you change providers. |
 
@@ -214,13 +219,13 @@ ai-playbook doctor --tool claude
 
 Reports stale files, missing agents, disabled agents, fingerprint drift, and missing runtime directories in one pass.
 
-### Check telemetry wiring (Claude only)
+### Check privacy-minimal telemetry wiring
 
 ```bash
-ai-playbook telemetry status
+ai-playbook telemetry status --tool <claude|codex>
 ```
 
-Shows whether the Claude Stop hook is configured, where `.claude/settings.json` lives, and whether `harness/telemetry.sh` is deployed. Use `telemetry enable` / `telemetry disable` to manage the hook outside the deploy flow.
+Shows whether the selected Claude `Stop` or Codex `SessionEnd` hook is configured, where its JSON config and local aggregate log live, and whether `harness/telemetry.sh` is deployed. The log contains only timestamp, source, approximate turns, and best-effort active-agent name. Use `telemetry enable` / `telemetry disable` with the same `--tool` value to manage it outside the deploy flow.
 
 ### Correct an agent that got something wrong
 

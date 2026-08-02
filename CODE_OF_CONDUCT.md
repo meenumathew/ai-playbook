@@ -21,7 +21,12 @@ We pledge to make participation in this project a harassment-free experience for
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by opening an issue or contacting the maintainers directly. All complaints will be reviewed and investigated and will result in a response that is deemed necessary and appropriate to the circumstances.
+Report instances of abusive, harassing, or otherwise unacceptable behavior through a private channel first:
+
+1. **GitHub's "Report to repository admins" flow.** Use the "Report content" option on the offending issue, comment, or profile and select reporting to the repository admins. This reaches the maintainer without a public record.
+2. **Direct message to the maintainer.** The maintainer is the named owner in `pyproject.toml` (`authors`); see [`GOVERNANCE.md`](GOVERNANCE.md) § Roles. Contact them through the profile linked from the repository.
+
+Open a public issue only as a last resort, when both private channels have failed, and never include details that could further expose the person who was harmed. All complaints will be reviewed and investigated and will result in a response that is deemed necessary and appropriate to the circumstances.
 
 ## Attribution
 

@@ -17,10 +17,6 @@ This project has two security-relevant surfaces:
 
 The CLI does not execute arbitrary code from agent markdown files.
 
-## Threat Model
-
-This threat model scopes reports: what counts as a vulnerability vs. an enhancement.
-
 ## Standards Alignment
 
 This repository uses three security checklists as review inputs:
@@ -32,6 +28,8 @@ This repository uses three security checklists as review inputs:
 Host-side controls such as branch protection, required reviews, and repository rulesets are part of the OpenSSF Scorecard posture but are configured in GitHub, not in this repository.
 
 ### In-scope attacks (security triage)
+
+This threat model scopes reports: the attacks below are triaged as vulnerabilities; anything under [Out of scope](#out-of-scope-not-triaged-as-security) is treated as an enhancement or workflow concern.
 
 | Attack | Asset at risk | Defense in place |
 |--------|---------------|------------------|

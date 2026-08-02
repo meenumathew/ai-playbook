@@ -1,4 +1,4 @@
-"""Artifacts service — pure logic for artifact discovery and gitignore policy."""
+"""Artifacts service: pure logic for artifact discovery and gitignore policy."""
 
 from __future__ import annotations
 
@@ -19,10 +19,11 @@ ARTIFACT_IGNORE_BLOCK_END = "# end ai-playbook artifacts"
 ARTIFACT_IGNORE_LINES = tuple(f"{directory}/" for directory in ARTIFACT_DIRECTORIES)
 # Hook state written by the shipped harness hooks: read-budget.sh counters and
 # telemetry.sh usage log, including rotated archives (usage-<ts>.jsonl[.gz]).
-# Machine-local by nature — the managed block keeps it out of version control.
+# Machine-local by nature: the managed block keeps it out of version control.
 HOOK_STATE_IGNORE_LINES = (
     ".claude/read-budget/",
     ".claude/usage*.jsonl*",
+    ".codex/usage*.jsonl*",
 )
 MANAGED_IGNORE_LINES = (*ARTIFACT_IGNORE_LINES, *HOOK_STATE_IGNORE_LINES)
 
@@ -68,11 +69,20 @@ def _artifact_matches(project_root: Path, artifact_path: Path, query: str | None
     relative_path = artifact_path.relative_to(project_root).as_posix().lower()
     if needle in relative_path:
         return True
-    return needle in artifact_path.read_text(encoding="utf-8").lower()
+    return needle in _artifact_text(artifact_path).lower()
+
+
+def _artifact_text(artifact_path: Path) -> str:
+    """Read an artifact leniently: one unreadable or non-UTF-8 file must not
+    break the whole listing (artifacts are adopter-authored content)."""
+    try:
+        return artifact_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 def _artifact_status(artifact_path: Path) -> str:
-    for line in artifact_path.read_text(encoding="utf-8").splitlines()[:40]:
+    for line in _artifact_text(artifact_path).splitlines()[:40]:
         if line.startswith("status:"):
             return line.split(":", 1)[1].strip()
         if line.startswith("| **Status** |"):

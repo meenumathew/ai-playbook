@@ -15,6 +15,12 @@ verified: <YYYY-MM-DD>
 
 Following Evans (DDD): the shared language used by domain experts and developers across code, tests, conversations, and docs. Use this file to prevent stories/plans from drifting into generic language. Before medium/large work, define at least: primary actor, core business object, key business event, and any terms with cross-context ambiguity.
 
+## Agent Use
+
+- **Read first:** Terms, then Ambiguities Resolved for overloaded project vocabulary.
+- **Update when:** a story introduces a domain term or changes an existing definition.
+- **Keep project-specific:** universal software terms belong in the canonical knowledge base, not this glossary.
+
 ---
 
 ## Terms

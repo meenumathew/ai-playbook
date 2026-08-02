@@ -3,7 +3,7 @@ id: debugging
 size: medium
 tldr: "Iron Law: no fixes without root cause; after 3 failed attempts stop and question the architecture."
 load_when: test fail, bug, regression, build failure, deploy failure, fix attempt, flaky test, root cause
-audience: xp-pair-programmer, code-inspector
+audience: all
 canonical_for: Iron Law, 3-fix stop rule, verification protocol, root cause investigation
 cross_refs: testing.md, refactoring.md
 verified: 2026-05-19

@@ -12,16 +12,16 @@ Usage (CI passes no args; tests pass an explicit synthetic repo root):
 
     python tools/check-agent-size.py [REPO_ROOT]
 
-Files without a cap entry get the matching DEFAULT_* cap — add an explicit
+Files without a cap entry get the matching DEFAULT_* cap: add an explicit
 entry when a new agent or skill ships.
 
 Exit codes:
 
     0  all budgeted files within budget (or skip flag set)
-    1  at least one file over budget — details printed to stderr
+    1  at least one file over budget: details printed to stderr
 
 Skip flag: set CLAUDE_SKIP_AGENT_SIZE=1 to bypass for emergencies.
-Use sparingly — every skip is a deliberate exception.
+Use sparingly: every skip is a deliberate exception.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-# Ratchet log — caps set at first-gate sizes + ~10 lines slack.
+# Ratchet log: caps set at first-gate sizes + ~10 lines slack.
 # When a file slims down (content moved to KB/skills), tighten its cap here
 # in the same commit, like the CLAUDE.md ratchet.
 AGENT_MAX_LINES: dict[str, int] = {
@@ -86,7 +86,7 @@ def _collect_failures(root: Path) -> list[str]:
         surface = root / rel
         if not surface.exists():
             # A cap whose file no longer resolves means the budget silently
-            # stopped being enforced — fail so the entry gets updated.
+            # stopped being enforced: fail so the entry gets updated.
             failures.append(
                 f"  {rel}: budgeted file is missing — its cap no longer resolves; "
                 "restore the file or update SURFACE_MAX_LINES in "
@@ -113,13 +113,13 @@ def main(argv: list[str]) -> int:
 
     if os.environ.get("CLAUDE_SKIP_AGENT_SIZE") == "1":
         print(
-            "⚠ CLAUDE_SKIP_AGENT_SIZE=1 set — bypassing size check:\n" + "\n".join(failures),
+            "WARNING: CLAUDE_SKIP_AGENT_SIZE=1 set — bypassing size check:\n" + "\n".join(failures),
             file=sys.stderr,
         )
         return 0
 
     print(
-        "✗ Loaded-surface file(s) exceed their size budget:\n"
+        "ERROR: Loaded-surface file(s) exceed their size budget:\n"
         + "\n".join(failures)
         + f"\n\nWhy this gate exists: these files are paid in full whenever"
         f"\nthey load — see {RATIONALE}."

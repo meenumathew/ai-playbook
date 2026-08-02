@@ -1,17 +1,17 @@
 """Pure file-system helpers for the deploy CLI.
 
 These functions return Rich-formatted status strings for the caller to print,
-but never call `console.print` directly — keeping IO concerns separate from
+but never call `console.print` directly: keeping IO concerns separate from
 presentation makes them safe to compose and easy to test.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from deploy_ai_playbook.paths import HARNESS_FILES, RULES_SOURCE_FILE, Tool
+from deploy_ai_playbook.paths import AGENT_FILE_SUFFIX, HARNESS_FILES, RULES_SOURCE_FILE, Tool
 from deploy_ai_playbook.safety import (
     UnsafeDestinationError,
     assert_safe_destination,
@@ -19,8 +19,6 @@ from deploy_ai_playbook.safety import (
     write_text_safely,
 )
 from deploy_ai_playbook.targets import COMMAND_ARGUMENTS_PLACEHOLDER, get_target_adapter
-
-AGENT_FILE_SUFFIX = ".agent.md"
 
 
 def generated_command_shim(agent_name: str) -> str:
@@ -82,7 +80,7 @@ def _expected_command_files(
         output_name, _ = target.transform_command(file_path.name, "")
         files.add(Path(output_name))
     # Generated shims for agents without an authored shim (pack agents) are
-    # expected too — prune and doctor must not treat them as orphans.
+    # expected too: prune and doctor must not treat them as orphans.
     for agent_name in (agent_names or set()) - authored_stems:
         output_name, _ = target.transform_command(f"{agent_name}.md", "")
         files.add(Path(output_name))
@@ -102,9 +100,16 @@ def _hash_overlay_sources(
     hasher: hashlib._Hash,
     discovered_files: list,
     skip_files: set[str] | None,
+    agent_names: set[str] | None,
 ) -> None:
     """Hash overlay files (agents / knowledge-base / skills / templates) from discovery."""
     for entry in sorted(discovered_files, key=lambda f: f.relative):
+        if (
+            entry.relative.parts[0] == "agents"
+            and agent_names is not None
+            and entry.relative.name.removesuffix(AGENT_FILE_SUFFIX) not in agent_names
+        ):
+            continue
         if (
             entry.relative.parts[0] == "knowledge-base"
             and skip_files
@@ -115,11 +120,22 @@ def _hash_overlay_sources(
         hasher.update(entry.src_path.read_bytes())
 
 
-def _hash_command_sources(hasher: hashlib._Hash, source_root: Path) -> None:
+def _hash_command_sources(
+    hasher: hashlib._Hash,
+    source_root: Path,
+    agent_names: set[str] | None,
+    known_agent_names: set[str],
+) -> None:
     commands_dir = source_root / "commands"
     if not commands_dir.exists():
         return
     for file_path in _iter_visible_files(commands_dir):
+        if (
+            agent_names is not None
+            and file_path.stem in known_agent_names
+            and file_path.stem not in agent_names
+        ):
+            continue
         hasher.update(("commands/" + str(file_path.relative_to(commands_dir))).encode())
         hasher.update(file_path.read_bytes())
 
@@ -140,6 +156,11 @@ def compute_source_fingerprint(
     source_root: Path,
     discovered_files: list,
     skip_files: set[str] | None = None,
+    agent_names: set[str] | None = None,
+    *,
+    include_commands: bool = True,
+    include_harness: bool = True,
+    include_rules: bool = True,
 ) -> str:
     """Compute a short hash fingerprint of all deployable source files.
 
@@ -149,11 +170,18 @@ def compute_source_fingerprint(
     and CLAUDE.md, so any drift is reflected in the hash.
     """
     hasher = hashlib.sha256()
-    _hash_overlay_sources(hasher, discovered_files, skip_files)
-    _hash_command_sources(hasher, source_root)
-    _hash_harness_sources(hasher, source_root)
+    known_agent_names = {
+        entry.relative.name.removesuffix(AGENT_FILE_SUFFIX)
+        for entry in discovered_files
+        if entry.relative.parts[0] == "agents"
+    }
+    _hash_overlay_sources(hasher, discovered_files, skip_files, agent_names)
+    if include_commands:
+        _hash_command_sources(hasher, source_root, agent_names, known_agent_names)
+    if include_harness:
+        _hash_harness_sources(hasher, source_root)
     rules = source_root / RULES_SOURCE_FILE
-    if rules.exists():
+    if include_rules and rules.exists():
         hasher.update(rules.read_bytes())
     return hasher.hexdigest()[:12]
 
@@ -264,16 +292,15 @@ def expected_deployed_files(
 
     `discovered_files` is the result of `discovery.discover_layered(...).files`
     (typed loosely as `list` to avoid an `fs → discovery` import cycle). Pack
-    files are recognised as expected — prune will NOT remove them.
+    files are recognised as expected: prune will NOT remove them.
 
     Returns a mapping from deployed directory path (string) to the set of
     relative `Path` objects expected in that directory. Disabled-agent files
-    (`<name>.agent.md.disabled`) are intentionally not in the expected set —
+    (`<name>.agent.md.disabled`) are intentionally not in the expected set:
     callers should preserve them at prune time.
     """
     target = get_target_adapter(tool)
-    destinations = target.destinations
-    expected = _expected_overlay_files(discovered_files, destinations, skip_files)
+    expected = _expected_overlay_files(discovered_files, target, skip_files)
     agent_names = {
         entry.relative.name.removesuffix(AGENT_FILE_SUFFIX)
         for entry in discovered_files
@@ -285,10 +312,11 @@ def expected_deployed_files(
 
 def _expected_overlay_files(
     discovered_files: list,
-    destinations: Mapping[str, str],
+    target,
     skip_files: set[str] | None,
 ) -> dict[str, set[Path]]:
     expected: dict[str, set[Path]] = {}
+    destinations = target.destinations
     for entry in discovered_files:
         overlay = entry.relative.parts[0]
         if overlay not in destinations:
@@ -296,7 +324,8 @@ def _expected_overlay_files(
         relative_inside = entry.relative.relative_to(overlay)
         if overlay == "knowledge-base" and _is_skipped(relative_inside, skip_files):
             continue
-        expected.setdefault(destinations[overlay], set()).add(relative_inside)
+        deployed_relative = target.deployed_overlay_relative(overlay, relative_inside)
+        expected.setdefault(destinations[overlay], set()).add(deployed_relative)
     return expected
 
 
@@ -321,6 +350,7 @@ def prune_orphaned_files(
     dry_run: bool,
     discovered_files: list,
     skip_files: set[str] | None = None,
+    allowed: set[Path] | None = None,
 ) -> list[tuple[Path, str]]:
     """Remove deployed files that have no corresponding source file.
 
@@ -329,7 +359,11 @@ def prune_orphaned_files(
 
     `discovered_files` is the result of `discovery.discover_layered(...).files`
     (typed loosely as `list` to avoid an `fs → discovery` import cycle). Pack
-    files are recognised as expected — prune will NOT remove them.
+    files are recognised as expected: prune will NOT remove them.
+
+    `allowed` restricts deletion to the given project-relative paths: the
+    confirm flow previews first and must delete exactly what the user saw,
+    not whatever a recomputation finds afterwards.
     """
     expected = expected_deployed_files(source_root, tool, discovered_files, skip_files=skip_files)
     results: list[tuple[Path, str]] = []
@@ -344,6 +378,8 @@ def prune_orphaned_files(
             if relative in expected_files:
                 continue
             display_path = file_path.relative_to(project_root)
+            if allowed is not None and display_path not in allowed:
+                continue
             if dry_run:
                 results.append((display_path, "[yellow]would prune[/yellow]"))
             else:

@@ -1,81 +1,16 @@
 # Eval Input: Diff Reviewer
 
+## Grounding
+
+This scenario targets the ai-playbook repository itself: the reviewed diff is the real, uncommitted output of the xp-pair-programmer capture session (see `evals/xp-pair-programmer-input.md`), so the review cites real files, real tests it re-ran, and real sandbox probes — the precondition for a `provenance: captured` baseline (see `evals/samples/README.md` § Refreshing a sample, capture prerequisite).
+
+## Request
+
+"use diff-reviewer: review the uncommitted STORY-002 changes against the story's acceptance criteria and the knowledge base."
+
 ## Context
 
-Review the staged changes for story `stories/STORY-042-order-email-notifications.md`.
-
-## Simulated Diff (staged changes)
-
-```diff
---- /dev/null
-+++ b/src/domain/notifications.py
-@@ -0,0 +1,18 @@
-+from dataclasses import dataclass
-+
-+
-+@dataclass(frozen=True)
-+class EmailNotification:
-+    recipient: str
-+    subject: str
-+    body: str
-+
-+    def __post_init__(self):
-+        if not self.recipient:
-+            raise ValueError("recipient required")
-
---- /dev/null
-+++ b/src/services/notification_service.py
-@@ -0,0 +1,25 @@
-+import logging
-+
-+logger = logging.getLogger(__name__)
-+
-+
-+class NotificationService:
-+    def __init__(self, email_adapter):
-+        self.email_adapter = email_adapter
-+
-+    def handle_order_shipped(self, order):
-+        if not order.customer_email:
-+            logger.info("Skipping notification — no email for order %s", order.id)
-+            return
-+        try:
-+            notification = EmailNotification(
-+                recipient=order.customer_email,
-+                subject="Your order has shipped!",
-+                body=f"Order {order.id} is on its way.",
-+            )
-+            self.email_adapter.send(notification)
-+        except Exception as e:
-+            logger.error(str(e))
-
---- /dev/null
-+++ b/src/infrastructure/sendgrid_adapter.py
-@@ -0,0 +1,12 @@
-+import sendgrid
-+
-+
-+class SendGridAdapter:
-+    def __init__(self, api_key: str):
-+        self.client = sendgrid.SendGridAPIClient(api_key)
-+
-+    def send(self, notification):
-+        self.client.send(
-+            to=notification.recipient,
-+            subject=notification.subject,
-+            body=notification.body,
-+        )
-
---- /dev/null
-+++ b/tests/test_notifications.py
-@@ -0,0 +1,10 @@
-+from src.domain.notifications import EmailNotification
-+
-+
-+def test_email_notification_requires_valid_recipient():
-+    try:
-+        EmailNotification(recipient="", subject="test", body="test")
-+        assert False, "Should have raised"
-+    except ValueError:
-+        pass
-```
+- Story: `stories/STORY-002-fix-harness-makefile-stack-override.md` (bug: the harness Makefile's documented Makefile.local rescue path fires `$(error)` at parse time before the include; plus a bare shellcheck suppression in telemetry.sh)
+- Diff under review: `harness/Makefile` (override include moved ahead of detection, guard added), the story's new tests in `tests/acceptance/test_harness_release_contracts.py`, and one justification comment in `harness/telemetry.sh`
+- Out-of-scope hunks are present in the same files (earlier uncommitted work); the reviewer must scope explicitly
+- Production tier: full review scope, AC-coverage table, cognitive debt check, explicit verdict

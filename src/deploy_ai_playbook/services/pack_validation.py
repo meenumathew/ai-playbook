@@ -1,7 +1,7 @@
 """Frontmatter contract validation for adopter pack content.
 
 Core agents and KB files are contract-tested upstream, but adopters never run
-those tests — so pack files were the one surface where a malformed file
+those tests: so pack files were the one surface where a malformed file
 deployed silently and failed only at runtime (an agent misbehaving, or KB
 routing that never fires). This module ports the two frontmatter contracts so
 `config validate` (error) and `doctor` (warning) catch the breakage first.
@@ -42,7 +42,7 @@ AGENT_REQUIRED_FRONTMATTER: tuple[str, ...] = (
 def validate_pack_content(packs: list[Source]) -> list[str]:
     """Return human-readable findings for pack files that break their contract.
 
-    Empty list when every pack file conforms (or when there are no packs) —
+    Empty list when every pack file conforms (or when there are no packs):
     callers decide severity: `config validate` treats findings as errors,
     `doctor` as warnings.
     """

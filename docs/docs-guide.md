@@ -4,6 +4,10 @@ This project follows the [Diataxis framework](https://diataxis.fr/) for technica
 
 The docs use Diataxis strictly: every page has one primary quadrant. A page can link to another quadrant, but it should not embed that second job in place.
 
+**Audience:** contributors and docs-maintainer users deciding what to write, where it belongs, and how to make it usable.
+
+**Jump to:** [the four quadrants](#the-four-quadrants), [placement rules](#strict-placement-rules), [the current map](#current-documentation-map), [writing guidance](#guidelines-for-new-documentation), [audience](#audience-contract), [long pages](#progressive-disclosure), [diagrams](#diagrams), or [navigation](#navigation).
+
 ---
 
 ## The Four Quadrants
@@ -48,14 +52,17 @@ Quick memory rule: tutorials are for studying, how-to guides are for working, re
 | `docs/README.md` | Reference index | Routes readers by Diataxis need; no task steps beyond page selection. |
 | `getting-started.md` | Tutorial | Beginner first success; avoid alternatives and deep theory. |
 | `user-guide.md` | How-to index | Day-to-day workflow routing for users who know the basics. |
+| `how-to/agent-telemetry.md` | How-to | Task recipe for wiring and reading unattended agent-run telemetry. |
 | `how-to/choose-workflow-path.md` | How-to | Task recipe for selecting full, minimal, spike, solo, or team workflow. |
 | `how-to/enforce-quality.md` | How-to | Task recipe for local hooks, CI gates, and quality checks. |
 | `how-to/invoke-agents.md` | How-to | Task recipe for starting agents with correct inputs. |
 | `how-to/reduce-token-usage.md` | How-to | Task recipe for lowering token use while preserving quality gates. |
 | `how-to/resume-session.md` | How-to | Task recipe for continuing after context loss or a tool switch. |
 | `how-to/run-with-local-models.md` | How-to | Task recipe for local and open source model setup. |
+| `how-to/scale-agent-automation.md` | How-to | Task recipe for scaling agent-first automation patterns. |
 | `how-to/setup-issue-tracker.md` | How-to | Task recipe for tracker setup or manual issue paste. |
 | `how-to/setup-multi-repo.md` | How-to | Task recipe for shared vocabulary across repositories. |
+| `how-to/uninstall.md` | How-to | Task recipe for removing the playbook from a project. |
 | `how-to/write-a-pack.md` | How-to | Task recipe for project-specific playbook packs. |
 | `rfcs/README.md` | How-to | Process recipe for proposing changes larger than a PR. |
 | `cli-reference.md` | Reference | Complete command, flag, agent, skill, template, and config lookup. |
@@ -159,10 +166,38 @@ Use **work item** for external project-management objects unless the doc is inte
 
 ---
 
+## Audience Contract
+
+Define the reader before choosing structure or detail. Capture three things:
+
+- **Expertise:** first-time user, competent practitioner, maintainer, operator, or decision-maker.
+- **Reader goal:** learn a capability, complete a task, look up a fact, understand a decision, or recover from failure.
+- **Reading context:** uninterrupted study, quick lookup, task under pressure, review, or accessibility-constrained use.
+
+Infer these from the request and repository when the evidence is clear, and state the assumption. Ask only when a different answer would change scope, terminology, prerequisite depth, or document structure. Labels such as "internal" or "external" are not enough by themselves: two internal readers can have different expertise and goals.
+
+---
+
+## Progressive Disclosure
+
+Long documentation should support scanning and deep reading on the same page:
+
+1. Lead with the outcome, purpose, and a short summary.
+2. Put the common path, decision, or task steps before background detail.
+3. Move edge cases, rationale, exhaustive tables, and troubleshooting into clearly named later sections.
+4. Use descriptive headings and a contents list when the page has enough sections that readers would otherwise need to scroll to discover its shape.
+5. Link to another Diataxis quadrant when the reader's goal changes; do not fragment one coherent explanation merely to shorten the page.
+
+Progressive disclosure is an information order, not permission to hide prerequisites, safety warnings, limitations, or irreversible consequences. Put those before the action they constrain.
+
+---
+
 ## Diagrams
 
 Prefer Mermaid fenced code blocks (```` ```mermaid ````) over image files: GitHub and GitLab render them inline, they diff like code, and they never go stale in an assets folder nobody re-exports.
 
+- **A diagram must earn its place.** Add one only when it makes a relationship materially easier to understand than prose: sequence, branching, hierarchy, state, ownership, or data flow. Omit it for a single fact, a short linear procedure, decoration, or a table that already communicates the mapping.
+- **Prose is the source of truth.** Put a concise text equivalent immediately before or after every diagram. A reader using a screen reader, terminal renderer, or tool without Mermaid support must receive the same sequence, branches, states, and conclusion.
 - **One diagram per concept.** A diagram that needs a legend to explain itself should be two diagrams.
 - **Pick the type by what the reader asks:** sequence diagram for "what calls what, in what order" (flows, handoffs, incident timelines); flowchart for "which branch applies" (decision trees, workflow routing); state diagram for lifecycle states (story status, release stages).
 - **Node labels use domain language**: the terms from `knowledge-base/domain-language.md`, not implementation names. `story-refiner → slice-planner`, not `module_a → module_b`.

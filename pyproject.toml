@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ai-playbook"
 version = "1.0.0"
-description = "CLI tool for deploying ai-playbook agents to Claude, Copilot, Cursor, or Kiro"
+description = "CLI tool for deploying ai-playbook agents to Claude, Copilot, Codex, Cursor, or Kiro"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -18,7 +18,7 @@ authors = [
 maintainers = [
     { name = "Meenu Mathew" },
 ]
-keywords = ["ai", "agents", "playbook", "claude", "copilot", "cursor", "kiro", "tdd", "xp"]
+keywords = ["ai", "agents", "playbook", "claude", "copilot", "codex", "cursor", "kiro", "tdd", "xp"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
@@ -83,6 +83,10 @@ dev = [
     "pyright>=1.1.350,<2.0",
     "pytest>=9.0.0,<10.0",
     "pytest-cov>=4.0.0,<8.0",
+    "pytest-xdist>=3.5,<4",
+    # Direct import of tools/check-kb-frontmatter.py — do not rely on the
+    # transitive copy pre-commit/libcst pull in.
+    "pyyaml>=6.0,<7",
     "ruff>=0.15.0,<1.0",
 ]
 
@@ -153,6 +157,13 @@ python_files = ["test_*.py"]
 # --strict-markers / --strict-config catch typos in markers and config keys.
 # -ra surfaces the reasons for non-pass outcomes (skipped / xfailed / errors).
 addopts = "--strict-markers --strict-config -ra"
+# repo_contract: tests that assert on repo-only files (.github/, evals/,
+# harness sources) that are deliberately not packaged into the wheel. CI
+# deselects them when running the acceptance suite against the installed
+# wheel; they still run in the default source-tree suite.
+markers = [
+    "repo_contract: asserts on repo-only files absent from the built wheel",
+]
 # pythonpath = ["src"] makes the src-layout importable from the tests
 # directory without relying on an editable install. Required for mutmut,
 # which runs pytest inside a `mutants/` sandbox where the editable link

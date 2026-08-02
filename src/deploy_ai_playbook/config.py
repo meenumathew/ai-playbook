@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -12,11 +11,11 @@ from types import MappingProxyType
 from typing import Any, NoReturn
 
 from deploy_ai_playbook.errors import AIPlaybookError
+from deploy_ai_playbook.semantic_version import SemanticVersion
 
 PACK_CONFIG_FILE = ".ai-playbook.toml"
 PACK_METADATA_FILE = "pack.toml"
 QUALITY_TIER_VALUES = frozenset({"production", "prototype"})
-_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$")
 
 
 class ConfigError(ValueError, AIPlaybookError):
@@ -45,6 +44,14 @@ class Source:
 @dataclass(frozen=True, slots=True)
 class ModelTierConfig:
     """Model mapping declared by adopter-side `.ai-playbook.toml`."""
+
+    advisor: str | None = None
+    executor: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ModelReasoningConfig:
+    """Reasoning-effort mapping declared by adopter-side `.ai-playbook.toml`."""
 
     advisor: str | None = None
     executor: str | None = None
@@ -99,6 +106,22 @@ def load_model_tier_config(project_root: Path) -> ModelTierConfig | None:
     return ModelTierConfig(
         advisor=_optional_non_empty_string(raw_model_tiers, "advisor", "model_tiers"),
         executor=_optional_non_empty_string(raw_model_tiers, "executor", "model_tiers"),
+    )
+
+
+def load_model_reasoning_config(project_root: Path) -> ModelReasoningConfig | None:
+    """Read optional `[model_reasoning_efforts]` mapping from `.ai-playbook.toml`."""
+    config = _read_playbook_config(project_root)
+    if config is None:
+        return None
+    raw_reasoning = config.get("model_reasoning_efforts")
+    if raw_reasoning is None:
+        return None
+    if not isinstance(raw_reasoning, dict):
+        _config_error("`model_reasoning_efforts` must be a table with advisor/executor strings")
+    return ModelReasoningConfig(
+        advisor=_optional_non_empty_string(raw_reasoning, "advisor", "model_reasoning_efforts"),
+        executor=_optional_non_empty_string(raw_reasoning, "executor", "model_reasoning_efforts"),
     )
 
 
@@ -214,11 +237,8 @@ def _metadata_version(data: dict[str, Any], metadata_path: Path, field: str) -> 
     return version
 
 
-def _version_key(version: str) -> tuple[int, int, int] | None:
-    match = _VERSION_RE.match(version)
-    if match is None:
-        return None
-    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+def _version_key(version: str) -> SemanticVersion | None:
+    return SemanticVersion.parse(version)
 
 
 def _validate_pack_compatibility(metadata: PackMetadata, metadata_path: Path) -> None:

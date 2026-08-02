@@ -34,6 +34,7 @@ provider = "jira"
 |------|-----------------|------|
 | Claude | `.claude/settings.json` | Browser prompt on first fetch |
 | Copilot | `.vscode/mcp.json` | Browser prompt on first fetch |
+| Codex | `.codex/config.toml` (`mcp_servers` table) | Browser prompt on first fetch |
 | Cursor | `.cursor/mcp.json` | Browser prompt on first fetch |
 | Kiro | `.kiro/settings/mcp.json` | Browser prompt on first fetch |
 

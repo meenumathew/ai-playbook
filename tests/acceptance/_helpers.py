@@ -25,11 +25,12 @@ AGENTS_WITH_SKILLS_REFS = {
 }
 AGENTS_WITH_TEMPLATE_REFS = {"slice-planner", "story-refiner"}
 
-# (Tool, agents subdir, kb prefix, skills prefix, templates prefix)
+# (Tool, agents subdir, agent suffix, kb prefix, skills prefix, templates prefix)
 TOOL_MATRIX = [
     (
         Tool.claude,
         ".claude/agents",
+        ".agent.md",
         ".claude/knowledge-base/",
         ".claude/skills/",
         ".claude/templates/",
@@ -37,13 +38,23 @@ TOOL_MATRIX = [
     (
         Tool.copilot,
         ".github/agents",
+        ".agent.md",
         ".github/knowledge-base/",
         ".github/skills/",
         ".github/templates/",
     ),
     (
+        Tool.codex,
+        ".codex/agents",
+        ".toml",
+        ".codex/knowledge-base/",
+        ".agents/skills/",
+        ".codex/templates/",
+    ),
+    (
         Tool.cursor,
         ".cursor/agents",
+        ".agent.md",
         ".cursor/knowledge-base/",
         ".cursor/skills/",
         ".cursor/templates/",
@@ -51,6 +62,7 @@ TOOL_MATRIX = [
     (
         Tool.kiro,
         ".kiro/agents",
+        ".agent.md",
         ".kiro/knowledge-base/",
         ".kiro/skills/",
         ".kiro/templates/",

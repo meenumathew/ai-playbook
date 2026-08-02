@@ -2,7 +2,11 @@
 
 import re
 
+import pytest
+
 from deploy_ai_playbook.cli import discover_agents, get_source_root
+
+pytestmark = pytest.mark.repo_contract
 
 _POINTER_RE = re.compile(
     r"(?<![\w/<])`?(?P<path>(?:(?:knowledge-base|skills|templates|docs|agents|evals)/)?"
@@ -34,7 +38,7 @@ def _normalize_heading(raw: str) -> str:
     decoration that doesn't load-bear the meaning. Strip:
     - backticks and trailing punctuation
     - parenthetical decoration `*(scope hint)*` or `(clarification)`
-    - em-dash qualifier ` — when the deliverable is tests`
+    - em-dash qualifier `: when the deliverable is tests`
     - leading step enumeration `5. ` (how-to Steps are numbered; pointers
       cite the heading text so they survive renumbering)
     """
@@ -98,7 +102,7 @@ def _heading_resolves(captured: str, target_headings: set[str], source_after: st
     `<captured>: <suffix>` AND verify that the source text after the regex
     match begins with `: <suffix>` (the colon stopped the regex; the
     suffix sits in the unmatched remainder). This is required to detect
-    typos in the suffix — a prefix-only match would silently accept
+    typos in the suffix: a prefix-only match would silently accept
     `Reference: Agent-First Automaton` against the real heading
     `Reference: Agent-First Automation`.
     """
@@ -262,14 +266,14 @@ def test_pointer_parser_handles_colon_in_heading(tmp_path):
     target.parent.mkdir(parents=True)
     target.write_text("# Working Agreement\n\n## Reference: Agent-First Automation\n\nstuff\n")
 
-    # Correct cite — must resolve.
+    # Correct cite: must resolve.
     source_ok = (
         "Detail: `knowledge-base/working-agreement.md` § Reference: Agent-First Automation.\n"
     )
     failures = _check_pointer_targets(source_ok, "src.md", tmp_path)
     assert failures == [], f"colon-in-heading citation must resolve: {failures}"
 
-    # Typo in suffix — must NOT be silently masked by prefix-only match.
+    # Typo in suffix: must NOT be silently masked by prefix-only match.
     source_typo = (
         "Detail: `knowledge-base/working-agreement.md` § Reference: Agent-First Automaton.\n"
     )

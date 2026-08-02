@@ -5,23 +5,168 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: auto-release
   cancel-in-progress: false
 
 jobs:
-  tag:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      release-branch: ${{ steps.release.outputs.branch }}
+      release-version: ${{ steps.release.outputs.version }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Checkout triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          # Must be a deploy key with write access: tags pushed with the
-          # default GITHUB_TOKEN do not trigger the Release workflow.
-          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
-      - name: Semantic release (compute version, commit, tag, push)
-        run: uvx python-semantic-release@10 version --no-vcs-release
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Classify main-branch commit
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          tag="v${version}"
+
+          if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
+            echo "mode=prepare" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          parent_version="$(
+            git show "${GITHUB_SHA}^:pyproject.toml" 2>/dev/null |
+              python3 -c 'import sys, tomllib; print(tomllib.loads(sys.stdin.read())["project"]["version"])' ||
+              true
+          )"
+          if [[ -n "$parent_version" && "$parent_version" != "$version" ]]; then
+            # A version change alone is not proof of a merged release PR: a
+            # manual or post-release bump would otherwise be tagged and
+            # published to append-only PyPI. Require a release-PR subject
+            # (squash merge keeps it, classic merge names the branch).
+            subject="$(git log -1 --format=%s "$GITHUB_SHA")"
+            case "$subject" in
+              "chore(release): ${version}"*) ;;
+              "Merge pull request "*"/release/v${version}"*) ;;
+              *)
+                echo "::error::pyproject.toml version changed to ${version}, but commit subject '${subject}' is not a release-PR merge (expected 'chore(release): ${version}' or a merge of release/v${version}). Refusing to tag a non-release version bump."
+                exit 1
+                ;;
+            esac
+            echo "mode=tag" >> "$GITHUB_OUTPUT"
+            echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::Version ${version} has no tag, but this commit did not introduce it. Rerun the failed Auto Release workflow for the commit that merged the release PR; refusing to tag unrelated code."
+          exit 1
+
+      - name: Prepare version and changelog for release PR
+        id: prepared
+        if: steps.mode.outputs.mode == 'prepare'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uvx --from python-semantic-release==10.6.1 \
+            semantic-release version --no-commit --no-tag --no-push --no-vcs-release
+
+          if git diff --quiet -- pyproject.toml CHANGELOG.md; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "No releasable conventional commits found."
+          else
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate release deploy key
+        if: >-
+          steps.mode.outputs.mode == 'tag' ||
+          steps.prepared.outputs.created == 'true'
+        uses: ./.github/actions/configure-release-ssh
+        with:
+          private-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          write-ref: release-preflight-${{ github.run_id }}
+
+      - name: Create release branch commit
+        id: release
+        if: steps.prepared.outputs.created == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          branch="release/v${version}"
+
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "::error::Remote branch ${branch} already exists. Update or close its release PR before retrying."
+            exit 1
+          fi
+
+          git switch -c "$branch"
+          git config user.name "ai-playbook-release"
+          git config user.email "ai-playbook-release@users.noreply.github.com"
+          git add pyproject.toml CHANGELOG.md
+          git commit \
+            -m "chore(release): ${version}" \
+            -m "Teach-back: semantic-release prepared version and changelog; merge this release PR before the tag is created."
+          git push --set-upstream origin "$branch"
+
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag merged release PR commit
+        if: steps.mode.outputs.mode == 'tag'
+        env:
+          RELEASE_TAG: ${{ steps.mode.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --tags --force
+          # The tag targets $GITHUB_SHA explicitly, so main moving ahead is
+          # fine — require only that the merge commit is still on main. A
+          # strict equality check here deadlocks: reruns keep the same
+          # GITHUB_SHA while origin/main stays ahead, so the release could
+          # never be tagged once any commit landed after the merge.
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::${GITHUB_SHA} is not on origin/main (rewritten or removed); refusing to tag an unverified commit."
+            exit 1
+          fi
+
+          tag="$RELEASE_TAG"
+          git config user.name "ai-playbook-release"
+          git config user.email "ai-playbook-release@users.noreply.github.com"
+          git tag -a "$tag" "$GITHUB_SHA" -m "Release $tag"
+          git push origin "refs/tags/$tag"
+
+  open-release-pr:
+    needs: release
+    if: needs.release.outputs.release-branch != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Open release PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_BRANCH: ${{ needs.release.outputs.release-branch }}
+          RELEASE_VERSION: ${{ needs.release.outputs.release-version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr create \
+            --base "$GITHUB_REF_NAME" \
+            --head "$RELEASE_BRANCH" \
+            --title "chore(release): ${RELEASE_VERSION}" \
+            --body "Automated version and changelog update. Merge only after the normal CI, review, and approval gates pass; the merged commit will then be tagged."

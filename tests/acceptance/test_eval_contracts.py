@@ -7,8 +7,12 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from deploy_ai_playbook.cli import get_source_root
 from tests.acceptance.contract_data import AGENT_CONTRACTS
+
+pytestmark = pytest.mark.repo_contract
 
 
 def _read_eval(filename: str) -> str:
@@ -19,7 +23,7 @@ def _read_eval(filename: str) -> str:
 def test_every_agent_has_an_eval_pair():
     """Every agent ships with all six required eval artifacts.
 
-    Adding agent #N must touch all of these in the same PR — a partial
+    Adding agent #N must touch all of these in the same PR: a partial
     add (e.g. forgot the rubric.json) silently shrinks coverage. Earlier
     versions of this test only checked the two main markdown files; the
     extension catches drift on the adversarial pair, the sample file
@@ -45,7 +49,7 @@ def test_every_agent_has_an_eval_pair():
 
 
 def test_eval_expected_files_have_required_sections():
-    # STRUCTURE-MARKER: rubric section headings — presence is the contract;
+    # STRUCTURE-MARKER: rubric section headings: presence is the contract;
     # the prose inside each section is free to change.
     required_sections = [
         r"## Must (demonstrate|identify|Fix)",
@@ -85,6 +89,24 @@ def test_eval_input_files_are_non_empty():
             f"evals/{agent_name}-input.md is too short ({len(content)} chars) — "
             f"needs a meaningful scenario"
         )
+
+
+def test_docs_maintainer_adversarial_eval_covers_information_design():
+    expected = _read_eval("docs-maintainer-adversarial-expected.md")
+    sample = (
+        get_source_root() / "evals" / "samples" / "adversarial" / "docs-maintainer-adversarial.md"
+    )
+
+    for concept in (
+        "Audience contract",
+        "Progressive disclosure",
+        "Diagram earns its place",
+        "Accessible text equivalent",
+    ):
+        assert concept in expected
+    assert sample.exists(), (
+        "docs-maintainer needs a committed adversarial information-design sample"
+    )
 
 
 # ---------------------------------------------------------------------------

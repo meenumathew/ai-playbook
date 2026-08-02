@@ -1,6 +1,7 @@
 ---
 provenance: curated
 negative_control: deliberately flawed — the LLM judge must FAIL this file
+violates: [DOCS-NOT-001, DOCS-NOT-002, DOCS-NOT-004, DOCS-NOT-005]
 ---
 
 # ADR appended

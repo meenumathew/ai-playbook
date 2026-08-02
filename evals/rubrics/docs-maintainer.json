@@ -16,9 +16,11 @@
     },
     {
       "id": "DOCS-MUST-002",
-      "criterion": "**Key questions asked first:** Situation? Decision? Alternatives rejected and why? What's gained? What becomes harder? Business reason? \u2014 stops if can't answer the first 3",
+      "criterion": "**Key questions resolved first:** situation, decision, and alternatives-rejected are each answered before drafting \u2014 asked explicitly, or extracted from the request when it already supplies them \u2014 and the agent stops if the first 3 can't be answered",
       "keywords": [
-        "Key questions asked first"
+        "situation",
+        "decided",
+        "alternatives rejected"
       ]
     },
     {
@@ -36,41 +38,46 @@
       "id": "DOCS-MUST-004",
       "criterion": "**Business reason explicit:** Not just \"we liked it better\" \u2014 captures deliverability, team familiarity, SDK fit, and timeline constraint",
       "keywords": [
-        "Business reason explicit"
+        "deliverability",
+        "team familiarity",
+        "timeline"
       ]
     },
     {
       "id": "DOCS-MUST-005",
-      "criterion": "**Consequences documented:** Both positive (better deliverability, faster onboarding) and negative (higher cost than Mailgun, vendor lock-in)",
+      "criterion": "**Consequences documented:** both what becomes easier (deliverability, onboarding) and what becomes harder (cost relative to Mailgun, dependence on a single vendor) \u2014 per the ADR template's easier/harder framing",
       "keywords": [
-        "Positive",
-        "Negative",
-        "higher cost",
-        "vendor lock-in"
+        "easier",
+        "harder",
+        "cost",
+        "vendor"
       ]
     },
     {
       "id": "DOCS-MUST-006",
       "criterion": "**Status set:** \"Accepted\" with date",
       "keywords": [
-        "Status set"
+        "Status",
+        "Active",
+        "Date"
       ]
     },
     {
       "id": "DOCS-MUST-007",
       "criterion": "**Preview before save:** Shows the ADR and waits for explicit approval",
       "keywords": [
-        "Preview before save"
+        "preview above",
+        "I'll revise"
       ]
     },
     {
       "id": "DOCS-MUST-008",
-      "criterion": "**Saved to correct location:** New file under `docs/adr/NNNN-title-slug.md` (one file per decision); `docs/adr/README.md` index updated",
+      "criterion": "**Correct save target named:** the approval line targets a new file under `docs/adr/NNNN-title-slug.md` (one file per decision, next zero-padded number); on approval the save includes a `docs/adr/README.md` index row",
       "keywords": [
-        "docs/adr/NNNN-title-slug.md",
-        "docs/adr/README.md",
-        "Saved to correct location"
-      ]
+        "docs/adr/0005",
+        "save to"
+      ],
+      "evidence": "Judge must confirm the preview's save target is a correctly numbered per-decision ADR path; the actual save may be pending approval in a preview-gated transcript."
     }
   ],
   "must_not": [
@@ -78,43 +85,54 @@
       "id": "DOCS-NOT-001",
       "criterion": "Write the ADR without asking clarifying questions first (at minimum confirm the situation and alternatives)",
       "keywords": [
-        "Write the ADR"
+        "no questions needed",
+        "wrote the decision record straight away",
+        "skipped the clarifying questions"
       ]
     },
     {
       "id": "DOCS-NOT-002",
       "criterion": "Include implementation details (API keys, SDK setup, code examples) \u2014 ADRs capture *decisions*, not *how-tos*",
       "keywords": [
-        "Include implementation details"
+        "import sendgrid",
+        "api_key=",
+        "sg.send("
       ]
     },
     {
       "id": "DOCS-NOT-003",
       "criterion": "Skip documenting what becomes harder (consequences of choosing SendGrid)",
       "keywords": [
-        "Skip documenting what"
-      ]
+        "nothing becomes harder",
+        "no downsides worth noting"
+      ],
+      "evidence": "Judge must confirm negative consequences are documented, or cite their absence. Structural keywords are best-effort here (skipping is an absence); the LLM judge is the enforcement layer."
     },
     {
       "id": "DOCS-NOT-004",
       "criterion": "Save without preview and approval",
       "keywords": [
-        "Save without preview"
+        "entry added",
+        "appended it to",
+        "saved it without preview"
       ]
     },
     {
       "id": "DOCS-NOT-005",
       "criterion": "Append to a single monolithic `decisions.md` instead of creating a new file under `docs/adr/`",
       "keywords": [
-        "decisions.md"
+        "decisions.md",
+        "one big file is easier"
       ]
     },
     {
       "id": "DOCS-NOT-006",
       "criterion": "Duplicate documentation that already exists elsewhere",
       "keywords": [
-        "Duplicate documentation that"
-      ]
+        "copied the existing section",
+        "duplicated from the user guide"
+      ],
+      "evidence": "Judge must flag content that restates documentation that already exists elsewhere in the repo. Structural keywords are best-effort here (duplication has no reliable phrase); the LLM judge is the enforcement layer."
     }
   ],
   "quality_signals": [
@@ -122,43 +140,49 @@
       "id": "DOCS-QUALITY-001",
       "criterion": "ADR leads with business purpose, not technical details",
       "keywords": [
-        "ADR leads with"
+        "needs a transactional email provider"
       ]
     },
     {
       "id": "DOCS-QUALITY-002",
       "criterion": "Language is clear enough that a new team member understands the decision without extra context",
       "keywords": [
-        "Language is clear"
+        "evaluated",
+        "rejected"
       ]
     },
     {
       "id": "DOCS-QUALITY-003",
       "criterion": "Trade-offs are honest \u2014 doesn't hide downsides of the chosen option",
       "keywords": [
-        "Trade-offs are honest"
+        "Harder: cost",
+        "vendor"
       ]
     },
     {
       "id": "DOCS-QUALITY-004",
       "criterion": "\"What becomes harder\" section mentions vendor lock-in or cost as a real consequence",
       "keywords": [
-        "\"What becomes harder\""
+        "Harder",
+        "lock-in"
       ]
     },
     {
       "id": "DOCS-QUALITY-005",
       "criterion": "Alternatives include enough detail to understand why they were rejected without re-evaluating",
       "keywords": [
-        "Alternatives include enough"
+        "documentation quality was worse",
+        "infrastructure setup"
       ]
     },
     {
       "id": "DOCS-QUALITY-006",
       "criterion": "No implementation guidance \u2014 the ADR explains *why SendGrid*, not *how to use SendGrid*",
       "keywords": [
-        "No implementation guidance"
-      ]
+        "SDK",
+        "implementation"
+      ],
+      "evidence": "Judge must confirm the ADR body contains no SDK setup, keys, or code examples; mentions of the SDK as a decision factor are fine."
     }
   ]
 }

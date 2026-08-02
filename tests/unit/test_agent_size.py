@@ -48,7 +48,7 @@ def run_check(
     if env_overrides:
         env.update(env_overrides)
     args = [sys.executable, str(SCRIPT), *(str(p) for p in paths)]
-    return subprocess.run(  # noqa: S603 — args are constructed from trusted constants
+    return subprocess.run(  # noqa: S603 - args are constructed from trusted constants
         args,
         capture_output=True,
         text=True,
@@ -80,7 +80,7 @@ def make_root(tmp_path: Path) -> Path:
 
 
 def test_size_gate_clean_repo_passes() -> None:
-    """Every live loaded-surface file must be within its budget — regression guard."""
+    """Every live loaded-surface file must be within its budget: regression guard."""
     result = run_check()
     assert result.returncode == 0, result.stderr
 
@@ -148,7 +148,7 @@ def test_within_budget_passes(tmp_path: Path) -> None:
 
 
 def test_empty_agents_glob_fails_loudly(tmp_path: Path) -> None:
-    """No agents/*.agent.md files must FAIL, not silently pass — a silent
+    """No agents/*.agent.md files must FAIL, not silently pass: a silent
     pass would disable the gate entirely (e.g. run from the wrong root)."""
     root = make_root(tmp_path)
     (root / "agents" / "baseline.agent.md").unlink()
@@ -160,7 +160,7 @@ def test_empty_agents_glob_fails_loudly(tmp_path: Path) -> None:
 
 
 def test_missing_budgeted_surface_fails_loudly(tmp_path: Path) -> None:
-    """A SURFACE_MAX_LINES cap whose file no longer resolves must FAIL —
+    """A SURFACE_MAX_LINES cap whose file no longer resolves must FAIL:
     a silently dropped cap means the budget stopped being enforced."""
     root = make_root(tmp_path)
     (root / "knowledge-base" / "CHEATSHEET.md").unlink()

@@ -2,20 +2,21 @@
 """Compare mutmut CI stats against the committed regression baseline.
 
 `mutmut run` is useful only when the exported stats are treated as a contract.
-This checker fails on new surviving/no-test mutants and on infrastructure-like
-statuses such as suspicious, timeout, interrupted, or segfault. It also fails
-on new skipped mutants (`max_skipped`) and on a collapse of the mutant
-population (`min_total`) — without a floor on total, a config change that
-silently stops mutating most of src/ would look like a perfect run.
+This checker fails when the combined survived + timeout *rate* grows, on new
+no-test/skipped mutants, and on infrastructure failures such as suspicious,
+interrupted, or segfault. It also retains an independent timeout ceiling and a
+mutant-population floor (`min_total`).
 
 Baseline value provenance (JSON carries no comments, so it lives here):
-`max_skipped` is pinned to the recorded skipped count of the current baseline
-run (0), and `min_total` to roughly 90% of that run's total mutant count
-(4007 mutants -> floor 3600, from CI run 29627561298). `max_survived` (600)
-and `max_timeout` (500) carry a small headroom over that run's observed
-580/436 because timeout counts vary with runner load. Regenerate with
-`uv run mutmut run` + `uv run mutmut export-cicd-stats` and update both when
-src/ legitimately grows or shrinks.
+`max_skipped` is pinned to 0, and `min_total` to roughly 90% of the baseline
+run's total (4007 mutants -> floor 3600, CI run 29627561298). That run observed
+580 survived + 436 timeout = 1016 unresolved. CI run 29994321084 improved to
+701 + 308 = 1009, demonstrating why independent survivor/timeout quality caps
+are unsound: runner speed reclassifies the same unresolved population.
+`max_unresolved_basis_points` carries small proportional headroom so adding
+well-tested source does not fail merely because the absolute mutant population
+grew; `max_timeout` still detects infrastructure degradation. Regenerate with
+`uv run mutmut run` + `uv run mutmut export-cicd-stats` when the score changes.
 
 Usage:
     python tools/check-mutation-baseline.py [STATS_JSON] [BASELINE_JSON]
@@ -49,7 +50,6 @@ STAT_FIELDS = (
 )
 
 THRESHOLD_TO_FIELD = {
-    "max_survived": "survived",
     "max_no_tests": "no_tests",
     "max_skipped": "skipped",
     "max_suspicious": "suspicious",
@@ -95,6 +95,25 @@ def check_baseline(stats_path: Path, baseline_path: Path) -> list[str]:
         raise CheckError(f"{stats_path}: `total` must be greater than zero")
 
     failures: list[str] = []
+    max_unresolved_basis_points = thresholds.get("max_unresolved_basis_points")
+    if (
+        not isinstance(max_unresolved_basis_points, int)
+        or not 0 <= max_unresolved_basis_points <= 10_000
+    ):
+        raise CheckError(
+            f"{baseline_path}: `thresholds.max_unresolved_basis_points` "
+            "must be an integer from 0 to 10000"
+        )
+    unresolved = observed["survived"] + observed["timeout"]
+    if unresolved * 10_000 > observed["total"] * max_unresolved_basis_points:
+        observed_percent = unresolved * 100 / observed["total"]
+        allowed_percent = max_unresolved_basis_points / 100
+        failures.append(
+            "unresolved rate (survived + timeout): "
+            f"observed {observed_percent:.2f}% ({unresolved}/{observed['total']}), "
+            f"baseline allows {allowed_percent:.2f}%"
+        )
+
     for threshold_key, stat_field in THRESHOLD_TO_FIELD.items():
         allowed = thresholds.get(threshold_key)
         if not isinstance(allowed, int) or allowed < 0:
@@ -134,7 +153,8 @@ def main(argv: list[str]) -> int:
         for failure in failures:
             print(f"  - {failure}", file=sys.stderr)
         print(
-            "\nReview surviving/no-test mutants before raising mutation-baseline.json.",
+            "\nReview surviving, timeout, and no-test mutants before changing "
+            "mutation-baseline.json.",
             file=sys.stderr,
         )
         return 1

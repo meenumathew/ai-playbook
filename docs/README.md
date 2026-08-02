@@ -26,10 +26,13 @@ Task-oriented docs for competent users who need to do one thing.
 | [Resume a Session](how-to/resume-session.md) | You need to continue after context loss or a tool switch. |
 | [Set Up Project Management Tool](how-to/setup-issue-tracker.md) | You need Jira, GitHub Issues/Projects, GitLab, Bitbucket Cloud, Linear, or pasted work items. |
 | [Enforce Quality Gates](how-to/enforce-quality.md) | You need local hooks, CI gates, or quality checks wired in. |
+| [Agent Telemetry](how-to/agent-telemetry.md) | You need to log and read telemetry from unattended agent runs. |
+| [Scale Agent Automation](how-to/scale-agent-automation.md) | You need agents to self-correct via lint messages, doc gardening, and quality sweeps. |
 | [Set Up Multi-Repo Teams](how-to/setup-multi-repo.md) | You need shared playbook vocabulary across repositories. |
 | [Reduce Token Usage](how-to/reduce-token-usage.md) | You need lower per-session token cost while keeping quality gates. |
 | [Run With Local Models](how-to/run-with-local-models.md) | You need local or open source model setup. |
 | [Write a Pack](how-to/write-a-pack.md) | You need project-specific playbook content without forking. |
+| [Uninstall the Playbook](how-to/uninstall.md) | You need to remove the playbook from a project, fully or partially. |
 | [RFC Process](rfcs/README.md) | You need to propose a change that is larger than a single PR. |
 
 ---

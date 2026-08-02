@@ -10,7 +10,7 @@ outputs: "plans/PLAN-NNN-<slug>.md (or small-story shortcut: ## Implementation s
 handoff: xp-pair-programmer for every plan; documentation-only plans carry docs-maintainer's writing rules
 escalation: back to story-refiner if AC contradicts research or scope changes
 read-budget: 15
-verified: 2026-07-02
+verified: 2026-07-25
 ---
 
 > **HARD RULES**
@@ -68,9 +68,9 @@ Do not proceed to step 1 for spikes. The remaining steps assume `type:` is `stor
    | `type:` | Plan shape |
    |---|---|
    | `story` (feature) | Default: vertical slices for new behaviour. |
-   | `bug` | Regression-test-first. First slice = failing regression test; later slices fix. See Phase 2 § For bug stories. |
+   | `bug` | Regression-test-first. First slice = failing regression test; later slices fix. See Phase 2, **For bug stories**. |
    | `chore` | Lean: usually one slice, no AC walkthrough, skip architecture overview. |
-   | `test-story` | Retrofitting coverage. Phase 2 § For test-stories applies. |
+   | `test-story` | Retrofitting coverage. Phase 2, **For test-stories** applies. |
 
    **Bug stories also expose `severity:` and `regression-since:`**: surface them in plan risks if SEV1/SEV2 means urgent rollout or if a long-standing regression needs broader characterization.
 
@@ -108,7 +108,7 @@ Break the agreed design into deliverable slices. Each slice is a checkpoint: wor
    - Slices produce characterization tests: document current behaviour, including bugs (marked `# BUG:`). See `knowledge-base/testing.md` § Test-Story Cycle: When the Deliverable Is Tests.
 
    **For bug stories (`type: bug`):**
-   - **Slice 1 is always the regression test, alone.** Encode the bug's reproduction as a test that *fails* against current code. Capture RED evidence (test name, command, failure output) in the plan/session log. Do not commit a failing test; the first commit happens after the regression test is green, or after it is explicitly xfail/skip-marked with the failure mode documented and quality gates remain green. Proves reproducible in code, not just prose.
+   - **Slice 1 is always the regression test, alone.** Encode the bug's reproduction as a test that *fails* against current code. Capture RED evidence (test name, command, failure output) in the plan/session log. This slice produces **no commit**: the fix slice's commit covers test + fix together (`agents/xp-pair-programmer.agent.md` owns the commit boundary). Proves reproducible in code, not just prose.
    - **Slice 2 is the fix.** The regression test must turn green. The commit's `Teach-back:` trailer (`skills/git/SKILL.md`) names the root cause, not the symptom (`knowledge-base/debugging.md` Iron Law).
    - **Adjacent behaviour gets characterization tests if missing**: added before the fix, in a slice between 1 and 2.
    - **No vertical-slice architecture diagram for one-liner fixes.** A bug fix rarely introduces new boundaries. Phase 1 design section can be one sentence on root cause.
@@ -133,6 +133,7 @@ Turn the structure into tactical tasks xp-pair-programmer can execute mechanical
 3. **Risks and unknowns**: flag destructive ops, third-party changes, cross-repo deps. Significant unknowns → recommend a spike (half-day timebox). **Out-of-scope blockers** (CI/CD, env config, IAM): list as risks with the owning team: not as tasks here.
 
 4. **Design-time gates** (state blast radius + add mitigation to Risks for each that applies):
+   - **Architecture-impact gate**: slice changes deployment model, runtime topology, process boundaries, or data ownership → profile the data and workload, then justify any added operational complexity before naming services, brokers, or platforms, `knowledge-base/architecture-decisions.md` § Architecture-Impact Trigger.
    - **Security checkpoint**: auth, secrets, CI/CD, permissions, PII, untrusted input → threat-model the slice (STRIDE-lite), `knowledge-base/security.md`.
    - **Performance/load gate**: data-heavy, high-throughput, or hot-path slice → plan a load/stress test with a target, `knowledge-base/performance.md` § Load & Stress Testing.
    - **Migration-safety gate**: schema or data migration → plan reversible expand → migrate → contract steps with backfill, `knowledge-base/regression-and-contracts.md` § Migration Safety.
@@ -167,9 +168,9 @@ Turn the structure into tactical tasks xp-pair-programmer can execute mechanical
     Structure: [N] vertical slices
     Language: [detected]
     Risks: [flagged items or "none"]
-   Handoff: xp-pair-programmer [if documentation-only: note the docs-maintainer writing rules]
+    Handoff: xp-pair-programmer [if documentation-only: note the docs-maintainer writing rules]
 
-   Say 'use xp-pair-programmer for <PREFIX>-NNN' to start the next step.
+    Say 'use xp-pair-programmer for <PREFIX>-NNN' to start the next step.
     ```
 
    Substitute the real prefix from the story (`STORY-` / `BUG-` / `CHORE-`); documentation-only plans carry the writing-rules note from Phase 3 step 5.

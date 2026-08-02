@@ -2,6 +2,10 @@
 
 The compatibility promise from [`GOVERNANCE.md`](../GOVERNANCE.md) lives here in machine- and human-readable form. This document is what adopters can rely on when pinning a version and planning upgrades.
 
+**Audience:** adopters assessing upgrade risk and maintainers changing a covered public surface.
+
+**Jump to:** [versioning](#versioning), [covered surfaces](#covered-surfaces), [what is not covered](#not-covered), [the deprecation cycle](#deprecation-cycle), [adopter responsibilities](#adopter-responsibilities), or [examples](#examples).
+
 ---
 
 ## Versioning

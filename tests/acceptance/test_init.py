@@ -1,4 +1,4 @@
-"""Acceptance tests for `ai-playbook init` — driven through the CLI boundary.
+"""Acceptance tests for `ai-playbook init`: driven through the CLI boundary.
 
 `init` replaces the only manual step in onboarding: hand-creating the six
 artifact directories and `.ai-playbook.toml`. It must be idempotent and must
@@ -17,7 +17,7 @@ from deploy_ai_playbook.services.artifacts import ARTIFACT_DIRECTORIES
 runner = CliRunner()
 
 
-def test_ac_init_creates_artifact_directories_with_gitkeep(tmp_path: Path):
+def test_init_creates_artifact_directories_with_gitkeep(tmp_path: Path):
     result = runner.invoke(app, ["init", "-t", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
@@ -26,7 +26,7 @@ def test_ac_init_creates_artifact_directories_with_gitkeep(tmp_path: Path):
         assert (tmp_path / directory / ".gitkeep").exists(), f"missing {directory}/.gitkeep"
 
 
-def test_ac_init_seeds_config_stub_when_absent(tmp_path: Path):
+def test_init_seeds_config_stub_when_absent(tmp_path: Path):
     result = runner.invoke(app, ["init", "-t", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
@@ -35,7 +35,7 @@ def test_ac_init_seeds_config_stub_when_absent(tmp_path: Path):
     assert "packs" in config.read_text()
 
 
-def test_ac_init_keeps_existing_config_untouched(tmp_path: Path):
+def test_init_keeps_existing_config_untouched(tmp_path: Path):
     existing = 'packs = [".ai-playbook/packs/django"]\n'
     (tmp_path / ".ai-playbook.toml").write_text(existing)
 
@@ -46,7 +46,7 @@ def test_ac_init_keeps_existing_config_untouched(tmp_path: Path):
     assert "kept" in result.output
 
 
-def test_ac_init_is_idempotent(tmp_path: Path):
+def test_init_is_idempotent(tmp_path: Path):
     first = runner.invoke(app, ["init", "-t", str(tmp_path)])
     assert first.exit_code == 0, first.output
 
@@ -56,7 +56,7 @@ def test_ac_init_is_idempotent(tmp_path: Path):
     assert "exists" in second.output
 
 
-def test_ac_init_does_not_overwrite_artifact_files(tmp_path: Path):
+def test_init_does_not_overwrite_artifact_files(tmp_path: Path):
     (tmp_path / "stories").mkdir()
     story = tmp_path / "stories" / "STORY-001-existing.md"
     story.write_text("# existing story\n")
@@ -65,3 +65,17 @@ def test_ac_init_does_not_overwrite_artifact_files(tmp_path: Path):
 
     assert result.exit_code == 0, result.output
     assert story.read_text() == "# existing story\n"
+
+
+def test_init_rejects_symlinked_artifact_directory(tmp_path: Path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "stories").symlink_to(outside, target_is_directory=True)
+
+    result = runner.invoke(app, ["init", "-t", str(project)])
+
+    assert result.exit_code == 1
+    assert "Unsafe destination" in result.output
+    assert not (outside / ".gitkeep").exists()

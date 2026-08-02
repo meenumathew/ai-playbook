@@ -9,8 +9,8 @@ inputs: module path, layer, or "the repo"
 outputs: audits/AUDIT-NNN-<scope>.md (scored inspection report)
 handoff: "story-refiner: turns Must Fix findings into bug/chore stories citing the audit; xp-pair-programmer directly only for trivial fixes marked as such"
 escalation: none (advisor tier already)
-read-budget: 30
-verified: 2026-05-19
+read-budget: 50
+verified: 2026-07-25
 ---
 
 # Code Inspector Agent
@@ -53,11 +53,12 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 3. **Review by group**: check each group against its KB anchor. Deliver findings per group if context grows large. At every priority level, grep for suppression pragmas (list in `CLAUDE.md` § Quality Gates): each is **Must Fix** unless an inline comment justifies why the fix is impossible (`knowledge-base/style-guide.md` § No Suppression Without Justification).
 
-4. **Cross-file consistency**: architecture violations (wrong-direction deps), domain language drift, duplicated logic, ADR drift, dead code, flag cleanup debt (`knowledge-base/feature-flags.md` § Flag Registry: past-due cleanup dates, flags in code with no registry row).
+4. **Cross-file consistency**: architecture violations (wrong-direction deps), domain language drift, duplicated logic, ADR drift, operational complexity with no recorded evidence (`knowledge-base/architecture-decisions.md` § Evidence for Operational Complexity), dead code, flag cleanup debt (`knowledge-base/feature-flags.md` § Flag Registry: past-due cleanup dates, flags in code with no registry row).
 
 5. **Context briefing** *(on request: `CLAUDE.md` § Shared Rules)*: short module map: entry points, core domain terms, dependencies, high-risk paths, existing patterns, first place to debug.
 
-6. **Preview report**: emit the complete audit report as plain markdown in chat. End with:
+6. **Preview report**: follow `templates/audit-template.md` and emit the
+   complete audit report as plain markdown in chat. End with:
 
     `Audit preview above. Reply 'approved' (or 'looks good' / 'go ahead') to save to audits/AUDIT-NNN-scope.md. Anything else and I'll revise.` (canonical artifact-approval prompt: `CLAUDE.md` § Shared Rules)
 
@@ -89,7 +90,7 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 ## Tool Policy
 
-See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:** read capped at 30 per session (up to 50 for "deep audit"). Write scoped to `audits/` only. If an audit reveals a KB gap, list it as a recommended action and hand it to docs-maintainer.
+See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:** read budget 30 per session, self-tracked; a user-requested "deep audit" may extend to 50, the frontmatter cap the read-budget hook enforces. Write scoped to `audits/` only. If an audit reveals a KB gap, list it as a recommended action and hand it to docs-maintainer.
 
 ---
 

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from deploy_ai_playbook.cli import get_source_root
+from deploy_ai_playbook.paths import HARNESS_FILES, Tool
+
+pytestmark = pytest.mark.repo_contract
 
 ENV_VAR_RE = re.compile(r"\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b")
 
@@ -142,6 +147,156 @@ def test_project_management_tool_agnostic_work_item_language_is_documented():
         assert concept in story_writing, f"story-writing must document {concept!r}"
 
 
+def test_cli_reference_harness_row_lists_every_harness_file():
+    """The deploy table's Harness row must track paths.HARNESS_FILES.
+
+    Caught drifting in an audit: the row omitted `.github/dependabot.yml`
+    and `harness/read-budget.sh` after they shipped.
+    """
+    source_root = get_source_root()
+    cli_reference = (source_root / "docs" / "cli-reference.md").read_text(encoding="utf-8")
+    harness_row = next(
+        (line for line in cli_reference.splitlines() if line.startswith("| Harness |")),
+        None,
+    )
+    assert harness_row, "docs/cli-reference.md lost its '| Harness |' deploy table row"
+
+    # STRUCTURE-MARKER: every deployed harness path must appear in the row;
+    # ordering and surrounding wording are free to change.
+    missing = sorted(dest for dest in HARNESS_FILES.values() if f"`{dest}`" not in harness_row)
+    assert not missing, (
+        "docs/cli-reference.md Harness row drifted from paths.HARNESS_FILES:\n"
+        f"  deployed but undocumented: {missing}"
+    )
+
+
+def test_deploy_targets_documented_in_user_guide_and_architecture():
+    """Every Tool enum value must be named in the adopter-facing target docs.
+
+    Caught drifting in an audit: Codex became a first-class deploy target but
+    docs/user-guide.md and the architecture Deployment Targets table still
+    listed only four tools.
+    """
+    source_root = get_source_root()
+    user_guide = (source_root / "docs" / "user-guide.md").read_text(encoding="utf-8")
+    architecture = (source_root / "docs" / "architecture.md").read_text(encoding="utf-8")
+    targets_section = _section(architecture, "Deployment Targets")
+
+    for tool in Tool:
+        name = tool.value.capitalize()
+        # STRUCTURE-MARKER: the target must be named; prose around it is free.
+        assert name in user_guide, f"docs/user-guide.md does not mention deploy target {name}"
+        assert name in targets_section, (
+            f"docs/architecture.md § Deployment Targets does not mention deploy target {name}"
+        )
+
+
+def test_context_report_docs_preserve_measurement_boundary():
+    """Static context estimates must never be presented as provider usage."""
+    source_root = get_source_root()
+    docs = {
+        "README.md": (source_root / "README.md").read_text(encoding="utf-8"),
+        "docs/architecture.md": (source_root / "docs" / "architecture.md").read_text(
+            encoding="utf-8"
+        ),
+        "docs/cli-reference.md": (source_root / "docs" / "cli-reference.md").read_text(
+            encoding="utf-8"
+        ),
+        "docs/how-to/reduce-token-usage.md": (
+            source_root / "docs" / "how-to" / "reduce-token-usage.md"
+        ).read_text(encoding="utf-8"),
+        "docs/limitations.md": (source_root / "docs" / "limitations.md").read_text(
+            encoding="utf-8"
+        ),
+    }
+
+    for path, text in docs.items():
+        if path == "docs/architecture.md":
+            assert "`context-report`" in text
+            continue
+        assert "ai-playbook context-report" in text, (
+            f"{path} must point adopters to the static context report"
+        )
+    reference = docs["docs/cli-reference.md"].lower()
+    for boundary in ("estimate", "billable", "conversation", "tool schemas"):
+        assert boundary in reference, (
+            f"docs/cli-reference.md must explain the {boundary!r} measurement boundary"
+        )
+
+
+def test_telemetry_docs_preserve_privacy_and_tool_boundaries():
+    source_root = get_source_root()
+    guide = (source_root / "docs" / "how-to" / "agent-telemetry.md").read_text(encoding="utf-8")
+    reference = (source_root / "docs" / "cli-reference.md").read_text(encoding="utf-8")
+
+    for text in (guide, reference):
+        assert "Claude" in text
+        assert "Codex" in text
+        assert "session IDs" in text
+        assert "token" in text
+        assert "never stores or transmits" in text.lower()
+    assert "ai-playbook context-report" in guide
+    assert "provider-native" in guide
+
+
+def test_docs_guide_defines_audience_progressive_disclosure_and_diagram_fallbacks():
+    source_root = get_source_root()
+    guide = (source_root / "docs" / "docs-guide.md").read_text(encoding="utf-8")
+    guide_lower = guide.lower()
+
+    for heading in ("Audience Contract", "Progressive Disclosure", "Diagrams"):
+        assert f"## {heading}" in guide
+
+    for concept in (
+        "expertise",
+        "reader goal",
+        "reading context",
+        "materially easier",
+        "text equivalent",
+        "screen reader",
+        "source of truth",
+    ):
+        assert concept in guide_lower, f"docs/docs-guide.md must define {concept!r}"
+
+
+def test_every_mermaid_diagram_has_an_adjacent_text_equivalent():
+    source_root = get_source_root()
+    failures: list[str] = []
+
+    for path in sorted((source_root / "docs").rglob("*.md")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if line != "```mermaid":
+                continue
+            preceding_context = "\n".join(lines[max(0, index - 8) : index])
+            if "**Text equivalent:**" not in preceding_context:
+                failures.append(f"{path.relative_to(source_root)}:{index + 1}")
+
+    assert not failures, (
+        "Mermaid diagrams must have an adjacent '**Text equivalent:**' "
+        "prose or text representation:\n  " + "\n  ".join(failures)
+    )
+
+
+def test_long_documents_declare_audience_and_early_navigation():
+    source_root = get_source_root()
+    contracts = {
+        "docs/architecture.md": "**Read by need:**",
+        "docs/cli-reference.md": "**Jump to:**",
+        "docs/deprecation-policy.md": "**Jump to:**",
+        "docs/docs-guide.md": "**Jump to:**",
+        "docs/user-guide.md": "**Jump to:**",
+    }
+
+    for relative_path, navigation_marker in contracts.items():
+        text = (source_root / relative_path).read_text(encoding="utf-8")
+        first_section = text.split("\n---\n", maxsplit=1)[0]
+        assert "**Audience:**" in first_section, f"{relative_path} needs an early audience contract"
+        assert navigation_marker in first_section, (
+            f"{relative_path} needs early progressive-disclosure navigation"
+        )
+
+
 DEFAULT_CHAIN_AGENTS = (
     "story-refiner",
     "slice-planner",
@@ -185,12 +340,12 @@ def test_user_guide_default_loop_matches_claude_md_workflow_chain():
 
 
 def test_which_path_decision_tree_is_identical_in_readme_and_how_to():
-    """The Which-Path decision tree exists in two display surfaces — README
+    """The Which-Path decision tree exists in two display surfaces: README
     (front door) and docs/how-to/choose-workflow-path.md (canonical detail).
 
     Hand-drawn duplicates drift (a whitespace delta had already
     crept in). Both copies stay because both surfaces need the tree; this pin
-    keeps them byte-identical — edit the how-to first, then copy to README.
+    keeps them byte-identical: edit the how-to first, then copy to README.
     """
     source_root = get_source_root()
 
@@ -203,7 +358,7 @@ def test_which_path_decision_tree_is_identical_in_readme_and_how_to():
     readme_tree = tree(source_root / "README.md")
     howto_tree = tree(source_root / "docs" / "how-to" / "choose-workflow-path.md")
     # STRUCTURE-MARKER: byte-equality of the two copies is the contract, not
-    # the tree's content — the tree itself is free to evolve in both at once.
+    # the tree's content: the tree itself is free to evolve in both at once.
     assert readme_tree == howto_tree, (
         "Which-Path decision tree drifted between README.md and "
         "docs/how-to/choose-workflow-path.md — sync them (how-to is canonical)"

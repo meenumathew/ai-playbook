@@ -6,7 +6,7 @@ load_when: collaboration, review size, ownership, disagreement, escalation, agen
 audience: all
 canonical_for: AI-as-peer norms, code review norms, disagreement protocol
 cross_refs: philosophy.md, model-tier.md, security.md
-verified: 2026-07-17
+verified: 2026-07-27
 ---
 
 # Working Agreement
@@ -76,6 +76,25 @@ Anyone: human or AI agent: can change any part of the codebase. No one "owns" a 
 | Comment on the code, not the author | "This function" not "you wrote" |
 | Distinguish severity | Must Fix / Should Fix / Suggestion (see `agents/diff-reviewer.agent.md` § Severity) |
 | Approve when Must Fix resolved | Don't hold merge over style preferences |
+
+## Responding to Review Feedback
+
+Treat review comments as hypotheses to evaluate, not instructions to apply
+blindly.
+
+1. Read the complete feedback and identify the requested behaviour. Ask only
+   when an ambiguity could change scope, safety, or user-visible results.
+2. Check the claim against the current code, tests, story requirements, and
+   canonical knowledge-base guidance. Advice from a human, agent, or external
+   source does not replace repository evidence.
+3. Accept feedback that improves correctness or the agreed design. If it
+   conflicts with requirements or introduces a regression, push back with the
+   relevant code path, test result, or documented constraint.
+4. Apply one independent item at a time and run its smallest meaningful
+   verification before moving to the next. Re-read the resulting diff so a
+   locally correct edit does not create a cross-file mismatch.
+5. Report what changed and the verification evidence. Do not mark an item
+   resolved when the supporting check has not run.
 
 ---
 

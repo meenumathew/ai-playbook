@@ -4,170 +4,178 @@
   "must_demonstrate": [
     {
       "id": "DIFF-MUST-001",
-      "criterion": "**`logger.error(str(e))` in notification_service.py** \u2014 Violates `CLAUDE.md` \u00a7 Security and `security.md` \u00a7 Data Handling. Must use `exc_info=True`, not `str(e)`. This leaks stack context and loses the traceback.",
+      "criterion": "**Explicit review scope** — names the in-scope hunks and explicitly excludes the unrelated uncommitted hunks sharing the same files, rather than silently reviewing everything or nothing.",
       "keywords": [
-        "logger.error(str(e))",
-        "CLAUDE.md",
-        "security.md",
-        "exc_info=True",
-        "str(e)",
-        "`logger.error(str(e))` in notification_service.py"
+        "In scope",
+        "Out of scope"
       ]
     },
     {
       "id": "DIFF-MUST-002",
-      "criterion": "**Test uses try/except instead of `pytest.raises`** \u2014 Violates `testing.md` \u00a7 Test Quality Rules (rule 4: Arrange-Act-Assert). The test in `test_notifications.py` uses a manual try/except pattern instead of `pytest.raises(ValueError)`. No logic in tests.",
+      "criterion": "**Verification run in this session** — re-runs the story's tests itself and reports the observed result; does not take the implementer's word that tests pass.",
       "keywords": [
-        "pytest.raises",
-        "testing.md",
-        "test_notifications.py",
-        "pytest.raises(ValueError)",
-        "Test uses try/except instead of `pytest.raises`"
+        "uv run pytest",
+        "passed"
       ]
     },
     {
       "id": "DIFF-MUST-003",
-      "criterion": "**Missing AC coverage** \u2014 AC2 (`test_order_shipped_skips_notification_when_no_email`) and AC3 (`test_email_failure_is_logged_without_affecting_order`) have no tests in the diff. Every AC must have at least one test.",
+      "criterion": "**Behavioural regression found by probing, not just reading** — reproduces the partial-override clobbering empirically (sandbox probe comparing old and new Makefile behaviour) and files it as Must Fix with the story constraint it violates.",
       "keywords": [
-        "test_order_shipped_skips_notification_when_no_email",
-        "test_email_failure_is_logged_without_affecting_order",
-        "Missing AC coverage"
-      ]
+        "Sandbox probe",
+        "Must Fix",
+        "clobbered"
+      ],
+      "evidence": "Judge must find an empirically reproduced regression (probe evidence, before/after comparison) driving the Must Fix, not a speculative style remark."
     },
     {
       "id": "DIFF-MUST-004",
-      "criterion": "**Missing import in notification_service.py** \u2014 `EmailNotification` is used but not imported. Code won't run.",
+      "criterion": "**Second behaviour change flagged with a concrete direction** — the environment-variable origin issue is identified, anchored to the story constraint, with a specific mechanism proposed ($(origin STACK) guard) and test hardening for hermeticity.",
       "keywords": [
-        "EmailNotification",
-        "Missing import in notification_service.py"
+        "environment variable",
+        "origin"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-005",
+      "criterion": "**AC coverage table** — every AC mapped to its covering test with a status column, including honest partial status where a constraint case is uncovered.",
+      "keywords": [
+        "| AC | Test | Status |"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-006",
+      "criterion": "**Findings anchored to KB files** — Must Fix / Should Fix / Suggestions each cite a specific knowledge-base file or CLAUDE.md section; severity follows the review rules (domain correctness = Must Fix).",
+      "keywords": [
+        "knowledge-base/testing.md",
+        "CHEATSHEET.md",
+        "Must Fix"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-007",
+      "criterion": "**Cognitive debt check before the verdict** — asks a targeted question about the key design decision, records the developer's answer, and assesses which part of the mental model is right and which is the gap.",
+      "keywords": [
+        "Cognitive debt check",
+        "Assessment"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-008",
+      "criterion": "**Explicit verdict release-captain can gate on** — a ## Verdict section stating Approve or Request changes with the reason tied to evidence.",
+      "keywords": [
+        "## Verdict",
+        "Request changes"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-009",
+      "criterion": "**Acknowledges what is good** — names the correct root-cause mechanism and the genuine test-quality strengths instead of only listing faults.",
+      "keywords": [
+        "What is good"
+      ]
+    },
+    {
+      "id": "DIFF-MUST-010",
+      "criterion": "**Read-only role respected** — no files modified, nothing committed; hands off fixes to xp-pair-programmer.",
+      "keywords": [
+        "No files modified",
+        "xp-pair-programmer"
       ]
     }
   ],
   "must_not": [
     {
       "id": "DIFF-NOT-001",
-      "criterion": "Rewrite the code in the review \u2014 suggest, reference KB, let the developer fix it",
+      "criterion": "Rewrite the code in the review — suggest, reference KB, let the developer fix it",
       "keywords": [
-        "Rewrite the code"
+        "went ahead and rewrote",
+        "just paste this in",
+        "here is the rewritten version"
       ]
     },
     {
       "id": "DIFF-NOT-002",
       "criterion": "Invent findings not grounded in KB files",
       "keywords": [
-        "Invent findings not"
-      ]
+        "from memory the guideline",
+        "no KB citation needed"
+      ],
+      "evidence": "Judge must check each finding cites a real KB file and flag any that cannot be traced to one. Structural keywords are best-effort here (invention has no reliable phrase); the LLM judge is the enforcement layer."
     },
     {
       "id": "DIFF-NOT-003",
-      "criterion": "Say \"looks good\" without checking all AC coverage",
+      "criterion": "Rubber-stamp: approve without verifying tests or probing the behaviour change",
       "keywords": [
-        "Say \"looks good\""
+        "looks good",
+        "LGTM",
+        "clean, idiomatic work"
       ]
     },
     {
       "id": "DIFF-NOT-004",
-      "criterion": "Skip the cognitive debt check (\"Can you explain the key design decision?\")",
+      "criterion": "Skip the cognitive debt check",
       "keywords": [
-        "Skip the cognitive"
-      ]
+        "skipped the cognitive debt check",
+        "no need for the comprehension question"
+      ],
+      "evidence": "Judge must confirm the cognitive debt question appears before the verdict, or cite its absence. Structural keywords are best-effort here (skipping is an absence); the LLM judge is the enforcement layer."
     },
     {
       "id": "DIFF-NOT-005",
-      "criterion": "Approve without flagging the `str(e)` security violation",
+      "criterion": "Trust the implementer's pass claims instead of re-running verification",
       "keywords": [
-        "approve without flagging"
-      ]
+        "the implementer says tests pass",
+        "taking their word",
+        "no need to re-run"
+      ],
+      "evidence": "Judge must confirm the review contains its own verification run, or cite the passage that relies on the implementation session's claims. Structural keywords are best-effort here; the LLM judge is the enforcement layer."
     }
   ],
   "quality_signals": [
     {
       "id": "DIFF-QUALITY-001",
-      "criterion": "**Magic strings** \u2014 `\"Your order has shipped!\"` and `\"Order {order.id} is on its way.\"` are hardcoded. Extract to constants or a template. Falls under `CLAUDE.md` \u00a7 Definition of Done (\"Code refactored \u2014 no obvious smells\").",
+      "criterion": "Probes compare HEAD behaviour against the new behaviour, isolating the regression to the change under review",
       "keywords": [
-        "\"Your order has shipped!\"",
-        "\"Order {order.id} is on its way.\"",
-        "CLAUDE.md",
-        "Magic strings"
+        "old Makefile",
+        "new Makefile"
       ]
     },
     {
       "id": "DIFF-QUALITY-002",
-      "criterion": "**SendGridAdapter has no port/interface** \u2014 `email_adapter` parameter in `NotificationService` has no corresponding port defined in the domain layer. Per `CLAUDE.md` \u00a7 Architecture and `design-patterns.md`, infrastructure implements ports defined by the domain.",
+      "criterion": "Commit hygiene flagged when story hunks are interleaved with unrelated work (one logical change per commit)",
       "keywords": [
-        "email_adapter",
-        "NotificationService",
-        "CLAUDE.md",
-        "design-patterns.md",
-        "SendGridAdapter has no port/interface"
+        "Commit hygiene",
+        "one logical change"
       ]
     },
     {
       "id": "DIFF-QUALITY-003",
-      "criterion": "**Bare `except Exception`** \u2014 `notification_service.py` catches all exceptions. Should catch the specific SendGrid exception to distinguish infra failures from bugs.",
+      "criterion": "Suggestions distinguish acceptable-for-now from must-change, with the tightening condition stated",
       "keywords": [
-        "except Exception",
-        "notification_service.py",
-        "Bare `except Exception`"
+        "Suggestions"
       ]
     },
     {
       "id": "DIFF-QUALITY-004",
-      "criterion": "**Observability** \u2014 `logger.error(str(e))` also violates `observability.md` \u00a7 Structured Logging. Error logs must use `exc_info=True` for full traceback, not stringified exceptions.",
+      "criterion": "The verdict separates AC compliance from constraint compliance (ACs pass; the constraint violation drives Request changes)",
       "keywords": [
-        "logger.error(str(e))",
-        "observability.md",
-        "exc_info=True",
-        "Observability"
+        "verdict turns on the constraint"
       ]
     },
     {
       "id": "DIFF-QUALITY-005",
-      "criterion": "**EmailNotification could validate email format** \u2014 Currently only checks non-empty. A simple regex or email validator would catch malformed addresses earlier.",
+      "criterion": "Read budget self-tracked and reported",
       "keywords": [
-        "EmailNotification could validate email format"
+        "Read count"
       ]
     },
     {
       "id": "DIFF-QUALITY-006",
-      "criterion": "**Commit granularity** \u2014 All files appear in one diff. Conventional Commits expects one logical change per commit \u2014 domain, service, and infrastructure could be separate commits.",
+      "criterion": "Handoff names the exact follow-up invocation with the finding IDs",
       "keywords": [
-        "Commit granularity"
-      ]
-    },
-    {
-      "id": "DIFF-QUALITY-007",
-      "criterion": "Every Must Fix cites a specific KB file and section",
-      "keywords": [
-        "Every Must Fix"
-      ]
-    },
-    {
-      "id": "DIFF-QUALITY-008",
-      "criterion": "AC coverage table shows gaps clearly",
-      "keywords": [
-        "AC coverage table"
-      ]
-    },
-    {
-      "id": "DIFF-QUALITY-009",
-      "criterion": "Review uses `templates/review-template.md` format",
-      "keywords": [
-        "templates/review-template.md"
-      ]
-    },
-    {
-      "id": "DIFF-QUALITY-010",
-      "criterion": "Severity levels are correct (security = Must Fix, magic strings = Should Fix, email validation = Suggestion)",
-      "keywords": [
-        "Severity levels are"
-      ]
-    },
-    {
-      "id": "DIFF-QUALITY-011",
-      "criterion": "Cognitive debt check is asked before delivering the verdict",
-      "keywords": [
-        "Cognitive debt check"
+        "M1",
+        "S1"
       ]
     }
   ]

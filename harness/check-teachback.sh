@@ -57,7 +57,7 @@ esac
 
 if ! printf '%s' "$SUBJECT" | grep -Eq '^[A-Za-z]+(\([^)]+\))?!?:'; then
   cat >&2 <<EOF
-✗ Unsupported commit message format.
+ERROR: Unsupported commit message format.
 
 Use Conventional Commits:
 
@@ -95,7 +95,7 @@ case "$TYPE" in
       exit 0
     fi
     cat >&2 <<EOF
-✗ Missing final Teach-back trailer.
+  ERROR: Missing final Teach-back trailer.
 
 This commit type ($TYPE) requires one line in the body explaining
 WHAT the change does and WHERE to debug it. It must be part of the
@@ -119,7 +119,7 @@ EOF
     ;;
   *)
     cat >&2 <<EOF
-✗ Unsupported commit type: $TYPE.
+ERROR: Unsupported commit type: $TYPE.
 
 Allowed types: feat, fix, refactor, perf, test, chore, docs, style, build, ci, revert.
 Why: CLAUDE.md § Commits.

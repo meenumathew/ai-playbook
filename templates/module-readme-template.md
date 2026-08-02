@@ -9,7 +9,7 @@ One-sentence purpose: what this module is responsible for.
 
 ## Usage
 
-```python
+```<lang>
 # Minimal example showing the most common path
 ```
 

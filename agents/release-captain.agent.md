@@ -8,9 +8,9 @@ load_when: release, ship, open PR, merge, tag, version bump, post-deploy smoke, 
 inputs: story number / branch / PR-MR ref / version
 outputs: story updated with release metadata (PR/MR URL, merge commit, tag, smoke result); PR/MR record + release tag live on the host platform
 handoff: incident-responder if smoke fails; docs-maintainer for changelog/runbook follow-ups
-escalation: human approval gate for merge, tag push, and any cross-environment promotion
+escalation: human approval gate for merge, tag push, and any cross-environment promotion; smoke failure escalates to humans (rollback first, then hand off to incident-responder)
 read-budget: 25
-verified: 2026-05-20
+verified: 2026-07-25
 ---
 
 # Release Captain Agent
@@ -72,11 +72,14 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 ### Phase 4: Release (versioned releases only)
 
-1. **Bump version**: `release.md` § Version Bump and Tag. State old → new.
-2. **Update CHANGELOG**: move `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`; add fresh `[Unreleased]` heading.
-3. **Commit**: Conventional Commit `chore: release vX.Y.Z`. Approval gate per `CLAUDE.md` § Shared Rules § Approval gate.
-4. **Tag**: annotated (`git tag -a vX.Y.Z -m "<summary>"`). Approval gate.
-5. **Push tag**: print: `Ready to push tag vX.Y.Z to origin. This is an external side effect. Say 'push' to proceed.` Wait. **Tag push is irreversible**: triggers downstream automation.
+1. **Prepare and merge**: follow `release.md` § Version Bump and Tag through
+   the release PR. Approval-gate its commit, branch push, and merge; use
+   `host.pr.create`, `host.pr.checks`, and `host.pr.merge`.
+2. **Resolve the release commit**: fetch after merge and verify the remote
+   default-branch commit contains the expected version and changelog section.
+3. **Tag the merged commit**: annotate that verified commit with
+   `git tag -a vX.Y.Z <commit> -m "<summary>"`. Approval gate applies.
+4. **Push tag**: print: `Ready to push tag vX.Y.Z to origin. This is an external side effect. Say 'push' to proceed.` Wait. **Tag push is irreversible**: triggers downstream automation.
 
 ### Phase 5: Smoke
 
@@ -114,11 +117,11 @@ Master table: `CLAUDE.md` § Quality Tier. Agent-specific overrides:
 
 See `knowledge-base/tool-policy.md` § Per-Agent Matrix. **Deltas:**
 
-- Host PR/MR: ✓ via `skills/host-adapter/SKILL.md` only.
+- Host PR/MR: allowed via `skills/host-adapter/SKILL.md` only.
 - Git: commit + tag allowed. **Push is approval-gated per push.**
 - Read capped at 25/session (production) / 15 (prototype).
-- Notifier: ✓ via `skills/notifier/SKILL.md` only. Default provider `none`.
-- Deploy commands (`kubectl`, `terraform`, `ansible`, `docker push`): ✗. Out of scope.
+- Notifier: allowed via `skills/notifier/SKILL.md` only. Default provider `none`.
+- Deploy commands (`kubectl`, `terraform`, `ansible`, `docker push`): denied. Out of scope.
 
 ---
 

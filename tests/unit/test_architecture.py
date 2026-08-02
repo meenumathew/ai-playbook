@@ -1,4 +1,4 @@
-"""Architecture enforcement tests — mechanical guardrails.
+"""Architecture enforcement tests: mechanical guardrails.
 
 These tests enforce the dependency direction documented in CLAUDE.md:
     paths/targets (foundation) → fs/discovery/mcp (middle) → backup/doctor (service) → cli (top)
@@ -19,45 +19,64 @@ SRC_DIR = Path(__file__).parent.parent.parent / "src" / "deploy_ai_playbook"
 # Anything not listed here is forbidden.
 #
 # Layers (bottom to top):
-#   foundation: paths, config, safety, console
+#   foundation: paths, config, deployment_record, safety, console
 #   middle:     targets, discovery, fs, mcp, telemetry
 #   service:    backup, upgrade, services, doctor
 #   top:        cli, deploy_render (Typer registration + presentation)
 ALLOWED_INTERNAL_IMPORTS: dict[str, set[str]] = {
     "paths": set(),
-    # `errors` is the foundation-layer exception base — every layer can import it.
+    # `errors` is the foundation-layer exception base: every layer can import it.
     "errors": set(),
-    # Shared Rich console instances — foundation, imports nothing internal.
+    # Shared Rich console instances: foundation, imports nothing internal.
     "console": set(),
     "targets": {"paths", "errors"},
-    "config": {"errors"},
+    "config": {"errors", "semantic_version"},
+    "deployment_record": set(),
+    "semantic_version": set(),
     "safety": {"errors"},
     "fs": {"paths", "safety", "targets"},
     "discovery": {"paths", "config", "errors", "targets"},
     "mcp": {"paths", "safety", "targets"},
     "telemetry": {"paths", "safety", "targets"},
-    "backup": {"paths", "config", "discovery", "fs", "targets"},
-    "upgrade": {"paths", "config", "fs", "discovery"},
+    "backup": {
+        "paths",
+        "config",
+        "deployment_record",
+        "discovery",
+        "fs",
+        "safety",
+        "targets",
+    },
+    "upgrade": {"paths", "config", "deployment_record", "fs", "discovery"},
     # services/* depends only on foundation + middle, plus its own siblings
     # (services → services is fine; the layer is one logical package and
-    # intra-package helper reuse — e.g. diff.py importing deploy.path_rewrite —
+    # intra-package helper reuse: e.g. diff.py importing deploy.path_rewrite:
     # is the alternative to duplicate code). Never on cli, doctor, or upgrade.
-    "services": {"paths", "config", "discovery", "fs", "targets", "services"},
+    "services": {
+        "paths",
+        "config",
+        "deployment_record",
+        "discovery",
+        "fs",
+        "targets",
+        "services",
+    },
     "doctor": {
         "paths",
         "config",
         "errors",
         "fs",
         "discovery",
+        "deployment_record",
         "services",
         "targets",
         "telemetry",
         "upgrade",
     },
-    # Deploy presentation extracted from cli — same layer as cli,
+    # Deploy presentation extracted from cli: same layer as cli,
     # but deliberately NOT allowed to import cli (no cycles, no doctor).
     # `config` added for provider-driven MCP deploy (issue-tracker provider
-    # decides whether the Atlassian MCP is configured) — foundation import,
+    # decides whether the Atlassian MCP is configured): foundation import,
     # direction unchanged.
     "deploy_render": {
         "paths",
@@ -65,6 +84,7 @@ ALLOWED_INTERNAL_IMPORTS: dict[str, set[str]] = {
         "errors",
         "safety",
         "console",
+        "deployment_record",
         "fs",
         "discovery",
         "mcp",
@@ -80,6 +100,7 @@ ALLOWED_INTERNAL_IMPORTS: dict[str, set[str]] = {
         "errors",
         "console",
         "deploy_render",
+        "deployment_record",
         "fs",
         "discovery",
         "mcp",
@@ -195,7 +216,7 @@ def test_no_circular_dependencies() -> None:
     Intra-package self-loops (e.g. ``services/diff.py`` importing
     ``services/deploy.py``) collapse to a `services → services` self-edge
     once subpackage files are rolled up by package name. Those are not
-    real cycles — they are sibling-helper reuse within one logical layer.
+    real cycles: they are sibling-helper reuse within one logical layer.
     `ALLOWED_INTERNAL_IMPORTS` permits them explicitly; the cycle check
     here filters self-edges so this allowance is consistent.
     """
@@ -288,7 +309,7 @@ def test_find_dependency_cycle_catches_long_cycles() -> None:
 #
 # Ruff's `PLW1514` rule covers this but is preview-only at the time of
 # writing and pulls in unrelated rules. This contract test is the stable
-# enforcement layer — AST-walks the package and fails on any text I/O
+# enforcement layer: AST-walks the package and fails on any text I/O
 # call missing the keyword. Test code is excluded; pytest's tmp_path
 # fixtures are platform-agnostic and adding `encoding=` everywhere there
 # is noise.
@@ -337,7 +358,7 @@ def test_every_custom_exception_inherits_from_ai_playbook_error() -> None:
         try:
             module = importlib.import_module(f"deploy_ai_playbook.{module_name}")
         except ImportError:
-            # Subpackage init or empty module — nothing to introspect.
+            # Subpackage init or empty module: nothing to introspect.
             continue
         for name, obj in inspect.getmembers(module, inspect.isclass):
             if not name.endswith("Error"):
@@ -345,7 +366,7 @@ def test_every_custom_exception_inherits_from_ai_playbook_error() -> None:
             if obj is AIPlaybookError:
                 continue
             if obj.__module__ != f"deploy_ai_playbook.{module_name}":
-                # Re-exported / imported error from another module — checked there.
+                # Re-exported / imported error from another module: checked there.
                 continue
             if not issubclass(obj, AIPlaybookError):
                 failures.append(f"{module_name}.{name}: does not subclass AIPlaybookError")
@@ -358,11 +379,11 @@ def test_package_text_io_passes_explicit_encoding() -> None:
     """Every Path.read_text/write_text in src/ and tools/ must pass encoding=.
 
     This is enforcement of cross-platform safety. If a new helper genuinely
-    needs locale-default behaviour (very rare — usually only when the file
+    needs locale-default behaviour (very rare: usually only when the file
     is owned by some external system that picks the encoding), refactor it
     into a thin wrapper module and add that module to `_ENCODING_EXEMPT`.
     """
-    _ENCODING_EXEMPT: frozenset[str] = frozenset()  # noqa: N806 — lint-style constant
+    _ENCODING_EXEMPT: frozenset[str] = frozenset()  # noqa: N806 - lint-style constant
 
     repo_root = SRC_DIR.parent.parent.parent
     audit_roots = [SRC_DIR, repo_root / "tools"]
@@ -433,7 +454,7 @@ def test_no_workflow_artifact_ids_in_comments_or_docstrings() -> None:
 
     Enforces `knowledge-base/style-guide.md` § Ticket Context Belongs in
     Commits, Not Code: story/plan/audit/chore IDs are temporary workflow
-    artifacts — citing them in comments or docstrings rots the moment the
+    artifacts: citing them in comments or docstrings rots the moment the
     artifact is archived. Traceability lives in commit messages.
     """
     repo_root = SRC_DIR.parent.parent.parent

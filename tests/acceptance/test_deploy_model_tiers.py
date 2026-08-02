@@ -3,12 +3,9 @@
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
 
-from deploy_ai_playbook.cli import app
 from deploy_ai_playbook.discovery import get_source_root
-
-runner = CliRunner()
+from tests.acceptance._dsl import deploy, diff, doctor
 
 ADVISOR_AGENT = "story-refiner"
 EXECUTOR_AGENT = "xp-pair-programmer"
@@ -21,11 +18,11 @@ def _frontmatter(path: Path) -> str:
 
 
 def _deploy(tmp_path: Path, tool: str = "claude") -> None:
-    result = runner.invoke(app, ["deploy", "--agent", "all", "--tool", tool, "-t", str(tmp_path)])
+    result = deploy(tmp_path, tool=tool)
     assert result.exit_code == 0, result.output
 
 
-def test_ac_deploy_claude_materializes_mapped_tiers(tmp_path: Path):
+def test_deploy_claude_materializes_mapped_tiers(tmp_path: Path):
     (tmp_path / ".ai-playbook.toml").write_text(
         '[model_tiers]\nadvisor = "opus"\nexecutor = "haiku"\n'
     )
@@ -45,26 +42,23 @@ def test_ac_deploy_claude_materializes_mapped_tiers(tmp_path: Path):
     assert "model: executor" in _frontmatter(source_agents / f"{EXECUTOR_AGENT}.agent.md")
 
 
-def test_ac_deploy_claude_without_model_tiers_keeps_tier_names_and_notes_skip(tmp_path: Path):
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+def test_deploy_claude_without_model_tiers_keeps_tier_names_and_notes_skip(tmp_path: Path):
+    result = deploy(tmp_path)
     assert result.exit_code == 0, result.output
 
     agents_dir = tmp_path / ".claude" / "agents"
     assert "model: advisor" in _frontmatter(agents_dir / f"{ADVISOR_AGENT}.agent.md")
     assert "model: executor" in _frontmatter(agents_dir / f"{EXECUTOR_AGENT}.agent.md")
     assert "not configured" in result.output
+    assert "[model_tiers]" in result.output
 
 
-def test_ac_deploy_claude_notes_non_claude_values(tmp_path: Path):
+def test_deploy_claude_notes_non_claude_values(tmp_path: Path):
     (tmp_path / ".ai-playbook.toml").write_text(
         '[model_tiers]\nadvisor = "ollama:qwen3:32b"\nexecutor = "ollama:qwen3:8b"\n'
     )
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
     assert result.exit_code == 0, result.output
 
     agents_dir = tmp_path / ".claude" / "agents"
@@ -74,29 +68,27 @@ def test_ac_deploy_claude_notes_non_claude_values(tmp_path: Path):
     assert "ollama:qwen3:32b" in result.output
 
 
-def test_ac_diff_and_doctor_clean_after_materialized_deploy(tmp_path: Path):
+def test_diff_and_doctor_clean_after_materialized_deploy(tmp_path: Path):
     (tmp_path / ".ai-playbook.toml").write_text(
         '[model_tiers]\nadvisor = "opus"\nexecutor = "haiku"\n'
     )
     _deploy(tmp_path)
 
-    diff = runner.invoke(app, ["diff", "--tool", "claude", "-t", str(tmp_path), "--exit-code"])
-    assert "changed" not in diff.output
-    assert diff.exit_code == 0, diff.output
+    diff_result = diff(tmp_path, exit_code=True)
+    assert "changed" not in diff_result.output
+    assert diff_result.exit_code == 0, diff_result.output
 
-    doctor = runner.invoke(app, ["doctor", "--tool", "claude", "-t", str(tmp_path)])
-    assert "stale" not in doctor.output, doctor.output
+    doctor_result = doctor(tmp_path)
+    assert "stale" not in doctor_result.output, doctor_result.output
 
 
-def test_ac_redeploy_with_materialized_tiers_is_idempotent(tmp_path: Path):
+def test_redeploy_with_materialized_tiers_is_idempotent(tmp_path: Path):
     (tmp_path / ".ai-playbook.toml").write_text(
         '[model_tiers]\nadvisor = "opus"\nexecutor = "haiku"\n'
     )
     _deploy(tmp_path)
 
-    second = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    second = deploy(tmp_path)
     assert second.exit_code == 0, second.output
     # The second deploy writes identical materialized content, so every agent
     # reports unchanged rather than being rewritten.
@@ -104,8 +96,8 @@ def test_ac_redeploy_with_materialized_tiers_is_idempotent(tmp_path: Path):
         if line.strip().endswith(".agent.md"):
             assert "unchanged" in line, line
 
-    diff = runner.invoke(app, ["diff", "--tool", "claude", "-t", str(tmp_path), "--exit-code"])
-    assert diff.exit_code == 0, diff.output
+    diff_result = diff(tmp_path, exit_code=True)
+    assert diff_result.exit_code == 0, diff_result.output
 
 
 @pytest.mark.parametrize(
@@ -116,9 +108,7 @@ def test_ac_redeploy_with_materialized_tiers_is_idempotent(tmp_path: Path):
         ("kiro", ".kiro/agents"),
     ],
 )
-def test_ac_deploy_non_claude_tools_never_rewrite_model(
-    tmp_path: Path, tool: str, agents_subdir: str
-):
+def test_deploy_non_claude_tools_never_rewrite_model(tmp_path: Path, tool: str, agents_subdir: str):
     (tmp_path / ".ai-playbook.toml").write_text(
         '[model_tiers]\nadvisor = "opus"\nexecutor = "haiku"\n'
     )
@@ -130,14 +120,43 @@ def test_ac_deploy_non_claude_tools_never_rewrite_model(
     assert "model: executor" in _frontmatter(agents_dir / f"{EXECUTOR_AGENT}.agent.md")
 
 
-def test_ac_deploy_claude_rewrites_only_recognizable_tier(tmp_path: Path):
+def test_deploy_codex_materializes_model_and_reasoning_mappings(tmp_path: Path):
+    (tmp_path / ".ai-playbook.toml").write_text(
+        '[model_tiers]\nadvisor = "gpt-5.6"\nexecutor = "gpt-5.6-terra"\n\n'
+        '[model_reasoning_efforts]\nadvisor = "high"\nexecutor = "medium"\n'
+    )
+
+    _deploy(tmp_path, tool="codex")
+
+    agents_dir = tmp_path / ".codex" / "agents"
+    advisor_agent = (agents_dir / f"{ADVISOR_AGENT}.toml").read_text(encoding="utf-8")
+    executor_agent = (agents_dir / f"{EXECUTOR_AGENT}.toml").read_text(encoding="utf-8")
+    assert 'model = "gpt-5.6"' in advisor_agent
+    assert 'model_reasoning_effort = "high"' in advisor_agent
+    assert 'model = "gpt-5.6-terra"' in executor_agent
+    assert 'model_reasoning_effort = "medium"' in executor_agent
+
+    diff_result = diff(tmp_path, tool="codex", exit_code=True)
+    assert diff_result.exit_code == 0, diff_result.output
+
+    doctor_result = doctor(tmp_path, tool="codex")
+    assert "stale" not in doctor_result.output, doctor_result.output
+
+
+def test_deploy_codex_without_mappings_inherits_model_and_reasoning(tmp_path: Path):
+    _deploy(tmp_path, tool="codex")
+
+    agent = (tmp_path / ".codex" / "agents" / f"{ADVISOR_AGENT}.toml").read_text(encoding="utf-8")
+    assert "model =" not in agent
+    assert "model_reasoning_effort =" not in agent
+
+
+def test_deploy_claude_rewrites_only_recognizable_tier(tmp_path: Path):
     (tmp_path / ".ai-playbook.toml").write_text(
         '[model_tiers]\nadvisor = "ollama:qwen3:32b"\nexecutor = "haiku"\n'
     )
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
     assert result.exit_code == 0, result.output
 
     agents_dir = tmp_path / ".claude" / "agents"
@@ -145,5 +164,5 @@ def test_ac_deploy_claude_rewrites_only_recognizable_tier(tmp_path: Path):
     assert "model: haiku" in _frontmatter(agents_dir / f"{EXECUTOR_AGENT}.agent.md")
     assert "not Claude-recognizable" in result.output
 
-    diff = runner.invoke(app, ["diff", "--tool", "claude", "-t", str(tmp_path), "--exit-code"])
-    assert diff.exit_code == 0, diff.output
+    diff_result = diff(tmp_path, exit_code=True)
+    assert diff_result.exit_code == 0, diff_result.output

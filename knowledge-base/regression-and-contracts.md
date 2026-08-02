@@ -4,7 +4,7 @@ size: medium
 tldr: Validate existing behavior and contracts before and after changes. Validate code generation for completeness. Scope changes trigger regression checks.
 load_when: plan changes, scope changes, code generation, OpenAPI, protobuf, GraphQL, migrations, API breaking change, contract change, behavior regression
 audience: xp-pair-programmer, diff-reviewer, slice-planner, release-captain
-canonical_for: regression testing, contract preservation, code generation validation, migration safety, PROJ-2140 pattern
+canonical_for: regression testing, contract preservation, code generation validation, migration safety
 cross_refs: testing.md, testing-techniques.md, debugging.md, quality-gates.md, CLAUDE.md § Shared Rules
 verified: 2026-07-17
 ---
@@ -43,7 +43,7 @@ Prevent plan-driven execution from masking quality debt. This file covers three 
 | 2 | **For code generators:** run the generator on current code and validate output completeness per § Code Generation Validation. Log gaps in plan's `## Discovered` with priority; do not proceed until you understand them. |
 | 3 | **For API or contract changes:** read the current contract definition (OpenAPI spec, protobuf schema, type definitions). Document exported fields and client dependencies. Identify backward-compatibility constraints. |
 
-**Example.** PROJ-2140 failure mode: should have caught at this step:
+**Example.** Generator completeness failure mode: should have caught at this step:
 
 ```text
 ## Discovered
@@ -71,8 +71,10 @@ Prevent plan-driven execution from masking quality debt. This file covers three 
 **Bash workflow (xp-pair-programmer use).** Prefer structured results over scraping runner output: emit machine-readable reports (`pytest --junitxml=...`, `go test -json`, `jest --json`) and diff the per-test outcomes: a summary line can stay identical while one test starts failing and another starts passing.
 
 ```bash
-make test PYTEST_ARGS="--junitxml=baseline.xml" || true   # before first slice
-make test PYTEST_ARGS="--junitxml=slice.xml"    || true   # after each slice
+# Invoke the test runner directly: make targets run a fixed command and
+# do not pass arguments through.
+uv run pytest --junitxml=baseline.xml || true   # before first slice
+uv run pytest --junitxml=slice.xml    || true   # after each slice
 # Extract (test name, status) from each report and diff those lines:
 # pass→fail and fail→pass can cancel out in the summary counts.
 ```
@@ -87,7 +89,7 @@ make test PYTEST_ARGS="--junitxml=slice.xml"    || true   # after each slice
 
 | Generated Artifact | Validation | Example |
 |---|---|---|
-| **OpenAPI spec** | All endpoints present? All real status codes? Error responses included? Authorization headers documented? | PROJ-2140: spec had 42 endpoints but no 400/402 error responses. Run a semantic diff (`oasdiff` / `openapi-diff`) of `main` vs. branch: removed operations, responses, or fields indicate incompleteness. |
+| **OpenAPI spec** | All endpoints present? All real status codes? Error responses included? Authorization headers documented? | Spec had 42 endpoints but no 400/402 error responses. Run a semantic diff (`oasdiff` / `openapi-diff`) of `main` vs. branch: removed operations, responses, or fields indicate incompleteness. |
 | **Protobuf / GraphQL schema** | All message types? All fields? Experimental or deprecated? Annotations preserved? Removed protobuf fields `reserved`? | Run a semantic schema diff: `buf breaking` (protobuf), `graphql-inspector diff` (GraphQL). If a field disappeared, investigate: was it deliberately removed (and reserved) or is the generator incomplete? |
 | **Database migrations** | Schema matches domain models? Foreign keys present? Indexes on query paths? | Run migration on empty DB, then `\d+ <table>` (psql) or schema inspection: does it match the model? |
 | **Type definitions** (TS `.d.ts`, Python stubs, Go interfaces) | All public methods? Correct types? Generic parameters preserved? | Diff against source: any public signature missing from generated types = incorrect generator. Fix before merge. |

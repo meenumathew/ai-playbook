@@ -1,4 +1,4 @@
-"""Acceptance tests for adopter-side pack support — driven through the CLI boundary.
+"""Acceptance tests for adopter-side pack support: driven through the CLI boundary.
 
 Pack ATs layer a tmp pack on top of the real playbook core. The core is the
 substrate; the pack is what's under test. This mirrors the pattern used by
@@ -14,21 +14,19 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
 
 from deploy_ai_playbook.cli import app, get_source_root
-
-runner = CliRunner()
+from tests.acceptance._dsl import deploy, diff, disable, doctor, enable, runner
 
 
 def _write_pack_config(project_root: Path, packs: list[str]) -> None:
-    """Helper — write `.ai-playbook.toml` with a packs list."""
+    """Helper: write `.ai-playbook.toml` with a packs list."""
     quoted = ", ".join(f'"{p}"' for p in packs)
     (project_root / ".ai-playbook.toml").write_text(f"packs = [{quoted}]\n")
 
 
 def _make_pack(project_root: Path, name: str) -> Path:
-    """Helper — create an empty pack directory under .ai-playbook/packs/<name>."""
+    """Helper: create an empty pack directory under .ai-playbook/packs/<name>."""
     pack_root = project_root / ".ai-playbook" / "packs" / name
     pack_root.mkdir(parents=True)
     return pack_root
@@ -53,7 +51,7 @@ def _read_version_fingerprint(project_root: Path) -> str:
     raise AssertionError("missing playbook-fingerprint line")
 
 
-def test_ac1_deploy_layers_pack_files_over_core(tmp_path: Path) -> None:
+def test1_deploy_layers_pack_files_over_core(tmp_path: Path) -> None:
     """AC 1: With a pack listed in `.ai-playbook.toml`, deploy outputs core + pack files."""
     pack_root = _make_pack(tmp_path, "django")
     (pack_root / "agents").mkdir()
@@ -62,15 +60,13 @@ def test_ac1_deploy_layers_pack_files_over_core(tmp_path: Path) -> None:
     )
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
 
     assert result.exit_code == 0, f"deploy failed:\n{result.output}"
     agents_dir = tmp_path / ".claude" / "agents"
     # Pack file deployed:
     assert (agents_dir / "django-model-reviewer.agent.md").exists()
-    # Core files still deployed (sanity — pack didn't replace core):
+    # Core files still deployed (sanity: pack didn't replace core):
     assert (agents_dir / "story-refiner.agent.md").exists()
     assert (agents_dir / "xp-pair-programmer.agent.md").exists()
 
@@ -84,9 +80,7 @@ def test_deploy_reports_pack_metadata_and_records_versions(tmp_path: Path) -> No
     )
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
 
     assert result.exit_code == 0, result.output
     assert "Pack metadata" in result.output
@@ -102,9 +96,7 @@ def test_deploy_stops_when_pack_requires_newer_playbook(tmp_path: Path) -> None:
     (pack_root / "agents" / "future.agent.md").write_text("# Future\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/future"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
 
     assert result.exit_code == 1
     # Rich wraps long lines to terminal width; collapse whitespace to keep the
@@ -114,7 +106,7 @@ def test_deploy_stops_when_pack_requires_newer_playbook(tmp_path: Path) -> None:
     assert not (tmp_path / ".claude").exists()
 
 
-def test_ac2_deploy_warns_when_pack_overrides_core(tmp_path: Path) -> None:
+def test2_deploy_warns_when_pack_overrides_core(tmp_path: Path) -> None:
     """AC 2: When a pack file overrides a core file, deploy warns AND uses pack content."""
     pack_root = _make_pack(tmp_path, "internal")
     (pack_root / "agents").mkdir()
@@ -123,9 +115,7 @@ def test_ac2_deploy_warns_when_pack_overrides_core(tmp_path: Path) -> None:
     pack_override.write_text(override_marker)
     _write_pack_config(tmp_path, [".ai-playbook/packs/internal"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
 
     assert result.exit_code == 0, f"deploy failed:\n{result.output}"
 
@@ -140,16 +130,14 @@ def test_ac2_deploy_warns_when_pack_overrides_core(tmp_path: Path) -> None:
 
 
 def test_pack_agent_gets_generated_command_shim(tmp_path: Path) -> None:
-    """Pack agents have no core `commands/` shim — deploy generates a standard
+    """Pack agents have no core `commands/` shim: deploy generates a standard
     one so pack agents are slash-invocable like core agents."""
     pack_root = _make_pack(tmp_path, "django")
     (pack_root / "agents").mkdir()
     (pack_root / "agents" / "django-model-reviewer.agent.md").write_text("# Django Reviewer\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
 
     assert result.exit_code == 0, result.output
     assert "generated" in result.output, "deploy output should mark the shim as generated"
@@ -166,9 +154,7 @@ def test_pack_agent_shim_generation_respects_dry_run(tmp_path: Path) -> None:
     (pack_root / "agents" / "django-model-reviewer.agent.md").write_text("# Django Reviewer\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "--dry-run", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path, dry_run=True)
 
     assert result.exit_code == 0, result.output
     assert "would generate" in result.output
@@ -182,9 +168,7 @@ def test_pack_agent_generated_shim_transforms_for_copilot(tmp_path: Path) -> Non
     (pack_root / "agents" / "django-model-reviewer.agent.md").write_text("# Django Reviewer\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "copilot", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path, tool="copilot")
 
     assert result.exit_code == 0, result.output
     shim = tmp_path / ".github" / "prompts" / "django-model-reviewer.prompt.md"
@@ -200,25 +184,18 @@ def test_generated_pack_shim_survives_prune(tmp_path: Path) -> None:
     (pack_root / "agents").mkdir()
     (pack_root / "agents" / "django-model-reviewer.agent.md").write_text("# Django Reviewer\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
-    first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    first = deploy(tmp_path)
     assert first.exit_code == 0, first.output
 
-    result = runner.invoke(
-        app,
-        ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path), "--prune", "--yes"],
-    )
+    result = deploy(tmp_path, prune=True, yes=True)
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".claude" / "commands" / "django-model-reviewer.md").exists()
 
 
 def test_core_agents_keep_authored_shims_not_generated(tmp_path: Path) -> None:
-    """Core agents have authored shims — generation must never replace them."""
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    """Core agents have authored shims: generation must never replace them."""
+    result = deploy(tmp_path)
 
     assert result.exit_code == 0, result.output
     shim = (tmp_path / ".claude" / "commands" / "story-refiner.md").read_text()
@@ -239,9 +216,7 @@ def test_path_rewrite_applied_to_pack_files_too(tmp_path: Path) -> None:
     )
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
 
     assert result.exit_code == 0, f"deploy failed:\n{result.output}"
     deployed = (tmp_path / ".claude" / "knowledge-base" / "django-patterns.md").read_text()
@@ -251,9 +226,7 @@ def test_path_rewrite_applied_to_pack_files_too(tmp_path: Path) -> None:
 
 def test_deploy_handles_no_packs_no_toml_unchanged(tmp_path: Path) -> None:
     """Regression: existing core-only flow still works when no `.ai-playbook.toml` exists."""
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    result = deploy(tmp_path)
 
     assert result.exit_code == 0, f"deploy failed:\n{result.output}"
     # No override warning (no packs configured):
@@ -262,8 +235,8 @@ def test_deploy_handles_no_packs_no_toml_unchanged(tmp_path: Path) -> None:
     assert (tmp_path / ".claude" / "agents" / "story-refiner.agent.md").exists()
 
 
-def test_ac3_doctor_recognizes_pack_files_as_expected(tmp_path: Path) -> None:
-    """AC 3: After deploying a pack, doctor reports clean — pack files are NOT orphans/stale."""
+def test3_doctor_recognizes_pack_files_as_expected(tmp_path: Path) -> None:
+    """AC 3: After deploying a pack, doctor reports clean: pack files are NOT orphans/stale."""
     # Setup: pack with one new agent file
     pack_root = _make_pack(tmp_path, "django")
     (pack_root / "agents").mkdir()
@@ -289,13 +262,11 @@ verified: 2026-06-12
     )
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    deploy_result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    deploy_result = deploy(tmp_path)
     assert deploy_result.exit_code == 0, f"deploy failed:\n{deploy_result.output}"
 
     # Doctor should see the pack file as expected, not orphaned, not stale
-    doctor_result = runner.invoke(app, ["doctor", "--tool", "claude", "-t", str(tmp_path)])
+    doctor_result = doctor(tmp_path)
     assert doctor_result.exit_code == 0, f"doctor failed:\n{doctor_result.output}"
     # AC 3 contract: the pack file is NOT flagged as orphaned in doctor output.
     output = doctor_result.output
@@ -320,16 +291,14 @@ def test_doctor_staleness_uses_pack_source_for_overrides(tmp_path: Path) -> None
     pack_override.write_text("# pack version of story-refiner\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/internal"])
 
-    deploy_result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    deploy_result = deploy(tmp_path)
     assert deploy_result.exit_code == 0
 
     # Hand-edit the deployed copy to simulate drift from pack source:
     deployed = tmp_path / ".claude" / "agents" / "story-refiner.agent.md"
     deployed.write_text("# manually edited — drift from pack\n")
 
-    doctor_result = runner.invoke(app, ["doctor", "--tool", "claude", "-t", str(tmp_path)])
+    doctor_result = doctor(tmp_path)
 
     # Doctor must flag story-refiner as stale (against pack source):
     assert "story-refiner" in doctor_result.output
@@ -344,13 +313,11 @@ def test_doctor_detects_pack_knowledge_base_source_drift(tmp_path: Path) -> None
     pack_kb.write_text("# Django patterns v1\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    deploy_result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    deploy_result = deploy(tmp_path)
     assert deploy_result.exit_code == 0, deploy_result.output
 
     pack_kb.write_text("# Django patterns v2\n")
-    doctor_result = runner.invoke(app, ["doctor", "--tool", "claude", "-t", str(tmp_path)])
+    doctor_result = doctor(tmp_path)
 
     assert doctor_result.exit_code == 0, doctor_result.output
     assert "knowledge-base" in doctor_result.output
@@ -365,13 +332,11 @@ def test_diff_detects_pack_knowledge_base_source_drift(tmp_path: Path) -> None:
     pack_kb.write_text("# Django patterns v1\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    deploy_result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    deploy_result = deploy(tmp_path)
     assert deploy_result.exit_code == 0, deploy_result.output
 
     pack_kb.write_text("# Django patterns v2\n")
-    diff_result = runner.invoke(app, ["diff", "--tool", "claude", "-t", str(tmp_path)])
+    diff_result = diff(tmp_path)
 
     assert diff_result.exit_code == 0, diff_result.output
     assert "django-patterns.md" in diff_result.output
@@ -386,16 +351,12 @@ def test_deployed_version_fingerprint_includes_pack_content(tmp_path: Path) -> N
     pack_kb.write_text("# Django patterns v1\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    first = deploy(tmp_path)
     assert first.exit_code == 0, first.output
     first_fingerprint = _read_version_fingerprint(tmp_path)
 
     pack_kb.write_text("# Django patterns v2\n")
-    second = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    second = deploy(tmp_path)
     assert second.exit_code == 0, second.output
     second_fingerprint = _read_version_fingerprint(tmp_path)
 
@@ -403,7 +364,7 @@ def test_deployed_version_fingerprint_includes_pack_content(tmp_path: Path) -> N
 
 
 def test_doctor_reports_pack_override_in_summary(tmp_path: Path) -> None:
-    """Doctor surfaces pack overrides in its health report — operational visibility.
+    """Doctor surfaces pack overrides in its health report: operational visibility.
 
     Without this, a pack silently masking a core update would never be flagged
     in routine health checks.
@@ -413,8 +374,8 @@ def test_doctor_reports_pack_override_in_summary(tmp_path: Path) -> None:
     (pack_root / "agents" / "story-refiner.agent.md").write_text("# pack override\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/internal"])
 
-    runner.invoke(app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)])
-    doctor_result = runner.invoke(app, ["doctor", "--tool", "claude", "-t", str(tmp_path)])
+    deploy(tmp_path)
+    doctor_result = doctor(tmp_path)
 
     # Override visible in doctor output:
     output = doctor_result.output.lower()
@@ -424,45 +385,38 @@ def test_doctor_reports_pack_override_in_summary(tmp_path: Path) -> None:
     )
 
 
-def test_ac4_prune_preserves_pack_files(tmp_path: Path) -> None:
+def test4_prune_preserves_pack_files(tmp_path: Path) -> None:
     """AC 4: After deploying a pack, deploy --prune does NOT remove pack-deployed files."""
     pack_root = _make_pack(tmp_path, "django")
     (pack_root / "agents").mkdir()
     (pack_root / "agents" / "django-model-reviewer.agent.md").write_text("# pack agent\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/django"])
 
-    # First deploy — installs pack file alongside core.
-    first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    # First deploy: installs pack file alongside core.
+    first = deploy(tmp_path)
     assert first.exit_code == 0
     deployed_pack_file = tmp_path / ".claude" / "agents" / "django-model-reviewer.agent.md"
     assert deployed_pack_file.exists()
 
-    # Re-deploy with --prune --yes — pack file MUST survive (not flagged as orphan).
-    second = runner.invoke(
-        app,
-        ["deploy", "--agent", "all", "--tool", "claude", "--prune", "--yes", "-t", str(tmp_path)],
-    )
+    # Re-deploy with --prune --yes: pack file MUST survive (not flagged as orphan).
+    second = deploy(tmp_path, prune=True, yes=True)
     assert second.exit_code == 0, f"prune deploy failed:\n{second.output}"
     assert deployed_pack_file.exists(), (
         f"AC 4 violated — pack file pruned as orphan:\n{second.output}"
     )
 
 
-def test_ac5_core_upgrade_propagates_to_non_overridden_files(
+def test5_core_upgrade_propagates_to_non_overridden_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """AC 5: After a core upgrade, non-overridden core files refresh; pack overrides hold.
 
     Simulates the Project A / Project B story:
       1. Adopter has v1 core deployed with one pack-overridden agent.
-      2. Core upgrades — the overridden agent AND a non-overridden agent change.
+      2. Core upgrades: the overridden agent AND a non-overridden agent change.
       3. Adopter runs `ai-playbook deploy` again.
       4. Expected: overridden agent still has pack content; non-overridden agent has v2.
     """
-    import deploy_ai_playbook.cli as cli_module
-
     # Build synthetic v1 core under fake_source/.
     fake_source = tmp_path / "fake_source"
     (fake_source / "agents").mkdir(parents=True)
@@ -480,12 +434,10 @@ def test_ac5_core_upgrade_propagates_to_non_overridden_files(
     pack_override.write_text("# PACK override (sticky)\n")
     (project_root / ".ai-playbook.toml").write_text('packs = [".ai-playbook/packs/internal"]\n')
 
-    monkeypatch.setattr(cli_module, "get_source_root", lambda: fake_source)
+    monkeypatch.setattr("deploy_ai_playbook.cli.get_source_root", lambda: fake_source)
 
-    # First deploy — v1 core + pack.
-    first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(project_root)]
-    )
+    # First deploy: v1 core + pack.
+    first = deploy(project_root)
     assert first.exit_code == 0, f"first deploy failed:\n{first.output}"
     deployed_overridden = project_root / ".claude" / "agents" / "overridden.agent.md"
     deployed_untouched = project_root / ".claude" / "agents" / "untouched.agent.md"
@@ -497,12 +449,10 @@ def test_ac5_core_upgrade_propagates_to_non_overridden_files(
     untouched_core_v1.write_text("# core untouched v2\n")
 
     # Second deploy.
-    second = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(project_root)]
-    )
+    second = deploy(project_root)
     assert second.exit_code == 0, f"second deploy failed:\n{second.output}"
 
-    # Pack override still wins — adopter's customisation survives core upgrade:
+    # Pack override still wins: adopter's customisation survives core upgrade:
     assert "PACK override" in deployed_overridden.read_text(), (
         "AC 5 violated — pack override lost on core upgrade"
     )
@@ -515,14 +465,12 @@ def test_ac5_core_upgrade_propagates_to_non_overridden_files(
 def test_two_packs_with_cross_pack_override_resolves_by_list_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Integration: two packs both modify the same file — last-in-list wins.
+    """Integration: two packs both modify the same file: last-in-list wins.
 
     Documents and protects the cross-pack precedence rule end-to-end through
     the CLI boundary (the unit test in test_discovery covers the discovery
     layer alone).
     """
-    import deploy_ai_playbook.cli as cli_module
-
     fake_source = tmp_path / "fake_source"
     (fake_source / "agents").mkdir(parents=True)
     (fake_source / "agents" / "shared.agent.md").write_text("# core shared\n")
@@ -539,11 +487,9 @@ def test_two_packs_with_cross_pack_override_resolves_by_list_order(
         'packs = [".ai-playbook/packs/alpha", ".ai-playbook/packs/beta"]\n'
     )
 
-    monkeypatch.setattr(cli_module, "get_source_root", lambda: fake_source)
+    monkeypatch.setattr("deploy_ai_playbook.cli.get_source_root", lambda: fake_source)
 
-    result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(project_root)]
-    )
+    result = deploy(project_root)
     assert result.exit_code == 0, f"deploy failed:\n{result.output}"
 
     deployed = (project_root / ".claude" / "agents" / "shared.agent.md").read_text()
@@ -598,7 +544,7 @@ def test_rollback_after_pack_deploy_leaves_pack_config_intact(tmp_path: Path) ->
 
     After rollback the deployment may pre-date the pack being added, leaving the pack
     agent absent from disk while `.ai-playbook.toml` still declares it. Doctor must flag
-    the missing agent as an issue — confirming the redeploy discipline documented in
+    the missing agent as an issue: confirming the redeploy discipline documented in
     cli-reference.md § Rollback.
     """
     pack_root = _make_pack(tmp_path, "internal")
@@ -606,22 +552,18 @@ def test_rollback_after_pack_deploy_leaves_pack_config_intact(tmp_path: Path) ->
     pack_agent = pack_root / "agents" / "custom-reviewer.agent.md"
     pack_agent.write_text("# custom reviewer\n")
 
-    # First deploy — core only (no pack config yet); creates a backup of the empty state.
-    first = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    # First deploy: core only (no pack config yet); creates a backup of the empty state.
+    first = deploy(tmp_path)
     assert first.exit_code == 0, first.output
 
-    # Second deploy — now with the pack; backup created = core-only state from first deploy.
+    # Second deploy: now with the pack; backup created = core-only state from first deploy.
     _write_pack_config(tmp_path, [".ai-playbook/packs/internal"])
-    second = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    second = deploy(tmp_path)
     assert second.exit_code == 0, second.output
     deployed_pack_agent = tmp_path / ".claude" / "agents" / "custom-reviewer.agent.md"
     assert deployed_pack_agent.exists(), "pack agent should be present after second deploy"
 
-    # Rollback — restores the core-only snapshot saved before the second deploy.
+    # Rollback: restores the core-only snapshot saved before the second deploy.
     rollback_result = runner.invoke(
         app, ["rollback", "--tool", "claude", "-t", str(tmp_path), "--force"]
     )
@@ -637,8 +579,8 @@ def test_rollback_after_pack_deploy_leaves_pack_config_intact(tmp_path: Path) ->
     assert (tmp_path / ".ai-playbook.toml").exists()
     assert pack_agent.exists()
 
-    # Doctor flags the missing pack agent as an issue — the mismatch is visible.
-    doctor_result = runner.invoke(app, ["doctor", "--tool", "claude", "-t", str(tmp_path)])
+    # Doctor flags the missing pack agent as an issue: the mismatch is visible.
+    doctor_result = doctor(tmp_path)
     assert "custom-reviewer" in doctor_result.output, (
         "doctor must flag missing pack agent after rollback to pre-pack snapshot:\n"
         + doctor_result.output
@@ -655,19 +597,13 @@ def test_disable_enable_pack_only_agent(tmp_path: Path) -> None:
     (pack_root / "agents" / "custom-reviewer.agent.md").write_text("# custom reviewer\n")
     _write_pack_config(tmp_path, [".ai-playbook/packs/internal"])
 
-    deploy_result = runner.invoke(
-        app, ["deploy", "--agent", "all", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    deploy_result = deploy(tmp_path)
     assert deploy_result.exit_code == 0, deploy_result.output
 
-    disable_result = runner.invoke(
-        app, ["disable", "custom-reviewer", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    disable_result = disable("custom-reviewer", tmp_path)
     assert disable_result.exit_code == 0, disable_result.output
     assert (tmp_path / ".claude" / "agents" / "custom-reviewer.agent.md.disabled").exists()
 
-    enable_result = runner.invoke(
-        app, ["enable", "custom-reviewer", "--tool", "claude", "-t", str(tmp_path)]
-    )
+    enable_result = enable("custom-reviewer", tmp_path)
     assert enable_result.exit_code == 0, enable_result.output
     assert (tmp_path / ".claude" / "agents" / "custom-reviewer.agent.md").exists()

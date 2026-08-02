@@ -39,7 +39,7 @@ The tier table binds behaviour; resolution just decides which column applies.
 Recommended, not required. When clarity matters (long sessions, a tier change, or a user request), state the active tier in one line so behaviour is unambiguous:
 
 - `Tier: production (preview-and-approve gates ON, full TDD, complete DoD).`
-- `Tier: prototype (gates skipped, save-and-summarize, lean artifacts).`
+- `Tier: prototype (approval gates skipped, save-and-summarize, lean artifacts).`
 
 This avoids the prototype-mode surprise where users expect approval gates that do not fire.
 
