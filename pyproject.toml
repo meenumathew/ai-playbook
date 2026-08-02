@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-playbook"
-version = "1.0.0"
+version = "1.1.0"
 description = "CLI tool for deploying ai-playbook agents to Claude, Copilot, Codex, Cursor, or Kiro"
 readme = "README.md"
 requires-python = ">=3.12"
